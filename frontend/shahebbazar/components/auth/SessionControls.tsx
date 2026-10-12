@@ -14,15 +14,15 @@ export async function SessionControls() {
   if (!session) {
     return (
       <div className="flex items-center gap-3">
-        <Link 
-          href="/login" 
+        <Link
+          href="/login"
           className="text-sm font-medium text-muted hover:text-ink transition-colors"
         >
           Log in
         </Link>
 
         <Link
-          href="/register/customer"
+          href="/register"
           className="rounded-lg bg-brand-600 px-3.5 py-2 text-sm font-semibold text-white shadow-sm hover:bg-brand-500 transition-colors"
         >
           Register
