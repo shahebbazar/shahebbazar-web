@@ -109,6 +109,7 @@ export interface Offering {
     price_max: string | number | null;
     unit: string | null;
     min_order_qty: number | null;
+    photo_url: string | null;
 }
 
 export interface Fact {

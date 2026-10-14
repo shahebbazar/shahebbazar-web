@@ -2,6 +2,8 @@ const express = require("express");
 const router = express.Router();
 const pool = require("../db");
 const multer = require("multer");
+const fs = require("node:fs");
+const path = require("node:path");
 
 // Schema v2 renamed every column this file writes (title -> listing_title,
 // price -> listing_price, free-text category -> category_id) and added a
@@ -11,7 +13,7 @@ const multer = require("multer");
 // Storage config for uploaded photos (local storage for now)
 const storage = multer.diskStorage({
     destination: (req, file, cb) => {
-        cb(null, "uploads/");
+        cb(null, "uploads/filename.jpg");
     },
     filename: (req, file, cb) => {
         // Keep original extension
@@ -269,15 +271,70 @@ router.post(
         const { listingId } = req.params;
 
         try {
-            const photoFiles = req.files || [];
+const photoFiles = req.files || [];
 
-            for (const file of photoFiles) {
+if (photoFiles.length === 0) {
+    return res.status(400).json({
+        success: false,
+        error: "Choose at least one photo.",
+    });
+}
+
+            const existingResult = await pool.query(
+                `SELECT
+                    COUNT(*)::int AS photo_count,
+                    COALESCE(
+                        MAX(photo_sort_order),
+                        -1
+                    )::int AS highest_sort_order,
+                    COALESCE(
+                        BOOL_OR(photo_is_primary),
+                        false
+                    ) AS has_primary
+                FROM listing_photos
+                WHERE listing_id = $1`,
+                            [listingId]
+                        );
+
+            const {
+                photo_count: photoCount,
+                highest_sort_order: highestSortOrder,
+                has_primary: hasPrimary,
+            } = existingResult.rows[0];
+
+            for (const [index, file] of photoFiles.entries()) {
+                const storedPath = path
+                    .relative(
+                        path.resolve(__dirname, ".."),
+                        file.path
+                    )
+                    .split(path.sep)
+                    .join("/");
+
+                const isPrimary =
+                    !hasPrimary &&
+                    photoCount === 0 &&
+                    index === 0;
+
                 await pool.query(
-                    `INSERT INTO listing_photos (listing_id, photo_url)
-                     VALUES ($1, $2)`,
-                    [listingId, file.path]
+                    `INSERT INTO listing_photos (
+             listing_id,
+             photo_url,
+             photo_alt_text,
+             photo_sort_order,
+             photo_is_primary
+         )
+         VALUES ($1, $2, $3, $4, $5)`,
+                    [
+                        listingId,
+                        storedPath,
+                        null,
+                        highestSortOrder + index + 1,
+                        isPrimary,
+                    ]
                 );
             }
+            
 
             res.json({ success: true, message: "Photos uploaded" });
         } catch (err) {
@@ -295,17 +352,40 @@ router.get("/vendors/:vendorId/listings", async (req, res) => {
         // Named rather than SELECT *, so a schema change surfaces here instead
         // of quietly reshaping the response.
         const result = await pool.query(
-            `SELECT l.listing_id, l.vendor_id, l.category_id,
-                    l.listing_title, l.listing_title_bn, l.listing_slug,
-                    l.listing_description, l.listing_price, l.listing_price_max,
-                    l.listing_price_unit, l.listing_min_order_qty,
-                    l.listing_is_negotiable, l.listing_status,
-                    l.listing_rejection_reason, l.listing_created_at,
-                    c.category_name, c.category_slug
-             FROM vendor_listings l
-             LEFT JOIN categories c ON c.category_id = l.category_id
-             WHERE l.vendor_id = $1
-             ORDER BY l.listing_id DESC`,
+            `SELECT
+         l.listing_id,
+         l.vendor_id,
+         l.category_id,
+         l.listing_title,
+         l.listing_title_bn,
+         l.listing_slug,
+         l.listing_description,
+         l.listing_price,
+         l.listing_price_max,
+         l.listing_price_unit,
+         l.listing_min_order_qty,
+         l.listing_is_negotiable,
+         l.listing_status,
+         l.listing_rejection_reason,
+         l.listing_created_at,
+         c.category_name,
+         c.category_slug,
+         primary_photo.photo_url AS photo_url
+     FROM vendor_listings l
+     LEFT JOIN categories c
+       ON c.category_id = l.category_id
+     LEFT JOIN LATERAL (
+         SELECT lp.photo_url
+         FROM listing_photos lp
+         WHERE lp.listing_id = l.listing_id
+         ORDER BY
+             lp.photo_is_primary DESC,
+             lp.photo_sort_order,
+             lp.photo_id
+         LIMIT 1
+     ) primary_photo ON true
+     WHERE l.vendor_id = $1
+     ORDER BY l.listing_id DESC`,
             [vendorId]
         );
 

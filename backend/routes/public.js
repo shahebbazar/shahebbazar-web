@@ -227,12 +227,12 @@ router.get("/businesses", async (req, res) => {
             // Paid placement: first page only, limited to two records.
             offset === 0
                 ? pool.query(
-                      `${BUSINESS_CARD_SQL}
+                    `${BUSINESS_CARD_SQL}
                        WHERE vendor_is_featured ${andSql}
                        ORDER BY rating DESC
                        LIMIT 2`,
-                      params
-                  )
+                    params
+                )
                 : Promise.resolve({ rows: [] }),
 
             // Counts all matches including promoted records, since both are shown.
@@ -359,13 +359,31 @@ router.get("/businesses/:slug", async (req, res) => {
                 ),
 
                 pool.query(
-                    `SELECT listing_id, listing_title AS title, listing_title_bn AS title_bn,
-                            listing_slug AS slug, listing_description AS description,
-                            listing_price AS price, listing_price_max AS price_max,
-                            listing_price_unit AS unit, listing_min_order_qty AS min_order_qty
-                     FROM vendor_listings
-                     WHERE vendor_id = $1 AND listing_status = 'approved'
-                     ORDER BY listing_id`,
+                    `SELECT
+         l.listing_id,
+         l.listing_title AS title,
+         l.listing_title_bn AS title_bn,
+         l.listing_slug AS slug,
+         l.listing_description AS description,
+         l.listing_price AS price,
+         l.listing_price_max AS price_max,
+         l.listing_price_unit AS unit,
+         l.listing_min_order_qty AS min_order_qty,
+         primary_photo.photo_url
+     FROM vendor_listings l
+     LEFT JOIN LATERAL (
+         SELECT lp.photo_url
+         FROM listing_photos lp
+         WHERE lp.listing_id = l.listing_id
+         ORDER BY
+             lp.photo_is_primary DESC,
+             lp.photo_sort_order,
+             lp.photo_id
+         LIMIT 1
+     ) primary_photo ON true
+     WHERE l.vendor_id = $1
+       AND l.listing_status = 'approved'
+     ORDER BY l.listing_id`,
                     [id]
                 ),
 

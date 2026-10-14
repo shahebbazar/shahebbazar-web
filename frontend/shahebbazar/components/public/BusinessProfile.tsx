@@ -123,11 +123,10 @@ export function BusinessProfile({
 
                                 {business.open_state && (
                                     <span
-                                        className={`inline-flex items-center rounded-full px-2 py-0.5 text-[0.6875rem] font-semibold ${
-                                            business.open_state === "open"
+                                        className={`inline-flex items-center rounded-full px-2 py-0.5 text-[0.6875rem] font-semibold ${business.open_state === "open"
                                                 ? "bg-open-bg text-open-ink"
                                                 : "bg-shut-bg text-shut-ink"
-                                        }`}
+                                            }`}
                                     >
                                         {business.open_state === "open" ? copy.open : copy.closed}
                                     </span>
@@ -169,11 +168,10 @@ export function BusinessProfile({
                         <a
                             key={section.id}
                             href={`#${section.id}`}
-                            className={`shrink-0 border-b-2 px-3 py-3 text-[0.875rem] font-medium transition-colors ${
-                                index === 0
+                            className={`shrink-0 border-b-2 px-3 py-3 text-[0.875rem] font-medium transition-colors ${index === 0
                                     ? "border-brand-600 text-brand-600"
                                     : "border-transparent text-muted hover:text-ink"
-                            }`}
+                                }`}
                         >
                             {section.label}
                         </a>
@@ -278,55 +276,75 @@ export function BusinessProfile({
                             const price = toNumber(item.price);
                             const priceMax = toNumber(item.price_max);
                             const minOrder = item.min_order_qty ?? 0;
+                            const photo = assetUrl(item.photo_url);
+
                             return (
                                 <li
                                     key={item.listing_id}
-                                    className="rounded-xl border border-line p-3.5 transition-colors hover:border-brand-200 hover:bg-brand-50"
+                                    className="overflow-hidden rounded-xl border border-line transition-colors hover:border-brand-200 hover:bg-brand-50"
                                 >
-                                    <h3 className="text-[0.875rem] font-semibold">
-                                        {pick(locale, item.title, item.title_bn)}
-                                    </h3>
-                                    {item.description && (
-                                        <p className="mt-1 line-clamp-2 text-[0.8125rem] leading-snug text-muted">
-                                            {item.description}
-                                        </p>
+                                    {photo && (
+                                        <div className="aspect-4/3 overflow-hidden bg-brand-50">
+                                            {/* eslint-disable-next-line @next/next/no-img-element */}
+                                            <img
+                                                src={photo}
+                                                alt={pick(locale, item.title, item.title_bn)}
+                                                loading="lazy"
+                                                className="size-full object-cover"
+                                            />
+                                        </div>
                                     )}
-                                    <p className="mt-2 text-[0.8125rem] font-medium text-brand-700">
-                                        {price > 0 ? (
-                                            <>
-                                                {formatTaka(price, locale)}
-                                                {priceMax > price && (
-                                                    <> – {formatTaka(priceMax, locale)}</>
-                                                )}
-                                                {item.unit && (
-                                                    <span className="font-normal text-muted">
-                                                        {" "}
-                                                        / {item.unit}
-                                                    </span>
-                                                )}
-                                            </>
-                                        ) : (
-                                            <span className="font-normal text-muted">
-                                                {copy.priceOnRequest}
-                                            </span>
+
+                                    <div className="p-3.5">
+                                        <h3 className="text-[0.875rem] font-semibold">
+                                            {pick(locale, item.title, item.title_bn)}
+                                        </h3>
+
+                                        {item.description && (
+                                            <p className="mt-1 line-clamp-2 text-[0.8125rem] leading-snug text-muted">
+                                                {item.description}
+                                            </p>
                                         )}
-                                    </p>
 
-                                    {minOrder > 0 && (
-                                        <p className="mt-1 text-[0.75rem] text-muted">
-                                            {copy.minOrder}:{" "}
-                                            {localiseDigits(minOrder.toLocaleString("en-US"), locale)}
-                                            {item.unit ? ` ${item.unit}` : ""}
+                                        <p className="mt-2 text-[0.8125rem] font-medium text-brand-700">
+                                            {price > 0 ? (
+                                                <>
+                                                    {formatTaka(price, locale)}
+                                                    {priceMax > price && (
+                                                        <> – {formatTaka(priceMax, locale)}</>
+                                                    )}
+                                                    {item.unit && (
+                                                        <span className="font-normal text-muted">
+                                                            {" "}/ {item.unit}
+                                                        </span>
+                                                    )}
+                                                </>
+                                            ) : (
+                                                <span className="font-normal text-muted">
+                                                    {copy.priceOnRequest}
+                                                </span>
+                                            )}
                                         </p>
-                                    )}
 
-                                    <Link
-                                        href={`/account/messages/new?vendor=${business.vendor_slug}&listing=${item.listing_id}`}
-                                        className="mt-2.5 inline-flex items-center gap-1.5 text-[0.8125rem] font-medium text-brand-600 hover:underline"
-                                    >
-                                        <MessageSquareText className="size-3.5" />
-                                        {copy.askAboutThis}
-                                    </Link>
+                                        {minOrder > 0 && (
+                                            <p className="mt-1 text-[0.75rem] text-muted">
+                                                {copy.minOrder}: {" "}
+                                                {localiseDigits(
+                                                    minOrder.toLocaleString("en-US"),
+                                                    locale
+                                                )}
+                                                {item.unit ? ` ${item.unit}` : ""}
+                                            </p>
+                                        )}
+
+                                        <Link
+                                            href={`/account/messages/new?vendor=${business.vendor_slug}&listing=${item.listing_id}`}
+                                            className="mt-2.5 inline-flex items-center gap-1.5 text-[0.8125rem] font-medium text-brand-600 hover:underline"
+                                        >
+                                            <MessageSquareText className="size-3.5" />
+                                            {copy.askAboutThis}
+                                        </Link>
+                                    </div>
                                 </li>
                             );
                         })}
@@ -354,11 +372,10 @@ export function BusinessProfile({
                                 {[1, 2, 3, 4, 5].map((i) => (
                                     <Star
                                         key={i}
-                                        className={`size-4 ${
-                                            i <= Math.round(toNumber(business.rating))
+                                        className={`size-4 ${i <= Math.round(toNumber(business.rating))
                                                 ? "fill-star text-star"
                                                 : "fill-slate-200 text-slate-200"
-                                        }`}
+                                            }`}
                                     />
                                 ))}
                             </div>
@@ -434,11 +451,10 @@ export function BusinessProfile({
                                                 {[1, 2, 3, 4, 5].map((i) => (
                                                     <Star
                                                         key={i}
-                                                        className={`size-3.5 ${
-                                                            i <= review.rating
+                                                        className={`size-3.5 ${i <= review.rating
                                                                 ? "fill-star text-star"
                                                                 : "fill-slate-200 text-slate-200"
-                                                        }`}
+                                                            }`}
                                                     />
                                                 ))}
                                             </span>
@@ -520,8 +536,8 @@ function ActionButtons({ locale, detail }: { locale: Locale; detail: BusinessDet
         lat && lng
             ? `https://www.google.com/maps/dir/?api=1&destination=${lat},${lng}`
             : `https://www.google.com/maps/search/?api=1&query=${encodeURIComponent(
-                  `${business.vendor_name} ${business.vendor_address ?? "Rajshahi"}`
-              )}`;
+                `${business.vendor_name} ${business.vendor_address ?? "Rajshahi"}`
+            )}`;
 
     // A WhatsApp share link instead of the Web Share API, which needs JavaScript and is not in every browser.
     const shareUrl = `https://wa.me/?text=${encodeURIComponent(
