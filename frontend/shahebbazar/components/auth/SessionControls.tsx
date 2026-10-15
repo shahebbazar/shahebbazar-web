@@ -4,68 +4,92 @@ import { authenticatedApiGet } from "@/lib/auth-server";
 import { LogoutButton } from "./LogoutButton";
 
 type AuthMeResponse = {
-  authenticated: true;
-  user: AuthUser;
+    authenticated: true;
+    user: AuthUser;
 };
 
-export async function SessionControls() {
-  const session = await authenticatedApiGet<AuthMeResponse>("/auth/me");
+type SessionControlsProps = {
+    variant?: "header" | "menu";
+};
 
-  if (!session) {
+export async function SessionControls({
+    variant = "header",
+}: SessionControlsProps) {
+    const session = await authenticatedApiGet<AuthMeResponse>("/auth/me");
+
+    // Unauthenticated state
+    if (!session) {
+        if (variant === "menu") {
+            return (
+                <div className="grid grid-cols-2 gap-2">
+                    <Link href="/login" className="btn btn-outline">
+                        Log in
+                    </Link>
+                    <Link href="/register" className="btn btn-primary">
+                        Register
+                    </Link>
+                </div>
+            );
+        }
+
+        return (
+            <div className="flex items-center gap-3">
+                <Link href="/login" className="btn btn-outline">
+                    Log in
+                </Link>
+                <Link href="/register" className="btn btn-primary">
+                    Register
+                </Link>
+            </div>
+        );
+    }
+
+    // Authenticated state configuration
+    const destinationByRole = {
+        customer: "/account",
+        vendor: "/vendors/dashboard",
+        admin: "/admin",
+    } as const;
+
+    const labelByRole = {
+        customer: "My Account",
+        vendor: "Vendor Dashboard",
+        admin: "Admin Dashboard",
+    } as const;
+
+    // Typecast or fallback to ensure role matching works safely
+    const role = session.user.user_role as keyof typeof destinationByRole;
+    const href = destinationByRole[role] ?? "/account";
+    const label = labelByRole[role] ?? "My Account";
+
+    // Authenticated: Menu Variant
+    if (variant === "menu") {
+        return (
+            <div className="grid grid-cols-2 gap-2">
+                <Link href={href} className="btn btn-outline">
+                    {label}
+                </Link>
+                <LogoutButton />
+            </div>
+        );
+    }
+
+    // Authenticated: Header Variant (Default)
     return (
-      <div className="flex items-center gap-3">
-        <Link
-          href="/login"
-          className="text-sm font-medium text-muted hover:text-ink transition-colors"
-        >
-          Log in
-        </Link>
+        <div className="flex items-center gap-3">
+            <div className="hidden text-right leading-tight xl:block">
+                <p className="max-w-40 truncate text-sm font-semibold text-ink">
+                    {session.user.user_name}
+                </p>
+                <p className="text-xs capitalize text-muted">
+                    {role}
+                </p>
+            </div>
 
-        <Link
-          href="/register"
-          className="rounded-lg bg-brand-600 px-3.5 py-2 text-sm font-semibold text-white shadow-sm hover:bg-brand-500 transition-colors"
-        >
-          Register
-        </Link>
-      </div>
+            <Link href={href} className="btn btn-outline">
+                {label}
+            </Link>
+            <LogoutButton />
+        </div>
     );
-  }
-
-  const destinationByRole = {
-    customer: "/account",
-    vendor: "/vendors/dashboard",
-    admin: "/admin",
-  } as const;
-
-  const labelByRole = {
-    customer: "My Account",
-    vendor: "Vendor Dashboard",
-    admin: "Admin Dashboard",
-  } as const;
-
-  const role = session.user.user_role;
-  const href = destinationByRole[role] ?? "/account";
-  const label = labelByRole[role] ?? "My Account";
-
-  return (
-    <div className="flex items-center gap-3">
-      <div className="hidden leading-tight sm:block text-right">
-        <p className="max-w-40 truncate text-sm font-semibold text-ink">
-          {session.user.user_name}
-        </p>
-        <p className="text-xs capitalize text-muted">
-          {role}
-        </p>
-      </div>
-
-      <Link
-        href={href}
-        className="rounded-lg border border-line bg-surface px-3.5 py-2 text-sm font-medium shadow-card hover:bg-surface-2 transition-colors"
-      >
-        {label}
-      </Link>
-
-      <LogoutButton />
-    </div>
-  );
 }
