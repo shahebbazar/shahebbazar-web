@@ -2,6 +2,7 @@ import Link from "next/link";
 import { ChartLine, Flag, LayoutGrid, MapPin, ShieldCheck, Star, type LucideIcon } from "lucide-react";
 import { MobileMenu } from "../shared/MobileMenu";
 import { LogoutButton } from "@/components/auth/LogoutButton";
+import { ThemeSelector } from "@/components/theme/ThemeSelector";
 // Page frame for the admin area.
 
 type Item = { key: string; label: string; Icon: LucideIcon } & ({ href: string } | { soon: true });
@@ -62,9 +63,13 @@ export function AdminShell({
                         <MapPin className="size-6 fill-brand-600 text-brand-600" strokeWidth={1.5} />
                         <span className="text-xl font-bold tracking-tight text-brand-600 sm:text-[1.35rem]">Shahebbazar</span>
                     </Link>
-                    <span className="rounded-full bg-ink px-2.5 py-0.5 text-[0.75rem] font-semibold text-white">Admin</span>
-                    <div className="ml-auto flex items-center gap-3">
-                        <div className="hidden leading-tight sm:block">
+                    <span className="rounded-full border border-brand-200 bg-brand-50 px-2.5 py-0.5 text-[0.75rem] font-semibold text-brand-700">Admin</span>
+                        <div className="ml-auto flex items-center gap-3">
+                            <div className="hidden lg:block">
+                                <ThemeSelector />
+                            </div>
+
+                            <div className="hidden leading-tight sm:block">
                             <p className="max-w-40 truncate text-sm font-semibold">
                                 {userName}
                             </p>
@@ -74,7 +79,7 @@ export function AdminShell({
                             </p>
                         </div>
 
-                        <div className="hidden sm:block">
+                        <div className="hidden lg:block">
                             <LogoutButton />
                         </div>
 
@@ -88,8 +93,17 @@ export function AdminShell({
                             </nav>
 
                             <div className="mt-3 border-t border-line px-3.5 pt-3">
+                                <p className="mb-2 text-[0.75rem] font-medium text-muted">
+                                    Appearance
+                                </p>
+
+                                <ThemeSelector className="w-full" />
+                            </div>
+
+                            <div className="mt-3 border-t border-line px-3.5 pt-3">
                                 <LogoutButton />
                             </div>
+
                         </MobileMenu>
                     </div>
                 </div>

@@ -15,6 +15,7 @@ import {
     type LucideIcon,
 } from "lucide-react";
 import { MobileMenu } from "../shared/MobileMenu";
+import { ThemeSelector } from "@/components/theme/ThemeSelector";
 
 // Page frame for the provider area: header, navigation rail and content.
 
@@ -111,8 +112,12 @@ export function ProviderShell({
                         </span>
                     </Link>
 
-                    <div className="ml-auto flex min-w-0 items-center gap-3 sm:gap-4">
-                        <div className="flex min-w-0 items-center gap-2.5">
+                        <div className="ml-auto flex min-w-0 items-center gap-3 sm:gap-4">
+                            <div className="hidden lg:block">
+                                <ThemeSelector />
+                            </div>
+
+                            <div className="flex min-w-0 items-center gap-2.5">
                             <span
                                 aria-hidden
                                 className="grid size-9 shrink-0 place-items-center rounded-full bg-brand-100 text-sm font-semibold text-brand-700"
@@ -131,7 +136,7 @@ export function ProviderShell({
                         </div>
 
                         {/* Desktop logout */}
-                        <div className="hidden sm:block">
+                        <div className="hidden lg:block">
                             <LogoutButton />
                         </div>
 
@@ -146,8 +151,17 @@ export function ProviderShell({
                             </nav>
 
                             <div className="mt-3 border-t border-line px-3.5 pt-3">
+                                <p className="mb-2 text-[0.75rem] font-medium text-muted">
+                                    Appearance
+                                </p>
+
+                                <ThemeSelector className="w-full" />
+                            </div>
+
+                            <div className="mt-3 border-t border-line px-3.5 pt-3">
                                 <LogoutButton />
                             </div>
+
                         </MobileMenu>
                     </div>
                 </div>
