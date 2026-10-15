@@ -52,14 +52,100 @@
     --shadow-float: 0 8px 24px rgb(15 23 42 / 0.08);
 }
 
+@custom-variant dark (&:where(.dark, .dark *));
+
 @layer base {
     :root {
         color-scheme: light;
+
+        --color-page: #f6f8fc;
+        --color-surface: #ffffff;
+        --color-surface-2: #f8fafc;
+
+        --color-line: #e6eaf2;
+        --color-line-strong: #d8dfec;
+
+        --color-ink: #0f172a;
+        --color-muted: #64748b;
+        --color-soft: #94a3b8;
+
+        --shadow-card:
+            0 1px 2px rgb(15 23 42 / 0.04);
+        --shadow-raised:
+            0 1px 3px rgb(15 23 42 / 0.06),
+            0 1px 2px rgb(15 23 42 / 0.04);
+        --shadow-float:
+            0 8px 24px rgb(15 23 42 / 0.08);
+    }
+
+    .dark {
+        color-scheme: dark;
+
+        --color-page: #0b1120;
+        --color-surface: #111827;
+        --color-surface-2: #182233;
+
+        --color-line: #263244;
+        --color-line-strong: #354258;
+
+        --color-ink: #f1f5f9;
+        --color-muted: #a8b3c4;
+        --color-soft: #7f8ca3;
+
+        --color-brand-50: #172554;
+        --color-brand-100: #1e3a8a;
+        --color-brand-200: #1e40af;
+        --color-brand-300: #2563eb;
+        --color-brand-400: #3b82f6;
+        --color-brand-500: #60a5fa;
+        --color-brand-600: #60a5fa;
+        --color-brand-700: #93c5fd;
+
+        --color-open-bg: #123524;
+        --color-open-ink: #86efac;
+
+        --color-shut-bg: #451a1a;
+        --color-shut-ink: #fca5a5;
+
+        --color-sponsor-bg: #422b0b;
+        --color-sponsor-ink: #fcd34d;
+
+        --color-success-bg: #123524;
+        --color-success-ink: #6ee7b7;
+
+        --color-error-bg: #451a1a;
+        --color-error-ink: #fca5a5;
+
+        --shadow-card:
+            0 1px 2px rgb(0 0 0 / 0.24);
+        --shadow-raised:
+            0 1px 3px rgb(0 0 0 / 0.30),
+            0 1px 2px rgb(0 0 0 / 0.22);
+        --shadow-float:
+            0 12px 30px rgb(0 0 0 / 0.38);
+    }
+
+    html {
+        background-color: var(--color-page);
     }
 
     body {
         background-color: var(--color-page);
         color: var(--color-ink);
+    }
+    input,
+    textarea,
+    select,
+    button {
+        color: inherit;
+    }
+        select option {
+        background-color: var(--color-surface);
+        color: var(--color-ink);
+    }
+
+    * {
+        border-color: var(--color-line);
     }
 }
 
