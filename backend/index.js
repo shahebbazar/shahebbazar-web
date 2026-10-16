@@ -1,12 +1,12 @@
 // Shahebbazar API server.
 
-const path = require('path');
 const express = require('express');
 const cors = require('cors');
 require('dotenv').config();
 
 const pool = require('./db');
 const { verifySchema, reportSchemaAtStartup } = require('./lib/verifySchema');
+const { UPLOAD_DIR, ensureUploadDir } = require('./lib/uploads');
 
 const vendorsRouter = require('./routes/vendors');
 const vendorListingsRouter = require('./routes/vendorListings');
@@ -54,7 +54,7 @@ app.use(resolveSession); // Populates req.user and req.session if a valid sessio
 app.use('/api/auth', authRouter);
 
 // Serves the paths stored in listing_photos.photo_url and vendors.vendor_cover_url.
-app.use('/uploads', express.static(path.join(__dirname, 'uploads')));
+app.use('/uploads', express.static(UPLOAD_DIR));
 
 app.use('/api/vendors', vendorsRouter);
 app.use('/api', vendorListingsRouter);
@@ -139,6 +139,9 @@ function connectionHint(code) {
             return undefined;
     }
 }
+
+// Uploads fail with ENOENT if their folder is missing, so create it before accepting requests.
+ensureUploadDir();
 
 const server = app.listen(PORT, () => {
     console.log(`API running on http://localhost:${PORT}`);

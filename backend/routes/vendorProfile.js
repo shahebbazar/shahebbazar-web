@@ -1,10 +1,7 @@
-const crypto = require("crypto");
-const fs = require("fs/promises");
-const path = require("path");
 const express = require("express");
-const multer = require("multer");
 const pool = require("../db");
 const { LIMITS, validateProfile } = require("../lib/businessProfile");
+const { imageUpload, receive, discard, storedPath, checkUploads } = require("../lib/uploads");
 const {
     requireAuthenticatedUser,
     requireRole,
@@ -14,10 +11,8 @@ const router = express.Router();
 
 // Add / Edit Business: the provider's own profile.
 
-const UPLOAD_DIR = path.join(__dirname, "..", "uploads");
 const LOGO_MAX_BYTES = 2 * 1024 * 1024;
 const PHOTO_MAX_BYTES = 5 * 1024 * 1024;
-const IMAGE_TYPES = { "image/jpeg": "jpg", "image/png": "png", "image/webp": "webp" };
 
 function parseId(raw) {
     return /^\d{1,10}$/.test(raw) && Number(raw) > 0 && Number(raw) <= 2147483647 ? Number(raw) : null;
@@ -300,88 +295,12 @@ router.put(
 
 // Images
 
-const storage = multer.diskStorage({
-    destination: (req, file, cb) => cb(null, UPLOAD_DIR),
-    // File names are generated, and the declared type is checked against the file's actual bytes.
-    filename: (req, file, cb) =>
-        cb(null, `vendor-${req.params.vendorId}-${crypto.randomBytes(12).toString("hex")}.${IMAGE_TYPES[file.mimetype]}`),
-});
+// Upload handling (limits, generated names, image checks, cleanup) lives in lib/uploads.js.
+const vendorFilePrefix = (req) => `vendor-${req.params.vendorId}`;
+// Ownership is checked before multer runs, so a refused request never writes a file.
+const ownerAccess = [requireAuthenticatedUser, requireRole("vendor", "admin"), requireVendorOwnership];
 
-function imageUpload(field, maxBytes, maxCount) {
-    return multer({
-        storage,
-        limits: { fileSize: maxBytes, files: maxCount },
-        fileFilter: (req, file, cb) => {
-            if (!IMAGE_TYPES[file.mimetype]) {
-                return cb(new multer.MulterError("LIMIT_UNEXPECTED_FILE", "type"));
-            }
-            cb(null, true);
-        },
-    }).array(field, maxCount);
-}
-
-/** Runs a multer middleware and turns its errors into 400 responses. */
-function receive(middleware, limitLabel) {
-    return (req, res, next) => {
-        if (parseId(req.params.vendorId) === null) {
-            return res.status(400).json({ error: "Invalid vendor id" });
-        }
-        middleware(req, res, (err) => {
-            if (!err) return next();
-            const message =
-                err.code === "LIMIT_FILE_SIZE"
-                    ? `Each image must be ${limitLabel} or smaller.`
-                    : err.code === "LIMIT_FILE_COUNT" || (err.code === "LIMIT_UNEXPECTED_FILE" && err.field !== "type")
-                        ? "Too many files, or the wrong form field."
-                        : err.field === "type"
-                            ? "Only JPG, PNG or WEBP images can be uploaded."
-                            : "The upload could not be read.";
-            // multer removes partial files on its own errors.
-            res.status(400).json({ error: message });
-        });
-    };
-}
-
-/** True when the file's first bytes match its declared image type. */
-async function hasImageSignature(file) {
-    const handle = await fs.open(file.path, "r");
-    try {
-        const { buffer } = await handle.read(Buffer.alloc(12), 0, 12, 0);
-        if (file.mimetype === "image/jpeg") return buffer[0] === 0xff && buffer[1] === 0xd8 && buffer[2] === 0xff;
-        if (file.mimetype === "image/png")
-            return buffer.subarray(0, 8).equals(Buffer.from([0x89, 0x50, 0x4e, 0x47, 0x0d, 0x0a, 0x1a, 0x0a]));
-        if (file.mimetype === "image/webp")
-            return buffer.toString("ascii", 0, 4) === "RIFF" && buffer.toString("ascii", 8, 12) === "WEBP";
-        return false;
-    } finally {
-        await handle.close();
-    }
-}
-
-async function discard(files) {
-    await Promise.all((files ?? []).map((f) => fs.unlink(f.path).catch(() => { })));
-}
-
-/** Path as stored in the database and served by express.static. */
-const storedPath = (file) => `uploads/${file.filename}`;
-
-async function checkUploads(req, res) {
-    const files = req.files ?? [];
-    if (files.length === 0) {
-        res.status(400).json({ error: "Choose an image to upload." });
-        return false;
-    }
-    for (const file of files) {
-        if (!(await hasImageSignature(file))) {
-            await discard(files);
-            res.status(400).json({ error: `"${file.originalname}" is not a valid image file.` });
-            return false;
-        }
-    }
-    return true;
-}
-
-router.post("/vendors/:vendorId/logo", receive(imageUpload("logo", LOGO_MAX_BYTES, 1), "2 MB"), async (req, res) => {
+router.post("/vendors/:vendorId/logo", ...ownerAccess, receive(imageUpload("logo", LOGO_MAX_BYTES, 1, vendorFilePrefix), "2 MB"), async (req, res) => {
     const vendorId = parseId(req.params.vendorId);
     if (!(await checkUploads(req, res))) return;
 
@@ -403,7 +322,7 @@ router.post("/vendors/:vendorId/logo", receive(imageUpload("logo", LOGO_MAX_BYTE
 });
 
 // Removed files stay on disk, since seed data may reference the same path.
-router.delete("/vendors/:vendorId/logo", async (req, res) => {
+router.delete("/vendors/:vendorId/logo", ...ownerAccess, async (req, res) => {
     const vendorId = parseId(req.params.vendorId);
     if (vendorId === null) return res.status(400).json({ error: "Invalid vendor id" });
     try {
@@ -421,7 +340,8 @@ router.delete("/vendors/:vendorId/logo", async (req, res) => {
 
 router.post(
     "/vendors/:vendorId/photos",
-    receive(imageUpload("photos", PHOTO_MAX_BYTES, LIMITS.photosMax), "5 MB"),
+    ...ownerAccess,
+    receive(imageUpload("photos", PHOTO_MAX_BYTES, LIMITS.photosMax, vendorFilePrefix), "5 MB"),
     async (req, res) => {
         const vendorId = parseId(req.params.vendorId);
         if (!(await checkUploads(req, res))) return;
@@ -482,7 +402,7 @@ router.post(
     }
 );
 
-router.delete("/vendors/:vendorId/photos/:photoId", async (req, res) => {
+router.delete("/vendors/:vendorId/photos/:photoId", ...ownerAccess, async (req, res) => {
     const vendorId = parseId(req.params.vendorId);
     const photoId = parseId(req.params.photoId);
     if (vendorId === null || photoId === null) return res.status(400).json({ error: "Invalid id" });

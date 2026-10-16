@@ -1,7 +1,7 @@
 "use client";
 import { useEffect, useState } from "react";
 import ListingForm from "./ListingForm";
-import { BROWSER_API_BASE } from "@/lib/apiBase";
+import { BROWSER_API_BASE, browserAssetUrl } from "@/lib/apiBase";
 
 // The earlier version read listing.title, listing.price and listing.category,
 // none of which exist in v2, so every card showed a blank name and no price.
@@ -50,6 +50,32 @@ function StatusBadge({ status }) {
     );
 }
 
+// The listing's main photo, so a vendor can confirm an upload worked.
+function ListingThumbnail({ listing }) {
+    const src = browserAssetUrl(listing.photo_url);
+    // A stored path whose file is missing falls back to the placeholder rather than a broken image.
+    const [failed, setFailed] = useState(false);
+    return (
+        <div className="size-20 shrink-0 overflow-hidden rounded-lg border border-line bg-surface-2 sm:size-24">
+            {src && !failed ? (
+                // A plain <img>, because next/image needs the environment-dependent asset host declared at build time.
+                // eslint-disable-next-line @next/next/no-img-element
+                <img
+                    src={src}
+                    alt={listing.listing_title}
+                    loading="lazy"
+                    onError={() => setFailed(true)}
+                    className="size-full object-cover"
+                />
+            ) : (
+                <div className="grid size-full place-items-center px-1 text-center text-xs text-muted">
+                    No photo
+                </div>
+            )}
+        </div>
+    );
+}
+
 export default function VendorListings({ vendorId, refresh }) {
     const [listings, setListings] = useState([]);
     const [status, setStatus] = useState(null);
@@ -65,9 +91,17 @@ export default function VendorListings({ vendorId, refresh }) {
 
         async function load() {
             try {
+                // The API checks the signed-in owner, so the session cookie must be sent.
                 const res = await fetch(
-                    `${BROWSER_API_BASE}/api/vendors/${vendorId}/listings`
+                    `${BROWSER_API_BASE}/api/vendors/${vendorId}/listings`,
+                    { credentials: "include" }
                 );
+                if (res.status === 401 || res.status === 403) {
+                    if (!cancelled) {
+                        setStatus({ type: "error", message: "Sign in as this business's owner to see its listings." });
+                    }
+                    return;
+                }
                 if (!res.ok) throw new Error(`HTTP ${res.status}`);
                 const data = await res.json();
                 if (!cancelled) setListings(data);
@@ -91,6 +125,7 @@ export default function VendorListings({ vendorId, refresh }) {
         try {
             const res = await fetch(`${BROWSER_API_BASE}/api/listings/${id}`, {
                 method: "DELETE",
+                credentials: "include",
             });
             const data = await res.json();
 
@@ -149,56 +184,61 @@ export default function VendorListings({ vendorId, refresh }) {
                                     setReloadKey((k) => k + 1);
                                 }}
                                 onCancel={() => setEditingId(null)}
+                                onPhotosChanged={() => setReloadKey((k) => k + 1)}
                             />
                         </div>
                     ) : (
                         <div
                             key={listing.listing_id}
-                            className="p-4 border border-neutral-700 rounded-md"
+                            className="flex gap-4 p-4 border border-neutral-700 rounded-md"
                         >
-                            <div className="flex items-start justify-between gap-3">
-                                <h4 className="text-md font-semibold">
-                                    {listing.listing_title}
-                                </h4>
-                                <StatusBadge status={listing.listing_status} />
-                            </div>
+                            <ListingThumbnail listing={listing} />
 
-                            <p className="text-gray-400">{priceLabel(listing)}</p>
-                            {listing.listing_min_order_qty && (
-                                <p className="text-gray-400">
-                                    Min order: {listing.listing_min_order_qty}
-                                    {listing.listing_price_unit
-                                        ? ` ${listing.listing_price_unit}`
-                                        : ""}
-                                </p>
-                            )}
-                            <p className="text-gray-400">
-                                {listing.category_name || "Uncategorised"}
-                            </p>
+                            <div className="min-w-0 flex-1">
+                                <div className="flex items-start justify-between gap-3">
+                                    <h4 className="text-md font-semibold">
+                                        {listing.listing_title}
+                                    </h4>
+                                    <StatusBadge status={listing.listing_status} />
+                                </div>
 
-                            {listing.listing_status === "rejected" &&
-                                listing.listing_rejection_reason && (
-                                    <p className="mt-2 text-sm text-red-600">
-                                        {listing.listing_rejection_reason}
+                                <p className="text-gray-400">{priceLabel(listing)}</p>
+                                {listing.listing_min_order_qty && (
+                                    <p className="text-gray-400">
+                                        Min order: {listing.listing_min_order_qty}
+                                        {listing.listing_price_unit
+                                            ? ` ${listing.listing_price_unit}`
+                                            : ""}
                                     </p>
                                 )}
+                                <p className="text-gray-400">
+                                    {listing.category_name || "Uncategorised"}
+                                </p>
 
-                            <div className="flex gap-3 mt-3">
-                                <button
-                                    type="button"
-                                    className="form-button-secondary"
-                                    onClick={() => setEditingId(listing.listing_id)}
-                                >
-                                    Edit
-                                </button>
+                                {listing.listing_status === "rejected" &&
+                                    listing.listing_rejection_reason && (
+                                        <p className="mt-2 text-sm text-red-600">
+                                            {listing.listing_rejection_reason}
+                                        </p>
+                                    )}
 
-                                <button
-                                    type="button"
-                                    className="form-button-danger"
-                                    onClick={() => deleteListing(listing.listing_id)}
-                                >
-                                    Delete
-                                </button>
+                                <div className="flex gap-3 mt-3">
+                                    <button
+                                        type="button"
+                                        className="form-button-secondary"
+                                        onClick={() => setEditingId(listing.listing_id)}
+                                    >
+                                        Edit
+                                    </button>
+
+                                    <button
+                                        type="button"
+                                        className="form-button-danger"
+                                        onClick={() => deleteListing(listing.listing_id)}
+                                    >
+                                        Delete
+                                    </button>
+                                </div>
                             </div>
                         </div>
                     )

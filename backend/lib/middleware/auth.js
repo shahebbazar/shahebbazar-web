@@ -198,11 +198,78 @@ async function requireVendorOwnership(req, res, next) {
     }
 }
 
+// Allows admins, or the vendor who owns the business the listing belongs to.
+// Sets req.listing and req.vendor for the route.
+async function requireListingOwnership(req, res, next) {
+    if (!req.user) {
+        return res.status(401).json({
+            success: false,
+            error: "Authentication required"
+        });
+    }
+
+    if (req.user.user_role !== "admin" && req.user.user_role !== "vendor") {
+        return res.status(403).json({
+            success: false,
+            error: "Vendor access required"
+        });
+    }
+
+    const raw = String(req.params.listingId ?? "");
+    const listingId = /^\d{1,10}$/.test(raw) && Number(raw) <= 2147483647 ? Number(raw) : 0;
+
+    if (listingId <= 0) {
+        return res.status(400).json({
+            success: false,
+            error: "Invalid listing id"
+        });
+    }
+
+    try {
+        const result = await pool.query(
+            `SELECT l.listing_id, l.vendor_id, v.user_id
+             FROM vendor_listings l
+             JOIN vendors v ON v.vendor_id = l.vendor_id
+             WHERE l.listing_id = $1`,
+            [listingId]
+        );
+
+        if (result.rowCount === 0) {
+            return res.status(404).json({
+                success: false,
+                error: "Listing not found."
+            });
+        }
+
+        const row = result.rows[0];
+
+        if (req.user.user_role !== "admin" && row.user_id !== req.user.user_id) {
+            return res.status(403).json({
+                success: false,
+                error: "You do not own this listing"
+            });
+        }
+
+        req.listing = { listing_id: row.listing_id, vendor_id: row.vendor_id };
+        req.vendor = { vendor_id: row.vendor_id };
+
+        return next();
+    } catch (error) {
+        console.error("Listing ownership check failed:", error);
+
+        return res.status(500).json({
+            success: false,
+            error: "Unable to verify listing ownership"
+        });
+    }
+}
+
 module.exports = {
     SESSION_COOKIE_NAME,
     hashSessionToken,
     resolveSession,
     requireAuthenticatedUser,
     requireRole,
-    requireVendorOwnership
+    requireVendorOwnership,
+    requireListingOwnership
 };

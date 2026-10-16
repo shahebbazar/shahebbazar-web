@@ -66,7 +66,7 @@ export function ImagesSection({
         try {
             const form = new FormData();
             form.append("logo", file);
-            const res = await fetch(`${BROWSER_API_BASE}/api/vendors/${vendorId}/logo`, { method: "POST", body: form });
+            const res = await fetch(`${BROWSER_API_BASE}/api/vendors/${vendorId}/logo`, { method: "POST", body: form, credentials: "include" });
             if (!res.ok) return setMessage({ type: "error", text: await errorText(res) });
             const { logo_url } = await res.json();
             onLogoChange(logo_url);
@@ -82,7 +82,7 @@ export function ImagesSection({
         setBusy("logo");
         setMessage(null);
         try {
-            const res = await fetch(`${BROWSER_API_BASE}/api/vendors/${vendorId}/logo`, { method: "DELETE" });
+            const res = await fetch(`${BROWSER_API_BASE}/api/vendors/${vendorId}/logo`, { method: "DELETE", credentials: "include" });
             if (!res.ok) return setMessage({ type: "error", text: await errorText(res) });
             onLogoChange(null);
         } catch {
@@ -109,7 +109,7 @@ export function ImagesSection({
         try {
             const form = new FormData();
             for (const file of files) form.append("photos", file);
-            const res = await fetch(`${BROWSER_API_BASE}/api/vendors/${vendorId}/photos`, { method: "POST", body: form });
+            const res = await fetch(`${BROWSER_API_BASE}/api/vendors/${vendorId}/photos`, { method: "POST", body: form, credentials: "include" });
             if (!res.ok) return setMessage({ type: "error", text: await errorText(res) });
             const body = await res.json();
             onPhotosFromServer(body.photos);
@@ -126,7 +126,7 @@ export function ImagesSection({
         setBusy("photos");
         setMessage(null);
         try {
-            const res = await fetch(`${BROWSER_API_BASE}/api/vendors/${vendorId}/photos/${photo.id}`, { method: "DELETE" });
+            const res = await fetch(`${BROWSER_API_BASE}/api/vendors/${vendorId}/photos/${photo.id}`, { method: "DELETE", credentials: "include" });
             if (!res.ok && res.status !== 404) return setMessage({ type: "error", text: await errorText(res) });
             onPhotosFromServer(photos.filter((p) => p.id !== photo.id));
         } catch {

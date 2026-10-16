@@ -294,6 +294,7 @@ Run these from the repository root.
 | `npm run db:load` | Create the database if required and load the baseline schema, seed data and seed images |
 | `npm run db:reset` | Drop, recreate and reload the database after confirmation |
 | `npm run db:verify` | Check the database has every required table, view and column |
+| `npm test` | Run the backend API tests against a throwaway `<PGDATABASE>_test` database |
 | `npm run build` | Build the frontend for production |
 | `npm start` | Start both production processes after a frontend build |
 | `npm run lint` | Run frontend lint checks |
@@ -403,6 +404,11 @@ an active session and the required role or ownership relationship.
 | POST | `/api/auth/register/customer` | Create a verified customer account |
 | POST | `/api/auth/logout` | Delete the active session and expire the cookie |
 | GET | `/api/vendor-account/businesses` | Businesses owned by the authenticated vendor account |
+| GET / POST | `/api/vendors/:vendorId/listings` | The owner's listings with their photos / create a listing (owner or admin) |
+| PUT / DELETE | `/api/listings/:listingId` | Update or delete a listing (owner or admin) |
+| POST | `/api/listings/:listingId/photos` | Upload up to 8 JPG/PNG/WEBP photos, 5 MB each (owner or admin) |
+| PUT | `/api/listings/:listingId/photos/:photoId/primary` | Make a photo the listing's main photo (owner or admin) |
+| DELETE | `/api/listings/:listingId/photos/:photoId` | Remove a listing photo; the next one becomes main (owner or admin) |
 
 Sponsored results are returned separately from ordinary search results and must
 render with a visible sponsored label.
@@ -501,9 +507,8 @@ schema state separately.
   returns validation details, but invalid categories, description, location or
   contact fields are not always obvious in the form.
 
-- **Seed photos are missing.** Five seeded listing photos and five business
-  covers point at images that are no longer in the repository, so they show
-  as broken images. Suitable development images still need choosing; see
+- **The seed has no photos yet.** Seeded businesses and listings show
+  placeholders until suitable development images are chosen; see
   `database/README.md`.
 
 - **Business and listing image uploads require completion.** Image rendering
