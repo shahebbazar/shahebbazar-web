@@ -7,7 +7,7 @@ Generated from the live PostgreSQL schema: **27 tables**, **45 foreign keys** an
 How to read it: `PK` primary key, `FK` foreign key, `UK` unique. Each line joins a parent (left) to a child (right):
 `||--o{` one parent to many children, `o|--o{` optional parent, `||--o|` one-to-one. The label is the foreign-key column.
 
-The schema itself, with the reasoning behind each table, is in `database/schema.v2*.sql` and `database/SCHEMA-NOTES.md`.
+The schema itself is in `database/baseline/schema.sql`; `database/README.md` explains how it is loaded and changed, and `database/legacy/SCHEMA-NOTES.md` records the reasoning behind the v2 design.
 
 ## 1. Accounts and sign-in
 

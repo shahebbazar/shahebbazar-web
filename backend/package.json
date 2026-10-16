@@ -9,6 +9,7 @@
     "dev": "nodemon index.js",
     "db:load": "node scripts/load-db.js",
     "db:reset": "node scripts/load-db.js --reset",
+    "db:verify": "node scripts/verify-db.js",
     "docs:erd": "node scripts/generate-erd.js"
   },
   "keywords": [],
