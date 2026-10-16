@@ -38,16 +38,18 @@ exists. Runtime uploads in `backend/uploads/` are not tracked in Git.
 Seed images are for development and demonstrations only, so licensing is not a
 concern, but each one must suit the business or listing it illustrates.
 
-> **Known gap (to revisit):** `seed-assets/` does not exist yet. The five
-> listing photos and five business covers in `baseline/seed.sql` still point at
-> `uploads/1788…jpg` files that were personal test uploads and were removed
-> from the repository, so those seeded records show broken images. To fix:
-> choose suitable photos for `katan-silk-saree`, `jute-shopping-bag`,
-> `khirsapat-mango`, `ms-grill-fabrication`, `puthia-temple-day-tour` and the
-> covers of `rajshahi-medical-centre`, `padma-view-restaurant`,
-> `grand-river-view-hotel`, `rajshahi-craft-outlet` and `digitax-accounting`;
-> add them to `seed-assets/` with descriptive names; and update the paths in
-> `baseline/seed.sql`.
+> **Known gap (to revisit):** the seed has no photos yet. The earlier sample
+> photos were personal test uploads and were removed, and the seed rows that
+> pointed at them were taken out so pages show placeholders rather than broken
+> images. To add development photos: choose images that suit each record, put
+> them in `seed-assets/` with descriptive names, and add `listing_photos` rows
+> (and `vendor_cover_url` values) back to `baseline/seed.sql`. Records that
+> previously had photos: listings `katan-silk-saree`, `jute-shopping-bag`,
+> `khirsapat-mango`, `ms-grill-fabrication`, `puthia-temple-day-tour`,
+> `general-medicine`, `radiology`, `kacchi-biryani`, `deluxe-room`,
+> `handloom-kurta`; covers for `rajshahi-medical-centre`,
+> `padma-view-restaurant`, `grand-river-view-hotel`, `rajshahi-craft-outlet`
+> and `digitax-accounting`.
 
 ## Changing the schema
 

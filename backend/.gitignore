@@ -32,5 +32,6 @@ yarn-error.log*
 # typescript
 *.tsbuildinfo
 next-env.d.ts
-#/uploads/
+# Runtime uploads (seed images are copied in from database/seed-assets/ by db:load).
+/uploads/
 !.env.example

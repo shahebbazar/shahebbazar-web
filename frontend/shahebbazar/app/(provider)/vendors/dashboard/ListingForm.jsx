@@ -1,6 +1,6 @@
 "use client";
 import { useEffect, useState } from "react";
-import { BROWSER_API_BASE } from "@/lib/apiBase";
+import { BROWSER_API_BASE, browserAssetUrl } from "@/lib/apiBase";
 
 // Shared by the add-listing page and the inline editor, so the two cannot
 // drift apart. Field names match schema v2 — the earlier form posted title,
@@ -22,6 +22,7 @@ export default function ListingForm({
     listing = null,
     onSaved,
     onCancel,
+    onPhotosChanged = null,
 }) {
     const editing = Boolean(listing);
 
@@ -42,6 +43,11 @@ export default function ListingForm({
 
     const [categories, setCategories] = useState([]);
     const [photos, setPhotos] = useState([]);
+    // Bumped to clear the file picker after a save, so the same files are not uploaded twice.
+    const [fileInputKey, setFileInputKey] = useState(0);
+    // The listing's saved photos, managed in the editor.
+    const [savedPhotos, setSavedPhotos] = useState(listing?.photos ?? []);
+    const [photoBusy, setPhotoBusy] = useState(false);
     const [status, setStatus] = useState(null);
     const [saving, setSaving] = useState(false);
 
@@ -110,9 +116,11 @@ export default function ListingForm({
                 ? `${BROWSER_API_BASE}/api/listings/${listing.listing_id}`
                 : `${BROWSER_API_BASE}/api/vendors/${vendorId}/listings`;
 
+            // The API checks the signed-in owner, so the session cookie must be sent.
             const res = await fetch(url, {
                 method: editing ? "PUT" : "POST",
                 headers: { "Content-Type": "application/json" },
+                credentials: "include",
                 body: JSON.stringify(form),
             });
             const data = await res.json();
@@ -131,17 +139,21 @@ export default function ListingForm({
 
                 const photoRes = await fetch(
                     `${BROWSER_API_BASE}/api/listings/${data.listing_id}/photos`,
-                    { method: "POST", body: formData }
+                    { method: "POST", body: formData, credentials: "include" }
                 );
-                const photoData = await photoRes.json();
+                const photoData = await photoRes.json().catch(() => ({}));
 
                 if (!photoRes.ok) {
+                    // The listing itself was saved, so the list still refreshes to show it.
                     setStatus({
                         type: "error",
-                        message: photoData.error || "The listing saved, but the photos did not.",
+                        message: `The listing was saved, but the photos were not: ${photoData.error || "try adding them again."}`,
                     });
+                    if (!editing) setForm(EMPTY);
+                    if (onSaved) onSaved(data);
                     return;
                 }
+                setSavedPhotos(photoData.photos ?? []);
             }
 
             setStatus({
@@ -151,6 +163,8 @@ export default function ListingForm({
                     : "Listing created. It appears publicly once an admin approves it.",
             });
             if (!editing) setForm(EMPTY);
+            setPhotos([]);
+            setFileInputKey((k) => k + 1);
             if (onSaved) onSaved(data);
         } catch (err) {
             console.error("Save failed:", err);
@@ -159,6 +173,30 @@ export default function ListingForm({
             setSaving(false);
         }
     };
+
+    // Makes a saved photo the main one, or removes it, then shows the updated set.
+    async function changePhoto(photoId, action) {
+        setPhotoBusy(true);
+        setStatus(null);
+        try {
+            const res = await fetch(
+                `${BROWSER_API_BASE}/api/listings/${listing.listing_id}/photos/${photoId}${action === "main" ? "/primary" : ""}`,
+                { method: action === "main" ? "PUT" : "DELETE", credentials: "include" }
+            );
+            const data = await res.json().catch(() => ({}));
+            if (!res.ok) {
+                setStatus({ type: "error", message: data.error || "Could not update the photo." });
+                return;
+            }
+            setSavedPhotos(data.photos ?? []);
+            if (onPhotosChanged) onPhotosChanged();
+        } catch (err) {
+            console.error("Photo change failed:", err);
+            setStatus({ type: "error", message: "Could not reach the server." });
+        } finally {
+            setPhotoBusy(false);
+        }
+    }
 
     return (
         <form onSubmit={handleSubmit} className="flex flex-col gap-4">
@@ -240,12 +278,68 @@ export default function ListingForm({
                 className="form-input"
             />
 
-            <input
-                type="file"
-                multiple
-                onChange={handlePhotoUpload}
-                className="form-input"
-            />
+            {editing && savedPhotos.length > 0 && (
+                <div className="flex flex-col gap-2">
+                    <span className="text-sm font-medium">Current photos</span>
+                    <ul className="grid grid-cols-2 gap-3 sm:grid-cols-3">
+                        {savedPhotos.map((photo) => (
+                            <li
+                                key={photo.photo_id}
+                                className="overflow-hidden rounded-lg border border-line bg-surface-2"
+                            >
+                                <div className="relative aspect-4/3">
+                                    {/* eslint-disable-next-line @next/next/no-img-element */}
+                                    <img
+                                        src={browserAssetUrl(photo.photo_url) ?? ""}
+                                        alt=""
+                                        className="size-full object-cover"
+                                    />
+                                    {photo.photo_is_primary && (
+                                        <span className="absolute top-1.5 left-1.5 rounded-md bg-brand-600 px-1.5 py-0.5 text-[0.6875rem] font-semibold text-white">
+                                            Main photo
+                                        </span>
+                                    )}
+                                </div>
+                                <div className="flex gap-2 p-2">
+                                    {!photo.photo_is_primary && (
+                                        <button
+                                            type="button"
+                                            className="form-button-secondary flex-1 px-2 py-1 text-xs"
+                                            disabled={photoBusy}
+                                            onClick={() => changePhoto(photo.photo_id, "main")}
+                                        >
+                                            Make main
+                                        </button>
+                                    )}
+                                    <button
+                                        type="button"
+                                        className="form-button-danger flex-1 px-2 py-1 text-xs"
+                                        disabled={photoBusy}
+                                        onClick={() => changePhoto(photo.photo_id, "remove")}
+                                    >
+                                        Remove
+                                    </button>
+                                </div>
+                            </li>
+                        ))}
+                    </ul>
+                </div>
+            )}
+
+            <label className="flex flex-col gap-1.5 text-sm">
+                <span className="font-medium">{editing ? "Add photos" : "Photos"}</span>
+                <input
+                    key={fileInputKey}
+                    type="file"
+                    multiple
+                    accept="image/jpeg,image/png,image/webp"
+                    onChange={handlePhotoUpload}
+                    className="form-input"
+                />
+                <span className="text-[0.8125rem] text-muted">
+                    JPG, PNG or WEBP, up to 5 MB each and 8 per listing. The first photo becomes the main one.
+                </span>
+            </label>
 
             <div className="flex gap-3">
                 <button type="submit" className="form-button-primary" disabled={saving}>

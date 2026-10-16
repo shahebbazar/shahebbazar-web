@@ -18,6 +18,7 @@
     "db:load": "npm --prefix backend run db:load",
     "db:reset": "npm --prefix backend run db:reset",
     "db:verify": "npm --prefix backend run db:verify",
+    "test": "npm --prefix backend test",
     "docs:erd": "npm --prefix backend run docs:erd",
 
     "lint": "npm --prefix frontend/shahebbazar run lint",

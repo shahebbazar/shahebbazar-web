@@ -264,17 +264,8 @@ FROM (VALUES
 JOIN vendors    v ON v.vendor_slug   = x.vendor_slug
 JOIN categories c ON c.category_slug = x.category_slug;
 
--- Photos: references the sample images in backend/uploads/, so seeded listings resolve to real files.
-INSERT INTO listing_photos (listing_id, photo_url, photo_alt_text, photo_sort_order, photo_is_primary)
-SELECT l.listing_id, p.url, p.alt, 0, TRUE
-FROM (VALUES
-    ('katan-silk-saree',        'uploads/1788451854562-688168547.jpg',  'Katan silk saree with zari border'),
-    ('jute-shopping-bag',       'uploads/1788453621026-466847301.jpg',  'Laminated jute shopping bag'),
-    ('khirsapat-mango',         'uploads/1788454922883-1396819.jpg',    'Crate of Khirsapat mangoes'),
-    ('ms-grill-fabrication',    'uploads/1788455110818-348770521.jpg',  'Mild steel window grill'),
-    ('puthia-temple-day-tour',  'uploads/1788456632248-187962939.jpg',  'Puthia temple complex')
-) AS p(listing_slug, url, alt)
-JOIN vendor_listings l ON l.listing_slug = p.listing_slug;
+-- Listing photos: none until suitable development images are added to database/seed-assets/
+-- (see database/README.md). Seeded listings show a placeholder instead of a broken image.
 
 -- Quote requests in three states (open, quoted, accepted) so every status is represented.
 INSERT INTO quote_requests (
@@ -495,16 +486,8 @@ FROM (VALUES
 JOIN vendors    v ON v.vendor_slug   = m.vendor_slug
 JOIN categories c ON c.category_slug = m.category_slug;
 
--- Cover images from backend/uploads/, so the featured cards show photographs.
-UPDATE vendors v SET vendor_cover_url = c.url
-FROM (VALUES
-    ('rajshahi-medical-centre', 'uploads/1788451854562-688168547.jpg'),
-    ('padma-view-restaurant',   'uploads/1788453621026-466847301.jpg'),
-    ('grand-river-view-hotel',  'uploads/1788454922883-1396819.jpg'),
-    ('rajshahi-craft-outlet',   'uploads/1788455110818-348770521.jpg'),
-    ('digitax-accounting',      'uploads/1788456632248-187962939.jpg')
-) AS c(slug, url)
-WHERE v.vendor_slug = c.slug;
+-- Business covers: none until suitable development images are added to database/seed-assets/
+-- (see database/README.md). Cards show the built-in placeholder instead of a broken image.
 
 -- Opening hours: defaults for approved vendors, then overrides for 24-hour and late-closing businesses.
 INSERT INTO vendor_opening_hours (vendor_id, hours_day_of_week, hours_open_time, hours_close_time)
@@ -700,18 +683,8 @@ JOIN vendors    v ON v.vendor_slug   = x.vendor_slug
 JOIN categories c ON c.category_slug = x.category_slug
 ON CONFLICT (vendor_id, listing_slug) DO NOTHING;
 
--- Associates sample photographs with the new listings so the profile gallery is populated.
-INSERT INTO listing_photos (listing_id, photo_url, photo_alt_text, photo_sort_order, photo_is_primary)
-SELECT l.listing_id, p.url, p.alt, 0, TRUE
-FROM (VALUES
-    ('general-medicine',   'uploads/1788451854562-688168547.jpg', 'General medicine consultation room'),
-    ('radiology',          'uploads/1788453621026-466847301.jpg', 'Radiology suite'),
-    ('kacchi-biryani',     'uploads/1788454922883-1396819.jpg',   'Plate of kacchi biryani'),
-    ('deluxe-room',        'uploads/1788455110818-348770521.jpg', 'Deluxe room with river view'),
-    ('handloom-kurta',     'uploads/1788456632248-187962939.jpg', 'Handloom cotton kurta')
-) AS p(listing_slug, url, alt)
-JOIN vendor_listings l ON l.listing_slug = p.listing_slug
-ON CONFLICT DO NOTHING;
+-- Gallery photos for these listings: none until suitable development images are added to
+-- database/seed-assets/ (see database/README.md).
 
 -- Written review bodies. seed.v2.1 generates ratings without text so the averages are derived from real rows.
 UPDATE reviews r SET review_body = t.body

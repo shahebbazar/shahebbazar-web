@@ -1,38 +1,37 @@
 const express = require("express");
 const router = express.Router();
 const pool = require("../db");
-const multer = require("multer");
-const fs = require("node:fs");
-const path = require("node:path");
+const { imageUpload, receive, discard, storedPath, checkUploads, removeUnreferencedFiles } = require("../lib/uploads");
+const { parseId } = require("../lib/currentUser");
+const {
+    requireAuthenticatedUser,
+    requireRole,
+    requireVendorOwnership,
+    requireListingOwnership,
+} = require("../lib/middleware/auth");
+
+// Every route here is for the business owner (or an admin). Ownership is checked before any
+// request body or upload is read, so a refused request never writes a file to disk.
+const vendorAccess = [requireAuthenticatedUser, requireRole("vendor", "admin"), requireVendorOwnership];
+const listingAccess = [requireAuthenticatedUser, requireRole("vendor", "admin"), requireListingOwnership];
 
 // Schema v2 renamed every column this file writes (title -> listing_title,
 // price -> listing_price, free-text category -> category_id) and added a
 // NOT NULL listing_slug that has to be generated. Inserts using the old names
 // failed against the v2 database.
 
-// Storage config for uploaded photos (local storage for now)
-const storage = multer.diskStorage({
-    destination: (req, file, cb) => {
-        cb(null, "uploads/filename.jpg");
-    },
-    filename: (req, file, cb) => {
-        // Keep original extension
-        const ext = file.originalname.split(".").pop();
-        const uniqueName = `${Date.now()}-${Math.round(Math.random() * 1e9)}.${ext}`;
-        cb(null, uniqueName);
-    }
-});
+const LISTING_PHOTO_MAX_BYTES = 5 * 1024 * 1024;
+const LISTING_PHOTOS_MAX = 8;
 
-const upload = multer({
-    storage,
-    fileFilter: (req, file, cb) => {
-        const allowed = ["image/jpeg", "image/png", "image/jpg"];
-        if (!allowed.includes(file.mimetype)) {
-            return cb(new Error("Only JPG and PNG images allowed"));
-        }
-        cb(null, true);
-    }
-});
+// A listing's photos, main photo first.
+async function listingPhotos(db, listingId) {
+    const result = await db.query(
+        `SELECT photo_id, photo_url, photo_is_primary FROM listing_photos
+         WHERE listing_id = $1 ORDER BY photo_is_primary DESC, photo_sort_order, photo_id`,
+        [listingId]
+    );
+    return result.rows;
+}
 
 // Bengali letters are outside the ASCII range, so a Bangla title slugifies to
 // an empty string. The caller falls back to a generated slug rather than
@@ -116,8 +115,11 @@ function readBody(body) {
 
 // create listing:
 
-router.post("/vendors/:vendorId/listings", async (req, res) => {
-    const { vendorId } = req.params;
+router.post("/vendors/:vendorId/listings", ...vendorAccess, async (req, res) => {
+    const vendorId = parseId(req.params.vendorId);
+    if (vendorId === null) {
+        return res.status(400).json({ success: false, error: "Invalid vendor id" });
+    }
     const fields = readBody(req.body);
 
     if (fields.categoryId === undefined || fields.categoryId === null) {
@@ -179,8 +181,8 @@ router.post("/vendors/:vendorId/listings", async (req, res) => {
 
 // update listing:
 
-router.put("/listings/:listingId", async (req, res) => {
-    const { listingId } = req.params;
+router.put("/listings/:listingId", ...listingAccess, async (req, res) => {
+    const listingId = req.listing.listing_id;
     const fields = readBody(req.body);
 
     if (fields.categoryId === undefined || fields.categoryId === null) {
@@ -256,97 +258,153 @@ router.put("/listings/:listingId", async (req, res) => {
 // upload photos for a listing:
 router.post(
     "/listings/:listingId/photos",
-    (req, res, next) => {
-        upload.array("photos")(req, res, function (err) {
-            if (err) {
+    ...listingAccess,
+    receive(
+        imageUpload("photos", LISTING_PHOTO_MAX_BYTES, LISTING_PHOTOS_MAX, (req) => `listing-${req.params.listingId}`),
+        "5 MB",
+        "listingId",
+        "listing"
+    ),
+    async (req, res) => {
+        const listingId = parseId(req.params.listingId);
+        if (!(await checkUploads(req, res))) return;
+
+        const client = await pool.connect();
+        try {
+            await client.query("BEGIN");
+            // Locking the listing serialises concurrent uploads, so two cannot both claim the primary photo.
+            const listing = await client.query(
+                "SELECT listing_title FROM vendor_listings WHERE listing_id = $1 FOR UPDATE",
+                [listingId]
+            );
+            if (listing.rowCount === 0) {
+                await client.query("ROLLBACK");
+                await discard(req.files);
+                return res.status(404).json({ success: false, error: "Listing not found." });
+            }
+
+            const existing = await client.query(
+                `SELECT COUNT(*)::int AS n,
+                        COALESCE(MAX(photo_sort_order), -1)::int AS last,
+                        COALESCE(BOOL_OR(photo_is_primary), false) AS has_primary
+                 FROM listing_photos WHERE listing_id = $1`,
+                [listingId]
+            );
+            const { n, last, has_primary: hasPrimary } = existing.rows[0];
+            if (n + req.files.length > LISTING_PHOTOS_MAX) {
+                await client.query("ROLLBACK");
+                await discard(req.files);
+                const left = LISTING_PHOTOS_MAX - n;
                 return res.status(400).json({
                     success: false,
-                    error: err.message
+                    error: left > 0
+                        ? `You can add ${left} more photo${left === 1 ? "" : "s"} (up to ${LISTING_PHOTOS_MAX} per listing).`
+                        : `This listing already has ${LISTING_PHOTOS_MAX} photos. Remove one to add another.`,
                 });
             }
-            next();
-        });
-    },
-    async (req, res) => {
-        const { listingId } = req.params;
 
-        try {
-const photoFiles = req.files || [];
-
-if (photoFiles.length === 0) {
-    return res.status(400).json({
-        success: false,
-        error: "Choose at least one photo.",
-    });
-}
-
-            const existingResult = await pool.query(
-                `SELECT
-                    COUNT(*)::int AS photo_count,
-                    COALESCE(
-                        MAX(photo_sort_order),
-                        -1
-                    )::int AS highest_sort_order,
-                    COALESCE(
-                        BOOL_OR(photo_is_primary),
-                        false
-                    ) AS has_primary
-                FROM listing_photos
-                WHERE listing_id = $1`,
-                            [listingId]
-                        );
-
-            const {
-                photo_count: photoCount,
-                highest_sort_order: highestSortOrder,
-                has_primary: hasPrimary,
-            } = existingResult.rows[0];
-
-            for (const [index, file] of photoFiles.entries()) {
-                const storedPath = path
-                    .relative(
-                        path.resolve(__dirname, ".."),
-                        file.path
-                    )
-                    .split(path.sep)
-                    .join("/");
-
-                const isPrimary =
-                    !hasPrimary &&
-                    photoCount === 0 &&
-                    index === 0;
-
-                await pool.query(
-                    `INSERT INTO listing_photos (
-             listing_id,
-             photo_url,
-             photo_alt_text,
-             photo_sort_order,
-             photo_is_primary
-         )
-         VALUES ($1, $2, $3, $4, $5)`,
-                    [
-                        listingId,
-                        storedPath,
-                        null,
-                        highestSortOrder + index + 1,
-                        isPrimary,
-                    ]
+            const title = listing.rows[0].listing_title;
+            for (const [i, file] of req.files.entries()) {
+                await client.query(
+                    `INSERT INTO listing_photos
+                         (listing_id, photo_url, photo_alt_text, photo_sort_order, photo_is_primary)
+                     VALUES ($1, $2, $3, $4, $5)`,
+                    // The first photo of a listing without one becomes its primary (cover) photo.
+                    [listingId, storedPath(file), title.slice(0, 255), last + 1 + i, !hasPrimary && i === 0]
                 );
             }
-            
+            await client.query("COMMIT");
 
-            res.json({ success: true, message: "Photos uploaded" });
+            res.status(201).json({ success: true, photos: await listingPhotos(pool, listingId) });
         } catch (err) {
-            console.error("Photo upload error:", err);
+            await client.query("ROLLBACK").catch(() => { });
+            await discard(req.files);
+            console.error(`POST /api/listings/${listingId}/photos failed:`, err);
             res.status(500).json({ success: false, error: "Could not save the photos." });
+        } finally {
+            client.release();
         }
     }
 );
 
+// make a photo the listing's main photo:
+router.put("/listings/:listingId/photos/:photoId/primary", ...listingAccess, async (req, res) => {
+    const listingId = req.listing.listing_id;
+    const photoId = parseId(req.params.photoId);
+    if (photoId === null) return res.status(400).json({ success: false, error: "Invalid photo id" });
+
+    const client = await pool.connect();
+    try {
+        await client.query("BEGIN");
+        await client.query("SELECT 1 FROM vendor_listings WHERE listing_id = $1 FOR UPDATE", [listingId]);
+        const photo = await client.query(
+            "SELECT 1 FROM listing_photos WHERE photo_id = $1 AND listing_id = $2",
+            [photoId, listingId]
+        );
+        if (photo.rowCount === 0) {
+            await client.query("ROLLBACK");
+            return res.status(404).json({ success: false, error: "Photo not found." });
+        }
+        // Cleared first: a unique index allows only one main photo per listing.
+        await client.query("UPDATE listing_photos SET photo_is_primary = false WHERE listing_id = $1", [listingId]);
+        await client.query("UPDATE listing_photos SET photo_is_primary = true WHERE photo_id = $1", [photoId]);
+        await client.query("COMMIT");
+        res.json({ success: true, photos: await listingPhotos(pool, listingId) });
+    } catch (err) {
+        await client.query("ROLLBACK").catch(() => { });
+        console.error(`PUT /api/listings/${listingId}/photos/${photoId}/primary failed:`, err);
+        res.status(500).json({ success: false, error: "Could not change the main photo." });
+    } finally {
+        client.release();
+    }
+});
+
+// remove one photo from a listing:
+router.delete("/listings/:listingId/photos/:photoId", ...listingAccess, async (req, res) => {
+    const listingId = req.listing.listing_id;
+    const photoId = parseId(req.params.photoId);
+    if (photoId === null) return res.status(400).json({ success: false, error: "Invalid photo id" });
+
+    const client = await pool.connect();
+    try {
+        await client.query("BEGIN");
+        await client.query("SELECT 1 FROM vendor_listings WHERE listing_id = $1 FOR UPDATE", [listingId]);
+        const removed = await client.query(
+            `DELETE FROM listing_photos WHERE photo_id = $1 AND listing_id = $2
+             RETURNING photo_url, photo_is_primary`,
+            [photoId, listingId]
+        );
+        if (removed.rowCount === 0) {
+            await client.query("ROLLBACK");
+            return res.status(404).json({ success: false, error: "Photo not found." });
+        }
+        // Removing the main photo promotes the next one, so the listing keeps a cover while it has photos.
+        if (removed.rows[0].photo_is_primary) {
+            await client.query(
+                `UPDATE listing_photos SET photo_is_primary = true
+                 WHERE photo_id = (SELECT photo_id FROM listing_photos WHERE listing_id = $1
+                                   ORDER BY photo_sort_order, photo_id LIMIT 1)`,
+                [listingId]
+            );
+        }
+        await client.query("COMMIT");
+        await removeUnreferencedFiles(pool, [removed.rows[0].photo_url]);
+        res.json({ success: true, photos: await listingPhotos(pool, listingId) });
+    } catch (err) {
+        await client.query("ROLLBACK").catch(() => { });
+        console.error(`DELETE /api/listings/${listingId}/photos/${photoId} failed:`, err);
+        res.status(500).json({ success: false, error: "Could not remove the photo." });
+    } finally {
+        client.release();
+    }
+});
+
 // get all listings for a vendor:
-router.get("/vendors/:vendorId/listings", async (req, res) => {
-    const { vendorId } = req.params;
+router.get("/vendors/:vendorId/listings", ...vendorAccess, async (req, res) => {
+    const vendorId = parseId(req.params.vendorId);
+    if (vendorId === null) {
+        return res.status(400).json({ success: false, error: "Invalid vendor id" });
+    }
 
     try {
         // Named rather than SELECT *, so a schema change surfaces here instead
@@ -370,7 +428,16 @@ router.get("/vendors/:vendorId/listings", async (req, res) => {
          l.listing_created_at,
          c.category_name,
          c.category_slug,
-         primary_photo.photo_url AS photo_url
+         primary_photo.photo_url AS photo_url,
+         COALESCE((
+             SELECT json_agg(json_build_object(
+                        'photo_id', lp.photo_id,
+                        'photo_url', lp.photo_url,
+                        'photo_is_primary', lp.photo_is_primary)
+                    ORDER BY lp.photo_is_primary DESC, lp.photo_sort_order, lp.photo_id)
+             FROM listing_photos lp
+             WHERE lp.listing_id = l.listing_id
+         ), '[]'::json) AS photos
      FROM vendor_listings l
      LEFT JOIN categories c
        ON c.category_id = l.category_id
@@ -398,11 +465,12 @@ router.get("/vendors/:vendorId/listings", async (req, res) => {
 
 // delete listings:
 
-router.delete("/listings/:listingId", async (req, res) => {
-    const { listingId } = req.params;
+router.delete("/listings/:listingId", ...listingAccess, async (req, res) => {
+    const listingId = req.listing.listing_id;
 
     try {
-        await pool.query(`DELETE FROM listing_photos WHERE listing_id = $1`, [listingId]);
+        // listing_photos rows go with the listing (ON DELETE CASCADE); their files are removed afterwards.
+        const photos = await pool.query("SELECT photo_url FROM listing_photos WHERE listing_id = $1", [listingId]);
         const result = await pool.query(
             `DELETE FROM vendor_listings WHERE listing_id = $1`,
             [listingId]
@@ -411,6 +479,7 @@ router.delete("/listings/:listingId", async (req, res) => {
         if (result.rowCount === 0) {
             return res.status(404).json({ success: false, error: "Listing not found." });
         }
+        await removeUnreferencedFiles(pool, photos.rows.map((r) => r.photo_url));
         res.json({ success: true, message: "Listing deleted" });
     } catch (err) {
         console.error("Listing delete error:", err);
