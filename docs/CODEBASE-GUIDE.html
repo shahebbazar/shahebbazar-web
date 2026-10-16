@@ -628,7 +628,7 @@ cp backend/.env.example backend/.env
 cp frontend/shahebbazar/.env.example frontend/shahebbazar/.env.local
 <span class="c"># then edit backend/.env and set PGPASSWORD — nothing connects until you do</span>
 
-npm run db:load    <span class="c"># creates the database and loads all six SQL files</span>
+npm run db:load    <span class="c"># creates the database and loads the baseline schema and seed</span>
 npm run dev        <span class="c"># starts both servers</span></pre>
   </div>
 
@@ -649,7 +649,7 @@ npm run dev        <span class="c"># starts both servers</span></pre>
       <thead><tr><th>Command</th><th>What it does</th></tr></thead>
       <tbody>
         <tr><td class="mono-col">npm run dev</td><td>Both servers, reloading on change (<code>node --watch</code> for the API, Turbopack for the web)</td></tr>
-        <tr><td class="mono-col">npm run db:load</td><td>Creates the database if absent, applies the six SQL files in order, prints row counts</td></tr>
+        <tr><td class="mono-col">npm run db:load</td><td>Creates the database if absent, loads the baseline schema and seed, copies seed images, verifies and prints row counts</td></tr>
         <tr><td class="mono-col">npm run db:reset</td><td>Drops the database, recreates it, reloads. Asks for confirmation first</td></tr>
         <tr><td class="mono-col">npm run build</td><td>Production build of the frontend only</td></tr>
         <tr><td class="mono-col">npm run typecheck</td><td><code>tsc --noEmit</code> over the frontend — catches API-shape drift</td></tr>
@@ -755,7 +755,7 @@ npm run dev        <span class="c"># starts both servers</span></pre>
   <p>This is the shared projection behind every business list on the site: home page, search results, related shops. Reading from it is what makes "approved only" impossible to forget.</p>
 
   <div class="code">
-    <div class="code-label"><span>database/schema.v2.1.sql</span><span class="who">abridged</span></div>
+    <div class="code-label"><span>database/baseline/schema.sql</span><span class="who">abridged</span></div>
 <pre><span class="k">CREATE VIEW</span> v_business_cards <span class="k">AS</span>
 <span class="k">SELECT</span> v.vendor_id, v.vendor_slug, v.vendor_name, …
        v.vendor_verified_at <span class="k">IS NOT NULL</span>        <span class="k">AS</span> is_verified,
@@ -867,27 +867,26 @@ module.exports = pool;</pre>
   <p><code>npm run db:load</code> runs <span class="pathname">backend/scripts/load-db.js</span>, which does four things in order:</p>
 
   <ol class="trace">
-    <li><span class="step db">1</span><div class="what"><strong>Checks all six SQL files exist</strong><p>Fails before touching the database rather than half way through.</p></div></li>
+    <li><span class="step db">1</span><div class="what"><strong>Checks the baseline files exist</strong><p><code>database/baseline/schema.sql</code> and <code>seed.sql</code>. Fails before touching the database rather than half way through.</p></div></li>
     <li><span class="step db">2</span><div class="what"><strong>Connects to the <code>postgres</code> maintenance database</strong><p>You cannot <code>CREATE DATABASE</code> from inside the database you are creating, so it connects to <code>postgres</code> first. With <code>--reset</code> it also runs <code>pg_terminate_backend</code> to kick open connections — a single pgAdmin tab left open will otherwise block <code>DROP DATABASE</code>.</p></div></li>
-    <li><span class="step db">3</span><div class="what"><strong>Applies the six files in dependency order</strong><p>Each file wraps itself in <code>BEGIN … COMMIT</code>, so a file either applies completely or not at all.</p></div></li>
-    <li><span class="step db">4</span><div class="what"><strong>Prints row counts</strong><p>businesses / listings / categories / events / moderation queue — so a silent partial load is visible immediately.</p></div></li>
+    <li><span class="step db">3</span><div class="what"><strong>Applies the schema, then the seed</strong><p>The baseline is a full schema dump, so it only loads into an empty database; <code>db:load</code> refuses otherwise and points you to <code>db:reset</code>. The seed wraps its inserts in transactions.</p></div></li>
+    <li><span class="step db">4</span><div class="what"><strong>Copies the seed images</strong><p>From <code>database/seed-assets/</code> into <code>backend/uploads/</code>, so seeded listings and covers show photographs.</p></div></li>
+    <li><span class="step db">5</span><div class="what"><strong>Verifies and prints row counts</strong><p>Runs <code>database/checks/verify-baseline.sql</code>, then prints businesses / listings / categories / events / moderation queue — so a silent partial load is visible immediately.</p></div></li>
   </ol>
 
   <div class="tw">
     <table>
-      <thead><tr><th class="num">#</th><th>File</th><th>What it adds</th></tr></thead>
+      <thead><tr><th>File</th><th>What it holds</th></tr></thead>
       <tbody>
-        <tr><td class="num">1</td><td class="mono-col">schema.v2.sql</td><td>Core: 18 tables, 3 views, the <code>pg_trgm</code> extension</td></tr>
-        <tr><td class="num">2</td><td class="mono-col">schema.v2.1.sql</td><td>Opening hours, events, saved businesses, and <code>v_business_cards</code></td></tr>
-        <tr><td class="num">3</td><td class="mono-col">seed.v2.sql</td><td>B2B sample merchants, locations, categories, RFQs</td></tr>
-        <tr><td class="num">4</td><td class="mono-col">seed.v2.1.sql</td><td>Consumer directory content for the home page</td></tr>
-        <tr><td class="num">5</td><td class="mono-col">schema.v2.2.sql</td><td><code>vendors.vendor_website</code> and the <code>vendor_facts</code> table</td></tr>
-        <tr><td class="num">6</td><td class="mono-col">seed.v2.2.sql</td><td>Profile detail: services, facts, written reviews</td></tr>
+        <tr><td class="mono-col">baseline/schema.sql</td><td>The complete schema: 27 tables, 4 views, the <code>pg_trgm</code> extension</td></tr>
+        <tr><td class="mono-col">baseline/seed.sql</td><td>Locations, categories, businesses, listings, accounts for every role, reviews, events and sample analytics</td></tr>
+        <tr><td class="mono-col">seed-assets/</td><td>The images the seed references</td></tr>
+        <tr><td class="mono-col">checks/verify-baseline.sql</td><td>The completeness check run by <code>db:load</code> and <code>db:verify</code></td></tr>
       </tbody>
     </table>
   </div>
 
-  <p>The order is not arbitrary — <code>schema.v2.1.sql</code> must run before the seeds because <code>v_business_cards</code> is what the loader's row count reads from, and <code>schema.v2.2.sql</code> is additive on top of already-seeded data. <span class="pathname">database/schema.sql</span> and <span class="pathname">sampleinput.sql</span> are the superseded originals — <strong>do not run them</strong>.</p>
+  <p>The historical versioned files (<code>schema.v2*.sql</code>, <code>seed.v2*.sql</code>, and the original <code>schema.sql</code> / <code>sampleinput.sql</code>) are kept in <span class="pathname">database/legacy/</span> for reference only — <strong>do not run them</strong>.</p>
 
   <h3>Step 4 — proving it worked</h3>
   <p>Connecting successfully proves almost nothing: <code>SELECT NOW()</code> works fine against a completely empty database, while every data endpoint returns 500. So the API checks the schema separately, in one round trip:</p>
@@ -907,7 +906,7 @@ module.exports = pool;</pre>
 <pre>{ "ok": false, "db": true,
   "schema": { "ok": false,
               "missing": [ { "name": "v_business_cards",
-                             "file": "schema.v2.1.sql" } ] },
+                             "file": "database/baseline/schema.sql" } ] },
   "hint": "Database reachable but incomplete. … Run \"npm run db:load\"" }</pre>
   </div>
 
@@ -1358,8 +1357,8 @@ module.exports = pool;</pre>
       <thead><tr><th>To change…</th><th>Open</th><th></th></tr></thead>
       <tbody>
         <tr><td>Database connection settings</td><td class="mono-col">backend/.env</td><td><span class="chip db">DB</span></td></tr>
-        <tr><td>Tables, columns, views</td><td class="mono-col">database/schema.v2*.sql</td><td><span class="chip db">DB</span></td></tr>
-        <tr><td>Sample data</td><td class="mono-col">database/seed.v2*.sql</td><td><span class="chip db">DB</span></td></tr>
+        <tr><td>Tables, columns, views</td><td class="mono-col">database/baseline/schema.sql</td><td><span class="chip db">DB</span></td></tr>
+        <tr><td>Sample data</td><td class="mono-col">database/baseline/seed.sql</td><td><span class="chip db">DB</span></td></tr>
         <tr><td>How the database is loaded</td><td class="mono-col">backend/scripts/load-db.js</td><td><span class="chip db">DB</span></td></tr>
         <tr><td>Public API behaviour or SQL</td><td class="mono-col">backend/routes/public.js</td><td><span class="chip api">API</span></td></tr>
         <tr><td>Vendor registration, listings, uploads</td><td class="mono-col">backend/routes/vendors.js<br>backend/routes/vendorListings.js</td><td><span class="chip api">API</span></td></tr>

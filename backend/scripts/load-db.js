@@ -1,32 +1,26 @@
 #!/usr/bin/env node
-// Database loader with legacy and consolidated-baseline modes.
+// Database loader: builds a database from the consolidated baseline schema and seed.
+// The historical versioned files in database/legacy/ are kept for reference only and are never loaded.
 const fs = require("fs");
 const path = require("path");
 const readline = require("readline");
 const { Client } = require("pg");
+const { verifyDatabase } = require("./verify-db");
 require("dotenv").config({ path: path.join(__dirname, "..", ".env") });
 
 const DATABASE_DIR = path.join(__dirname, "..", "..", "database");
-const LEGACY_FILES = [
-  "schema.v2.sql", "schema.v2.1.sql", "seed.v2.sql", "seed.v2.1.sql",
-  "schema.v2.2.sql", "seed.v2.2.sql", "schema.v2.3.sql", "seed.v2.3.sql",
-  "schema.v2.4.sql", "seed.v2.4.sql", "schema.v2.5.sql", "schema.v2.6.sql",
-  "seed.v2.6.sql", "schema.v2.7.sql",
-];
 const BASELINE_FILES = ["baseline/schema.sql", "baseline/seed.sql"];
+// Images the seed references by path; copied into the upload folder so seeded listings display.
+const SEED_ASSETS_DIR = path.join(DATABASE_DIR, "seed-assets");
+const UPLOAD_DIR = process.env.UPLOAD_DIR
+  ? path.resolve(process.env.UPLOAD_DIR)
+  : path.join(__dirname, "..", "uploads");
 
 const args = process.argv.slice(2);
-const baselineMode = args.includes("--baseline");
 const wantsReset = args.includes("--reset");
 const skipPrompt = args.includes("--yes") || args.includes("-y");
 const databaseArg = args.find((arg) => arg.startsWith("--database="));
-const configuredDb = process.env.PGDATABASE || "shahebbazar";
-const dbName = databaseArg
-  ? databaseArg.slice("--database=".length)
-  : baselineMode
-    ? `${configuredDb}_baseline_test`
-    : configuredDb;
-const files = baselineMode ? BASELINE_FILES : LEGACY_FILES;
+const dbName = databaseArg ? databaseArg.slice("--database=".length) : process.env.PGDATABASE || "shahebbazar";
 const connection = {
   host: process.env.PGHOST || "localhost",
   user: process.env.PGUSER || "postgres",
@@ -53,18 +47,30 @@ async function withAdminClient(fn) {
   await client.connect();
   try { return await fn(client); } finally { await client.end(); }
 }
+
+// Copies seed images into the upload folder, leaving any file that already exists untouched.
+function copySeedAssets() {
+  if (!fs.existsSync(SEED_ASSETS_DIR)) return 0;
+  fs.mkdirSync(UPLOAD_DIR, { recursive: true });
+  let copied = 0;
+  for (const name of fs.readdirSync(SEED_ASSETS_DIR)) {
+    const target = path.join(UPLOAD_DIR, name);
+    if (fs.existsSync(target)) continue;
+    fs.copyFileSync(path.join(SEED_ASSETS_DIR, name), target);
+    copied += 1;
+  }
+  return copied;
+}
+
 async function main() {
   validateDatabaseName(dbName);
-  for (const file of files) {
+  for (const file of BASELINE_FILES) {
     const fullPath = path.join(DATABASE_DIR, file);
     if (!fs.existsSync(fullPath)) throw new Error(`Missing SQL file: ${fullPath}`);
   }
-  if (baselineMode && !dbName.endsWith("_test")) {
-    throw new Error("Baseline mode requires a database name ending in _test.");
-  }
   if (wantsReset && !skipPrompt) {
     const answer = await ask(`This drops database "${dbName}". Continue? (yes/no) `);
-    if (!['yes', 'y'].includes(answer)) return console.log("Cancelled. No changes made.");
+    if (!["yes", "y"].includes(answer)) return console.log("Cancelled. No changes made.");
   }
   await withAdminClient(async (admin) => {
     if (wantsReset) {
@@ -84,11 +90,28 @@ async function main() {
   const client = new Client({ ...connection, database: dbName });
   await client.connect();
   try {
-    for (const file of files) {
-      const sql = fs.readFileSync(path.join(DATABASE_DIR, file), "utf8").replace(/^\uFEFF/, "");
+    // The baseline is a full schema dump, so it can only be applied to an empty database.
+    const loaded = await client.query("SELECT to_regclass('public.users') IS NOT NULL AS loaded");
+    if (loaded.rows[0].loaded) {
+      console.log(`Database "${dbName}" is already loaded. Run "npm run db:reset" to rebuild it.`);
+      return;
+    }
+    for (const file of BASELINE_FILES) {
+      const sql = fs.readFileSync(path.join(DATABASE_DIR, file), "utf8").replace(/^﻿/, "");
       await client.query(sql);
       console.log(`  applied ${file}`);
     }
+    const copied = copySeedAssets();
+    console.log(`  copied ${copied} seed image${copied === 1 ? "" : "s"} to ${UPLOAD_DIR}`);
+
+    const problems = await verifyDatabase(client);
+    if (problems.length) {
+      console.error("\nDatabase verification failed:");
+      console.table(problems);
+      process.exitCode = 1;
+      return;
+    }
+
     const summary = await client.query(`
       SELECT 'businesses' AS item, COUNT(*)::int AS n FROM v_business_cards
       UNION ALL SELECT 'listings', COUNT(*)::int FROM vendor_listings
@@ -96,7 +119,7 @@ async function main() {
       UNION ALL SELECT 'events', COUNT(*)::int FROM events
       UNION ALL SELECT 'moderation queue', COUNT(*)::int FROM v_moderation_queue
     `);
-    console.log(`\nComplete (${baselineMode ? "baseline" : "legacy"} mode, ${dbName}).`);
+    console.log(`\nComplete (${dbName}). Verification passed.`);
     for (const row of summary.rows) console.log(`  ${row.item.padEnd(18)} ${row.n}`);
   } finally { await client.end(); }
 }

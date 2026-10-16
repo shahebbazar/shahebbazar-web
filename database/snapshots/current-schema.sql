@@ -2,7 +2,7 @@
 -- PostgreSQL database dump
 --
 
-\restrict 5Na7djF2besTauFjmFaX7XLUTMQI5zS1aUNaEsigQCTime4uI7843Nw6KfE4cnu
+\restrict 2wqpfVxgz8nlw8qmnMLlSDb3qTHMaDeXc8PeXVyGFV66AmH0MwtVavq7lmCzK1o
 
 -- Dumped from database version 15.19
 -- Dumped by pg_dump version 15.19
@@ -120,7 +120,7 @@ CREATE TABLE public.conversations (
     conversation_status character varying(20) DEFAULT 'open'::character varying NOT NULL,
     conversation_created_at timestamp with time zone DEFAULT now() NOT NULL,
     conversation_last_message_at timestamp with time zone,
-    CONSTRAINT conversations_conversation_status_check CHECK (((conversation_status)::text = ANY ((ARRAY['open'::character varying, 'closed'::character varying, 'blocked'::character varying])::text[])))
+    CONSTRAINT conversations_conversation_status_check CHECK (((conversation_status)::text = ANY (ARRAY[('open'::character varying)::text, ('closed'::character varying)::text, ('blocked'::character varying)::text])))
 );
 
 
@@ -163,7 +163,7 @@ CREATE TABLE public.events (
     event_status character varying(20) DEFAULT 'published'::character varying NOT NULL,
     event_created_at timestamp with time zone DEFAULT now() NOT NULL,
     CONSTRAINT events_check CHECK (((event_ends_at IS NULL) OR (event_ends_at >= event_starts_at))),
-    CONSTRAINT events_event_status_check CHECK (((event_status)::text = ANY ((ARRAY['draft'::character varying, 'published'::character varying, 'cancelled'::character varying])::text[])))
+    CONSTRAINT events_event_status_check CHECK (((event_status)::text = ANY (ARRAY[('draft'::character varying)::text, ('published'::character varying)::text, ('cancelled'::character varying)::text])))
 );
 
 
@@ -235,7 +235,7 @@ CREATE TABLE public.locations (
     location_slug character varying(255) NOT NULL,
     location_path text NOT NULL,
     location_created_at timestamp with time zone DEFAULT now() NOT NULL,
-    CONSTRAINT locations_location_type_check CHECK (((location_type)::text = ANY ((ARRAY['country'::character varying, 'division'::character varying, 'district'::character varying, 'city'::character varying, 'area'::character varying])::text[])))
+    CONSTRAINT locations_location_type_check CHECK (((location_type)::text = ANY (ARRAY[('country'::character varying)::text, ('division'::character varying)::text, ('district'::character varying)::text, ('city'::character varying)::text, ('area'::character varying)::text])))
 );
 
 
@@ -308,8 +308,8 @@ CREATE TABLE public.notifications (
     notification_sent_at timestamp with time zone,
     notification_read_at timestamp with time zone,
     notification_created_at timestamp with time zone DEFAULT now() NOT NULL,
-    CONSTRAINT notifications_notification_channel_check CHECK (((notification_channel)::text = ANY ((ARRAY['in_app'::character varying, 'sms'::character varying, 'email'::character varying])::text[]))),
-    CONSTRAINT notifications_notification_status_check CHECK (((notification_status)::text = ANY ((ARRAY['queued'::character varying, 'sent'::character varying, 'failed'::character varying, 'skipped'::character varying])::text[])))
+    CONSTRAINT notifications_notification_channel_check CHECK (((notification_channel)::text = ANY (ARRAY[('in_app'::character varying)::text, ('sms'::character varying)::text, ('email'::character varying)::text]))),
+    CONSTRAINT notifications_notification_status_check CHECK (((notification_status)::text = ANY (ARRAY[('queued'::character varying)::text, ('sent'::character varying)::text, ('failed'::character varying)::text, ('skipped'::character varying)::text])))
 );
 
 
@@ -347,7 +347,7 @@ CREATE TABLE public.otp_codes (
     otp_consumed_at timestamp with time zone,
     otp_request_ip inet,
     otp_created_at timestamp with time zone DEFAULT now() NOT NULL,
-    CONSTRAINT otp_codes_otp_purpose_check CHECK (((otp_purpose)::text = ANY ((ARRAY['login'::character varying, 'register'::character varying, 'recover'::character varying, 'verify'::character varying])::text[])))
+    CONSTRAINT otp_codes_otp_purpose_check CHECK (((otp_purpose)::text = ANY (ARRAY[('login'::character varying)::text, ('register'::character varying)::text, ('recover'::character varying)::text, ('verify'::character varying)::text])))
 );
 
 
@@ -396,7 +396,7 @@ CREATE TABLE public.quote_requests (
     rfq_created_at timestamp with time zone DEFAULT now() NOT NULL,
     rfq_expires_at timestamp with time zone,
     CONSTRAINT quote_requests_check CHECK (((vendor_id IS NOT NULL) OR (category_id IS NOT NULL))),
-    CONSTRAINT quote_requests_rfq_status_check CHECK (((rfq_status)::text = ANY ((ARRAY['open'::character varying, 'quoted'::character varying, 'accepted'::character varying, 'closed'::character varying, 'expired'::character varying])::text[])))
+    CONSTRAINT quote_requests_rfq_status_check CHECK (((rfq_status)::text = ANY (ARRAY[('open'::character varying)::text, ('quoted'::character varying)::text, ('accepted'::character varying)::text, ('closed'::character varying)::text, ('expired'::character varying)::text])))
 );
 
 
@@ -436,8 +436,8 @@ CREATE TABLE public.quote_responses (
     quote_valid_until date,
     quote_status character varying(20) DEFAULT 'sent'::character varying NOT NULL,
     quote_created_at timestamp with time zone DEFAULT now() NOT NULL,
-    CONSTRAINT quote_responses_quote_payment_terms_check CHECK (((quote_payment_terms)::text = ANY ((ARRAY['cash_on_delivery'::character varying, 'advance'::character varying, 'partial_advance'::character varying, 'credit'::character varying, 'negotiable'::character varying])::text[]))),
-    CONSTRAINT quote_responses_quote_status_check CHECK (((quote_status)::text = ANY ((ARRAY['sent'::character varying, 'accepted'::character varying, 'rejected'::character varying, 'withdrawn'::character varying, 'expired'::character varying])::text[])))
+    CONSTRAINT quote_responses_quote_payment_terms_check CHECK (((quote_payment_terms)::text = ANY (ARRAY[('cash_on_delivery'::character varying)::text, ('advance'::character varying)::text, ('partial_advance'::character varying)::text, ('credit'::character varying)::text, ('negotiable'::character varying)::text]))),
+    CONSTRAINT quote_responses_quote_status_check CHECK (((quote_status)::text = ANY (ARRAY[('sent'::character varying)::text, ('accepted'::character varying)::text, ('rejected'::character varying)::text, ('withdrawn'::character varying)::text, ('expired'::character varying)::text])))
 );
 
 
@@ -476,8 +476,8 @@ CREATE TABLE public.reports (
     report_resolved_by integer,
     report_resolved_at timestamp with time zone,
     report_created_at timestamp with time zone DEFAULT now() NOT NULL,
-    CONSTRAINT reports_report_status_check CHECK (((report_status)::text = ANY ((ARRAY['open'::character varying, 'actioned'::character varying, 'dismissed'::character varying])::text[]))),
-    CONSTRAINT reports_report_target_type_check CHECK (((report_target_type)::text = ANY ((ARRAY['vendor'::character varying, 'listing'::character varying, 'review'::character varying, 'message'::character varying])::text[])))
+    CONSTRAINT reports_report_status_check CHECK (((report_status)::text = ANY (ARRAY[('open'::character varying)::text, ('actioned'::character varying)::text, ('dismissed'::character varying)::text]))),
+    CONSTRAINT reports_report_target_type_check CHECK (((report_target_type)::text = ANY (ARRAY[('vendor'::character varying)::text, ('listing'::character varying)::text, ('review'::character varying)::text, ('message'::character varying)::text])))
 );
 
 
@@ -516,7 +516,7 @@ CREATE TABLE public.reviews (
     review_reply text,
     review_replied_at timestamp with time zone,
     CONSTRAINT reviews_review_rating_check CHECK (((review_rating >= 1) AND (review_rating <= 5))),
-    CONSTRAINT reviews_review_status_check CHECK (((review_status)::text = ANY ((ARRAY['published'::character varying, 'pending'::character varying, 'hidden'::character varying, 'removed'::character varying])::text[])))
+    CONSTRAINT reviews_review_status_check CHECK (((review_status)::text = ANY (ARRAY[('published'::character varying)::text, ('pending'::character varying)::text, ('hidden'::character varying)::text, ('removed'::character varying)::text])))
 );
 
 
@@ -616,8 +616,8 @@ CREATE TABLE public.users (
     user_status character varying(20) DEFAULT 'active'::character varying NOT NULL,
     user_created_at timestamp with time zone DEFAULT now() NOT NULL,
     user_updated_at timestamp with time zone DEFAULT now() NOT NULL,
-    CONSTRAINT users_user_role_check CHECK (((user_role)::text = ANY ((ARRAY['customer'::character varying, 'vendor'::character varying, 'admin'::character varying])::text[]))),
-    CONSTRAINT users_user_status_check CHECK (((user_status)::text = ANY ((ARRAY['active'::character varying, 'suspended'::character varying, 'deleted'::character varying])::text[])))
+    CONSTRAINT users_user_role_check CHECK (((user_role)::text = ANY (ARRAY[('customer'::character varying)::text, ('vendor'::character varying)::text, ('admin'::character varying)::text]))),
+    CONSTRAINT users_user_status_check CHECK (((user_status)::text = ANY (ARRAY[('active'::character varying)::text, ('suspended'::character varying)::text, ('deleted'::character varying)::text])))
 );
 
 
@@ -652,7 +652,7 @@ CREATE TABLE public.vendor_profile_views (
     view_source character varying(20),
     view_session_hash character(64),
     view_created_at timestamp with time zone DEFAULT now() NOT NULL,
-    CONSTRAINT vendor_profile_views_view_source_check CHECK (((view_source)::text = ANY ((ARRAY['search'::character varying, 'category'::character varying, 'direct'::character varying, 'share'::character varying, 'sponsored'::character varying])::text[])))
+    CONSTRAINT vendor_profile_views_view_source_check CHECK (((view_source)::text = ANY (ARRAY[('search'::character varying)::text, ('category'::character varying)::text, ('direct'::character varying)::text, ('share'::character varying)::text, ('sponsored'::character varying)::text])))
 );
 
 
@@ -735,9 +735,9 @@ CREATE TABLE public.vendors (
     vendor_nid_submitted_at timestamp with time zone,
     vendor_nid_verified_at timestamp with time zone,
     vendor_nid_verified_by integer,
-    CONSTRAINT vendors_nid_status_check CHECK (((vendor_nid_status)::text = ANY ((ARRAY['pending'::character varying, 'verified'::character varying, 'rejected'::character varying])::text[]))),
-    CONSTRAINT vendors_vendor_business_type_check CHECK (((vendor_business_type)::text = ANY ((ARRAY['b2b'::character varying, 'b2c'::character varying, 'both'::character varying])::text[]))),
-    CONSTRAINT vendors_vendor_status_check CHECK (((vendor_status)::text = ANY ((ARRAY['draft'::character varying, 'pending'::character varying, 'approved'::character varying, 'rejected'::character varying, 'suspended'::character varying])::text[])))
+    CONSTRAINT vendors_nid_status_check CHECK (((vendor_nid_status)::text = ANY (ARRAY[('pending'::character varying)::text, ('verified'::character varying)::text, ('rejected'::character varying)::text]))),
+    CONSTRAINT vendors_vendor_business_type_check CHECK (((vendor_business_type)::text = ANY (ARRAY[('b2b'::character varying)::text, ('b2c'::character varying)::text, ('both'::character varying)::text]))),
+    CONSTRAINT vendors_vendor_status_check CHECK (((vendor_status)::text = ANY (ARRAY[('draft'::character varying)::text, ('pending'::character varying)::text, ('approved'::character varying)::text, ('rejected'::character varying)::text, ('suspended'::character varying)::text])))
 );
 
 
@@ -832,7 +832,7 @@ CREATE TABLE public.vendor_listings (
     listing_created_at timestamp with time zone DEFAULT now() NOT NULL,
     listing_updated_at timestamp with time zone DEFAULT now() NOT NULL,
     CONSTRAINT vendor_listings_check CHECK (((listing_price_max IS NULL) OR (listing_price IS NULL) OR (listing_price_max >= listing_price))),
-    CONSTRAINT vendor_listings_listing_status_check CHECK (((listing_status)::text = ANY ((ARRAY['draft'::character varying, 'pending'::character varying, 'approved'::character varying, 'rejected'::character varying, 'archived'::character varying])::text[])))
+    CONSTRAINT vendor_listings_listing_status_check CHECK (((listing_status)::text = ANY (ARRAY[('draft'::character varying)::text, ('pending'::character varying)::text, ('approved'::character varying)::text, ('rejected'::character varying)::text, ('archived'::character varying)::text])))
 );
 
 
@@ -889,7 +889,7 @@ CREATE TABLE public.vendor_facts (
     fact_value character varying(120) NOT NULL,
     fact_icon character varying(40),
     fact_sort_order smallint DEFAULT 0 NOT NULL,
-    CONSTRAINT vendor_facts_fact_group_check CHECK (((fact_group)::text = ANY ((ARRAY['about'::character varying, 'quick'::character varying])::text[])))
+    CONSTRAINT vendor_facts_fact_group_check CHECK (((fact_group)::text = ANY (ARRAY[('about'::character varying)::text, ('quick'::character varying)::text])))
 );
 
 
@@ -963,7 +963,7 @@ CREATE TABLE public.vendor_payment_methods (
     payment_method character varying(20) NOT NULL,
     payment_note character varying(120),
     payment_sort_order smallint DEFAULT 0 NOT NULL,
-    CONSTRAINT vendor_payment_methods_payment_method_check CHECK (((payment_method)::text = ANY ((ARRAY['cash'::character varying, 'cash_on_delivery'::character varying, 'bank_transfer'::character varying, 'bkash'::character varying, 'nagad'::character varying, 'rocket'::character varying, 'card'::character varying])::text[])))
+    CONSTRAINT vendor_payment_methods_payment_method_check CHECK (((payment_method)::text = ANY (ARRAY[('cash'::character varying)::text, ('cash_on_delivery'::character varying)::text, ('bank_transfer'::character varying)::text, ('bkash'::character varying)::text, ('nagad'::character varying)::text, ('rocket'::character varying)::text, ('card'::character varying)::text])))
 );
 
 
@@ -1060,7 +1060,7 @@ CREATE TABLE public.vendor_social_links (
     vendor_id integer NOT NULL,
     social_platform character varying(20) NOT NULL,
     social_url character varying(255) NOT NULL,
-    CONSTRAINT vendor_social_links_social_platform_check CHECK (((social_platform)::text = ANY ((ARRAY['facebook'::character varying, 'instagram'::character varying, 'youtube'::character varying, 'tiktok'::character varying])::text[])))
+    CONSTRAINT vendor_social_links_social_platform_check CHECK (((social_platform)::text = ANY (ARRAY[('facebook'::character varying)::text, ('instagram'::character varying)::text, ('youtube'::character varying)::text, ('tiktok'::character varying)::text])))
 );
 
 
@@ -2205,5 +2205,5 @@ ALTER TABLE ONLY public.vendors
 -- PostgreSQL database dump complete
 --
 
-\unrestrict 5Na7djF2besTauFjmFaX7XLUTMQI5zS1aUNaEsigQCTime4uI7843Nw6KfE4cnu
+\unrestrict 2wqpfVxgz8nlw8qmnMLlSDb3qTHMaDeXc8PeXVyGFV66AmH0MwtVavq7lmCzK1o
 

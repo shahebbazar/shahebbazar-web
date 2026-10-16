@@ -39,31 +39,25 @@ Files marked **BROKEN** throw against the current schema.
 | `scripts/generate-erd.js` | `npm run docs:erd`. Reads tables, keys and foreign keys from the live database and writes `docs/ER-DIAGRAM.md` as Mermaid: one diagram per area and one of everything. |
 | `routes/vendors.js` | **BROKEN.** `GET /` returns `SELECT * FROM vendors` with no status filter — leaks `vendor_rejection_reason` and moderation state to anonymous callers. `POST /` inserts `vendor_password` and `vendor_city`, columns that no longer exist, and omits the required `user_id` and `vendor_slug`. Written against the old `schema.sql`. |
 | `routes/vendorListings.js` | **BROKEN** (the insert). Configures `multer` for photo uploads (generated filenames, JPEG/PNG only). `POST /vendors/:id/listings` inserts `title, description, price, category` — all four renamed in v2. The photo upload, listing fetch and delete routes work. Stores `file.path`, which contains a backslash on Windows and is not a valid URL. |
-| `scripts/load-db.js` | The `db:load` / `db:reset` command. Verifies all six SQL files exist, connects to the `postgres` maintenance database to `CREATE`/`DROP DATABASE` (with `pg_terminate_backend` to kick connections that would block a drop), applies the six files in order, prints row counts. Maps failure codes to remedies. |
-| `uploads/*.jpg` | Five uploaded images, served by `express.static`. Not gitignored, so they are committed. |
+| `scripts/load-db.js` | The `db:load` / `db:reset` command. Connects to the `postgres` maintenance database to `CREATE`/`DROP DATABASE` (with `pg_terminate_backend` to kick connections that would block a drop), applies `database/baseline/schema.sql` then `seed.sql` to an empty database, copies `database/seed-assets/` into the upload folder, runs the verification check and prints row counts. |
+| `scripts/verify-db.js` | The `db:verify` command. Runs `database/checks/verify-baseline.sql`; also used by `load-db.js`. |
+| `uploads/` | Uploaded images, served by `express.static`. Seed images are copied in by `db:load`. |
 
 ---
 
 ## database/
 
-Run order is fixed. `load-db.js` enforces it; if you load by hand in pgAdmin,
-follow the numbers.
+The database is built from one consolidated baseline. `database/README.md`
+covers the commands and how schema changes are made.
 
-| # | File | What it does |
-| --- | --- | --- |
-| 1 | `schema.v2.sql` | Core schema, 459 lines. 18 tables in 9 numbered sections (identity, geography, taxonomy, vendors, listings, quotations, messaging, reviews, analytics) plus 3 admin views. Enables `pg_trgm`. Status columns use `CHECK` rather than `ENUM` so extending them is a one-line migration. |
-| 2 | `schema.v2.1.sql` | Additive. Adds `vendor_opening_hours`, `events`, `saved_businesses`, and **`v_business_cards`** — the view behind every business list on the site. |
-| 3 | `seed.v2.sql` | B2B sample data: the location hierarchy (Bangladesh → Rajshahi → areas), categories, merchants, listings, RFQs. Inserts by slug lookup rather than hard-coded ids, so it stays correct if partially re-run. |
-| 4 | `seed.v2.1.sql` | Consumer directory content for the home page — opening hours, events. |
-| 5 | `schema.v2.2.sql` | Additive. Adds `vendors.vendor_website` and the `vendor_facts` table (label/value pairs, so a hospital can record beds and a hotel can record check-in time without a migration per business type). |
-| 6 | `seed.v2.2.sql` | Profile detail: services, facts, written reviews. |
-| — | `schema.v2.3.sql`, `seed.v2.3.sql` | `vendor_payment_methods` and its sample rows. |
-| — | `seed.v2.4.sql` | Sixty days of profile views and search appearances for every approved business, from `hashtext()` so every load gives the same numbers. Today is left empty for live data. |
-| — | `schema.v2.5.sql` | `vendor_photos` (the business's own photos; the first is the cover, and existing covers are copied in as first photos) and `vendor_social_links` (Facebook, Instagram, YouTube, TikTok). |
-| — | `schema.v2.4.sql` | `vendor_search_impressions` (search appearances per business per day, for the provider dashboard), and `v_active_users_daily` redefined to count visitors who searched as well as those who opened a profile. |
-| — | `schema.sql` | **DEAD.** The original schema. Superseded by v2. The two broken routes were written against this. |
-| — | `sampleinput.sql` | **DEAD.** Original seed, 4 lines. |
-| — | `SCHEMA-NOTES.md` | Why v2 differs from v1, mapped to the client's scope email. §4 lists the exact code changes the broken routes need. Read this before arguing with the schema. |
+| File | What it does |
+| --- | --- |
+| `baseline/schema.sql` | The complete schema: 27 tables and 4 views covering accounts and sign-in, locations, categories, businesses, listings and photos, quotations, messaging, reviews, moderation and analytics. Enables `pg_trgm`. Status columns use `CHECK` rather than `ENUM` so extending them is a one-line change. |
+| `baseline/seed.sql` | Sample data: the location hierarchy (Bangladesh → Rajshahi → areas), categories, businesses, listings, accounts for every role, reviews, events and sixty days of analytics. |
+| `seed-assets/` | The images the seed references as `uploads/<file>`; `db:load` copies them into the upload folder. |
+| `checks/verify-baseline.sql` | Returns a row for anything missing. Run by `db:load` and `db:verify`. |
+| `snapshots/current-schema.sql` | Schema-only dump of a freshly loaded database, for reviewing differences. |
+| `legacy/` | Historical `schema.v2*.sql` / `seed.v2*.sql` files, the original `schema.sql` and `sampleinput.sql`, and `SCHEMA-NOTES.md` (why v2 differs from v1, mapped to the client's scope email). Reference only; never loaded. |
 
 ### The four views
 

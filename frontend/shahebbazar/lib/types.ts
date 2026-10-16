@@ -136,7 +136,7 @@ export interface SimilarBusiness extends BusinessCard {
     distance_km: string | number | null;
 }
 
-// Must match the CHECK constraint in schema.v2.3.sql.
+// Must match vendor_payment_methods_payment_method_check in database/baseline/schema.sql.
 export type PaymentMethodKey =
     | "cash"
     | "cash_on_delivery"

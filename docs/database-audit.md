@@ -1640,3 +1640,15 @@ The disposable comparison databases are:
 shahebbazar_baseline_test
 shahebbazar_legacy_test
 ```
+
+## Baseline cut-over (16 October 2026)
+
+The team approved the consolidated baseline as the only way to build the database.
+
+- `npm run db:load` and `npm run db:reset` now load only `database/baseline/schema.sql` and `database/baseline/seed.sql`. The `--baseline` flag, the legacy loading sequence and the `_test` database-name restriction were removed.
+- `db:load` refuses to load into a database that already has tables; `db:reset` rebuilds it.
+- After loading, the loader copies `database/seed-assets/` into the upload folder and runs `database/checks/verify-baseline.sql`. The same check is available as `npm run db:verify`.
+- The duplicate `schema.v2*.sql` and `seed.v2*.sql` files in `database/` were removed; identical copies remain in `database/legacy/`. The original `schema.sql`, `sampleinput.sql` and `SCHEMA-NOTES.md` were moved to `database/legacy/`.
+- `backend/lib/verifySchema.js` and `database/checks/verify-baseline.sql` now cover all 27 tables and 4 views.
+- Seed images are still outstanding. The seed references five `uploads/1788…jpg` files that were personal test uploads, rightly removed from Git in commit `25d1e11`, so those listing photos and business covers show broken images. Suitable development images need choosing and adding to `database/seed-assets/`; see `database/README.md`.
+- Verified on a disposable database: load, refusal to reload, `db:verify`, reset and the API startup schema check all passed. The regenerated schema snapshot differs from the previous one only in how PostgreSQL prints `CHECK` constraints.

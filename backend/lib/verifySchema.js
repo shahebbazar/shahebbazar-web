@@ -2,38 +2,41 @@
 
 const pool = require("../db");
 
-/** Required database object, mapped to the SQL file that defines it. */
-const REQUIRED_OBJECTS = {
-    users: "schema.v2.sql",
-    vendors: "schema.v2.sql",
-    categories: "schema.v2.sql",
-    locations: "schema.v2.sql",
-    vendor_listings: "schema.v2.sql",
-    listing_photos: "schema.v2.sql",
-    quote_requests: "schema.v2.sql",
-    v_search_trends_daily: "schema.v2.sql",
-    v_moderation_queue: "schema.v2.sql",
-    vendor_opening_hours: "schema.v2.1.sql",
-    events: "schema.v2.1.sql",
-    saved_businesses: "schema.v2.1.sql",
-    v_business_cards: "schema.v2.1.sql",
-    vendor_facts: "schema.v2.2.sql",
-    vendor_payment_methods: "schema.v2.3.sql",
-    vendor_search_impressions: "schema.v2.4.sql",
-    vendor_photos: "schema.v2.5.sql",
-    vendor_social_links: "schema.v2.5.sql",
-};
+// Every object is defined in the consolidated baseline; the versioned files in database/legacy/ are not loaded.
+const SCHEMA_FILE = "database/baseline/schema.sql";
 
-// Required columns added to existing tables, as "table.column".
-const REQUIRED_COLUMNS = {
-    "reviews.review_reply": "schema.v2.6.sql",
+/** Required tables and views, mapped to the SQL file that defines them. */
+const REQUIRED_OBJECTS = Object.fromEntries(
+    [
+        // Accounts and sign-in
+        "users", "sessions", "otp_codes",
+        // Taxonomy and businesses
+        "locations", "categories", "vendors", "vendor_categories", "vendor_opening_hours",
+        "vendor_facts", "vendor_payment_methods", "vendor_photos", "vendor_social_links",
+        // Products and services
+        "vendor_listings", "listing_photos",
+        // Quotations and messaging
+        "quote_requests", "quote_responses", "conversations", "messages", "notifications",
+        // Reviews, moderation and saved businesses
+        "reviews", "reports", "audit_logs", "saved_businesses",
+        // Analytics and events
+        "search_logs", "vendor_profile_views", "vendor_search_impressions", "events",
+        // Views
+        "v_business_cards", "v_moderation_queue", "v_search_trends_daily", "v_active_users_daily",
+    ].map((name) => [name, SCHEMA_FILE])
+);
 
-    "vendors.vendor_nid_reference": "schema.v2.7.sql",
-    "vendors.vendor_nid_status": "schema.v2.7.sql",
-    "vendors.vendor_nid_submitted_at": "schema.v2.7.sql",
-    "vendors.vendor_nid_verified_at": "schema.v2.7.sql",
-    "vendors.vendor_nid_verified_by": "schema.v2.7.sql",
-};
+// Required columns, as "table.column", that the API relies on beyond the tables existing.
+const REQUIRED_COLUMNS = Object.fromEntries(
+    [
+        "reviews.review_reply",
+        "vendors.vendor_nid_reference",
+        "vendors.vendor_nid_status",
+        "vendors.vendor_nid_submitted_at",
+        "vendors.vendor_nid_verified_at",
+        "vendors.vendor_nid_verified_by",
+    ].map((name) => [name, SCHEMA_FILE])
+);
 
 // Checks all required objects in a single query.
 async function verifySchema() {

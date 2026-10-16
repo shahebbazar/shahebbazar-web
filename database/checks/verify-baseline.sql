@@ -3,11 +3,23 @@ WITH required_relations(object_name, object_type) AS (
     VALUES
         ('users', 'table'),
         ('sessions', 'table'),
+        ('otp_codes', 'table'),
         ('locations', 'table'),
         ('categories', 'table'),
         ('vendors', 'table'),
+        ('vendor_categories', 'table'),
         ('vendor_listings', 'table'),
+        ('listing_photos', 'table'),
         ('quote_requests', 'table'),
+        ('quote_responses', 'table'),
+        ('conversations', 'table'),
+        ('messages', 'table'),
+        ('notifications', 'table'),
+        ('reviews', 'table'),
+        ('reports', 'table'),
+        ('audit_logs', 'table'),
+        ('search_logs', 'table'),
+        ('vendor_profile_views', 'table'),
         ('vendor_opening_hours', 'table'),
         ('events', 'table'),
         ('saved_businesses', 'table'),
@@ -18,7 +30,8 @@ WITH required_relations(object_name, object_type) AS (
         ('vendor_social_links', 'table'),
         ('v_business_cards', 'view'),
         ('v_search_trends_daily', 'view'),
-        ('v_moderation_queue', 'view')
+        ('v_moderation_queue', 'view'),
+        ('v_active_users_daily', 'view')
 ), missing_relations AS (
     SELECT r.object_type, r.object_name
     FROM required_relations r

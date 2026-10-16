@@ -238,9 +238,11 @@ docker compose up -d --wait
 npm run db:load
 ```
 
-`db:load` applies the current schema and seed files in the required order. To
-wipe and rebuild the local database, run `npm run db:reset` and follow the
-prompt.
+`db:load` builds the database from `database/baseline/schema.sql` and
+`database/baseline/seed.sql`, copies any seed images from `database/seed-assets/` into `backend/uploads/`
+and verifies the result. It only loads an empty database; to wipe and rebuild
+an existing one, run `npm run db:reset` and follow the prompt. Run
+`npm run db:verify` at any time to check a database is complete.
 
 | Command | Purpose |
 | --- | --- |
@@ -251,9 +253,9 @@ prompt.
 | `docker compose down` | Remove the container and keep the named volume |
 | `docker compose down -v` | Remove the container and delete local database data |
 
-For current schema details, see `database/SCHEMA-NOTES.md`. The older
-`database/schema.sql` and `database/sampleinput.sql` files are superseded and
-must not be used for the current setup.
+For how the database files are organised and how schema changes are made, see
+`database/README.md`. The historical versioned files in `database/legacy/` are
+kept for reference only and are never loaded.
 
 ### 5. Run the application
 
@@ -289,8 +291,9 @@ Run these from the repository root.
 | `npm run dev` | Start the Next.js frontend and Nodemon-managed Express API |
 | `npm run dev:api` | Start only the Express API with Nodemon |
 | `npm run dev:web` | Start only the Next.js frontend |
-| `npm run db:load` | Create the database if required and load schema and seed data |
+| `npm run db:load` | Create the database if required and load the baseline schema, seed data and seed images |
 | `npm run db:reset` | Drop, recreate and reload the database after confirmation |
+| `npm run db:verify` | Check the database has every required table, view and column |
 | `npm run build` | Build the frontend for production |
 | `npm start` | Start both production processes after a frontend build |
 | `npm run lint` | Run frontend lint checks |
@@ -463,7 +466,7 @@ schema state separately.
 
 | Symptom | Cause and fix |
 | --- | --- |
-| API endpoint returns `500` after startup | Check the `[api]` terminal. A partly loaded database is a common cause. Run `npm run db:load`. |
+| API endpoint returns `500` after startup | Check the `[api]` terminal. A partly loaded database is a common cause. Run `npm run db:reset`. |
 | Home page renders with no data | Confirm the API and PostgreSQL are running, then check `/api/health`. |
 | Data changed but the page remains stale | Remove `frontend/shahebbazar/.next` and restart the frontend. |
 | `EADDRINUSE` or stale API responses | Run `npx kill-port 4000` or `npx kill-port 3000`, then restart. |
@@ -497,6 +500,11 @@ schema state separately.
 - **Vendor profile validation needs clearer field-level feedback.** The backend
   returns validation details, but invalid categories, description, location or
   contact fields are not always obvious in the form.
+
+- **Seed photos are missing.** Five seeded listing photos and five business
+  covers point at images that are no longer in the repository, so they show
+  as broken images. Suitable development images still need choosing; see
+  `database/README.md`.
 
 - **Business and listing image uploads require completion.** Image rendering
   and URL resolution are present, but seed businesses may have no logo, cover

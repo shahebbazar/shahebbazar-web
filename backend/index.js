@@ -110,7 +110,7 @@ app.get('/api/health', async (req, res) => {
             schema: { ok: false, missing: schema.missing },
             hint:
                 `Database reachable but incomplete. Missing objects are defined in: ` +
-                `${schema.missingFiles.join(', ')}. Run "npm run db:load" from the repository root.`,
+                `${schema.missingFiles.join(', ')}. Run "npm run db:reset" from the repository root to rebuild it.`,
         });
     }
 
