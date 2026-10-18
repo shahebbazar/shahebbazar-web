@@ -1,6 +1,6 @@
 const express = require("express");
 const pool = require("../db");
-const { currentAdminId, parseId, cleanText, } = require("../lib/currentUser"); 
+const { parseId, cleanText } = require("../lib/currentUser");
 const { requireAuthenticatedUser, requireRole, } = require("../lib/middleware/auth");
 
 const router = express.Router();
@@ -65,6 +65,7 @@ router.post( "/reports",
     }
 );
 
+// /admin routes need a signed-in admin (see index.js); actions are recorded against that admin.
 router.get("/admin/reports", async (req, res) => {
     try {
         const result = await pool.query(
@@ -105,7 +106,7 @@ router.post("/admin/reports/:id/resolve", async (req, res) => {
     const client = await pool.connect();
     try {
         await client.query("BEGIN");
-        const actor = await currentAdminId(client);
+        const actor = req.user.user_id;
         const current = await client.query(
             `SELECT report_status, report_target_type, report_target_id FROM reports WHERE report_id = $1 FOR UPDATE`,
             [id]
@@ -183,7 +184,7 @@ router.post("/admin/reviews/:id/status", async (req, res) => {
     const client = await pool.connect();
     try {
         await client.query("BEGIN");
-        const actor = await currentAdminId(client);
+        const actor = req.user.user_id;
         const current = await client.query("SELECT review_status FROM reviews WHERE review_id = $1 FOR UPDATE", [id]);
         if (current.rowCount === 0) {
             await client.query("ROLLBACK");

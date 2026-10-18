@@ -49,7 +49,7 @@ without JavaScript, and WhatsApp is how a link actually travels here.
 
 | Requirement | Status | Where |
 | --- | --- | --- |
-| RBAC — three roles: Customer, Vendor/Business Owner, Platform Admin | **Partial** | `users.user_role` with a CHECK constraint. Route areas exist per role — `app/(seeker)`, `app/(provider)`, `app/(admin)` — but **every gate is a `TODO(auth)` that lets anyone through.** |
+| RBAC — three roles: Customer, Vendor/Business Owner, Platform Admin | **Done** | `users.user_role` with a CHECK constraint. Each route area (`app/(seeker)`, `app/(provider)`, `app/(admin)`) checks the session in its layout, and the API enforces role and business ownership on every signed-in route (access table in the README, tested by `backend/test/access.test.js`). |
 | Phone-based auth as primary identifier, via OTP/SMS | **Schema only** | `users.user_phone` NOT NULL UNIQUE, `otp_codes` (hashed codes, expiry, attempt count), `sessions` (hashed tokens). No endpoints. |
 | Email kept optional | **Done** | `users.user_email` is nullable. |
 

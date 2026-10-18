@@ -1,6 +1,8 @@
 const express = require("express");
 const pool = require("../db");
-const { currentAdminId, parseId, cleanText } = require("../lib/currentUser");
+const { parseId, cleanText } = require("../lib/currentUser");
+
+// Every /admin route needs a signed-in admin (see index.js); audit entries record that admin.
 
 const router = express.Router();
 const NAME_MAX = 100;
@@ -108,7 +110,7 @@ router.post("/admin/categories", async (req, res) => {
             [parentId, fields.name, fields.nameBn, slug, fields.icon, fields.sortOrder]
         );
         const id = inserted.rows[0].category_id;
-        await audit(client, await currentAdminId(client), "category.create", id, null, { ...fields, parentId, slug });
+        await audit(client, req.user.user_id, "category.create", id, null, { ...fields, parentId, slug });
         await client.query("COMMIT");
         const created = await pool.query(`${SELECT_CATEGORY} WHERE c.category_id = $1`, [id]);
         res.status(201).json(created.rows[0]);
@@ -152,7 +154,7 @@ router.put("/admin/categories/:id", async (req, res) => {
              WHERE category_id = $1`,
             [id, fields.name, fields.nameBn, fields.icon, fields.sortOrder, req.body.is_active]
         );
-        await audit(client, await currentAdminId(client), "category.update", id, current.rows[0], {
+        await audit(client, req.user.user_id, "category.update", id, current.rows[0], {
             ...fields,
             is_active: req.body.is_active,
         });

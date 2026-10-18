@@ -27,6 +27,10 @@ export function PaymentMethodsForm({
     initialMethods: PaymentMethod[];
 }) {
     const [fields, setFields] = useState<FieldState>(() => toFieldState(initialMethods));
+    // The order the profile shows them in: saved methods keep their place, new ones go last.
+    const [savedOrder, setSavedOrder] = useState<PaymentMethodKey[]>(() =>
+        initialMethods.map((m) => m.payment_method)
+    );
     const [status, setStatus] = useState<Status>(null);
     const [isPending, startTransition] = useTransition();
 
@@ -38,18 +42,24 @@ export function PaymentMethodsForm({
     function handleSubmit(event: React.FormEvent<HTMLFormElement>) {
         event.preventDefault();
 
-        const methods: PaymentMethod[] = PAYMENT_METHOD_OPTIONS.filter(
-            ({ key }) => fields[key].checked
-        ).map(({ key }) => ({
-            payment_method: key,
-            payment_note: fields[key].note.trim() || null,
-        }));
+        const position = (key: PaymentMethodKey) => {
+            const saved = savedOrder.indexOf(key);
+            return saved === -1 ? savedOrder.length + PAYMENT_METHOD_OPTIONS.findIndex((o) => o.key === key) : saved;
+        };
+        const methods: PaymentMethod[] = PAYMENT_METHOD_OPTIONS.filter(({ key }) => fields[key].checked)
+            .map(({ key }) => key)
+            .sort((a, b) => position(a) - position(b))
+            .map((key) => ({
+                payment_method: key,
+                payment_note: fields[key].note.trim() || null,
+            }));
 
         startTransition(async () => {
             const result = await savePaymentMethods(vendorId, methods);
 
             if (result.ok) {
                 setFields(toFieldState(result.methods));
+                setSavedOrder(result.methods.map((m) => m.payment_method));
                 setStatus({
                     kind: "success",
                     message:

@@ -1,7 +1,7 @@
 import type { Metadata } from "next";
 import { notFound, redirect } from "next/navigation";
 import { Star } from "lucide-react";
-import { authenticatedApiGet } from "@/lib/auth-server";
+import { authenticatedApiGet, getViewer } from "@/lib/auth-server";
 import { formatDateTime } from "@/lib/format";
 import { ProviderShell, parseVendorParam } from "@/components/provider/ProviderShell";
 import type { OwnerReview, VendorSummary} from "@/lib/types";
@@ -14,11 +14,13 @@ export const metadata: Metadata = {
 export default async function OwnerReviewsPage({ searchParams }: { searchParams: Promise<{ vendor?: string }> }) {
     const vendorId = parseVendorParam((await searchParams).vendor);
     if (vendorId === null) redirect("/vendors/dashboard");
-    const [vendor, reviews] = await Promise.all([
+    const [vendor, reviews, viewer] = await Promise.all([
         authenticatedApiGet<VendorSummary>(`/vendors/${vendorId}/summary`),
         authenticatedApiGet<OwnerReview[]>(`/vendors/${vendorId}/reviews`),
+        getViewer(),
     ]);
     if (!vendor) notFound();
+    const adminView = viewer?.user_role === "admin";
 
     const written = (reviews ?? []).filter((r) => r.body);
     const average = reviews && reviews.length ? reviews.reduce((sum, r) => sum + r.rating, 0) / reviews.length : 0;
@@ -53,7 +55,17 @@ export default async function OwnerReviewsPage({ searchParams }: { searchParams:
                                 ))}
                             </div>
                             <p className="mt-2 text-sm text-muted">{review.body}</p>
-                            <ReplyForm vendorId={vendorId} reviewId={review.review_id} initial={review.reply} />
+                            {/* Replies are written as the business, so admins see them but cannot write one. */}
+                            {adminView ? (
+                                review.reply && (
+                                    <p className="mt-3 border-l-2 border-line pl-3 text-sm text-muted">
+                                        <span className="font-medium text-ink">Owner&apos;s reply: </span>
+                                        {review.reply}
+                                    </p>
+                                )
+                            ) : (
+                                <ReplyForm vendorId={vendorId} reviewId={review.review_id} initial={review.reply} />
+                            )}
                         </li>
                     ))}
                 </ul>

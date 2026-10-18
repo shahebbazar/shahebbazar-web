@@ -264,6 +264,17 @@ async function requireListingOwnership(req, res, next) {
     }
 }
 
+// Route guards for /vendors/:vendorId/... routes.
+// Owner or admin: managing the business (listings, profile, images, payment methods, settings).
+const vendorOwnerOrAdmin = [requireAuthenticatedUser, requireRole("vendor", "admin"), requireVendorOwnership];
+// Owner only: anything written or read as the business itself (messages, alerts, review replies),
+// so an admin can never speak for a business.
+const vendorOwnerOnly = [requireAuthenticatedUser, requireRole("vendor"), requireVendorOwnership];
+// Owner or admin, for /listings/:listingId/... routes.
+const listingOwnerOrAdmin = [requireAuthenticatedUser, requireRole("vendor", "admin"), requireListingOwnership];
+// Every /api/admin/... route (applied once in index.js).
+const adminOnly = [requireAuthenticatedUser, requireRole("admin")];
+
 module.exports = {
     SESSION_COOKIE_NAME,
     hashSessionToken,
@@ -271,5 +282,9 @@ module.exports = {
     requireAuthenticatedUser,
     requireRole,
     requireVendorOwnership,
-    requireListingOwnership
+    requireListingOwnership,
+    vendorOwnerOrAdmin,
+    vendorOwnerOnly,
+    listingOwnerOrAdmin,
+    adminOnly
 };

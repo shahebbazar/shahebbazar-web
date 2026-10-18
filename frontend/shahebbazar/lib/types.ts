@@ -247,7 +247,7 @@ export interface VendorDashboard {
     }[];
 }
 
-/** Row of the development business picker; see getVendorsForPicker. */
+/** Row of the business picker; from GET /api/vendor-account/businesses. */
 export interface VendorPickerRow {
     vendor_id: number;
     vendor_name: string;

@@ -3,7 +3,7 @@ import Link from "next/link";
 import { Star } from "lucide-react";
 import { AdminShell } from "@/components/admin/AdminShell";
 import { ActionButton } from "@/components/admin/ActionButton";
-import { apiGet } from "@/lib/api";
+import { authenticatedApiGet } from "@/lib/auth-server";
 import { formatDateTime } from "@/lib/format";
 import type { AdminReview } from "@/lib/types";
 import { setReviewStatus } from "../moderation-actions";
@@ -14,7 +14,7 @@ export const metadata: Metadata = {
 
 export default async function AdminReviewsPage({ searchParams }: { searchParams: Promise<{ status?: string }> }) {
     const status = (await searchParams).status === "hidden" ? "hidden" : "published";
-    const reviews = (await apiGet<AdminReview[]>(`/admin/reviews?status=${status}`)) ?? [];
+    const reviews = (await authenticatedApiGet<AdminReview[]>(`/admin/reviews?status=${status}`)) ?? [];
 
     return (
         <AdminShell current="reviews">

@@ -1,8 +1,10 @@
 import type { Metadata } from "next";
 import Link from "next/link";
 import { AlertTriangle, CheckCircle2, Clock, MapPin, Package, Phone, RotateCcw, User, XCircle } from "lucide-react";
-import { assetUrl, getAdminQueue } from "@/lib/api";
-import type { AdminDecisionLog, PendingBusiness, PendingListing } from "@/lib/types";
+import { redirect } from "next/navigation";
+import { assetUrl } from "@/lib/api";
+import { authenticatedApiGet } from "@/lib/auth-server";
+import type { AdminDecisionLog, AdminQueue, PendingBusiness, PendingListing } from "@/lib/types";
 import { AdminShell } from "@/components/admin/AdminShell";
 import { StatusBadge } from "@/components/provider/StatusBadge";
 import { listingPrice } from "@/components/provider/DashboardCards";
@@ -30,7 +32,9 @@ export default async function AdminApprovalsPage({
     searchParams: Promise<{ tab?: string }>;
 }) {
     const { tab: rawTab } = await searchParams;
-    const queue = await getAdminQueue();
+    const queue = await authenticatedApiGet<AdminQueue>("/admin/queue");
+    // Null when the session ended after the layout checked it.
+    if (!queue) redirect("/admin/login");
     const tab: Tab = rawTab === "listings" ? "listings" : "businesses";
 
     const tabs: { key: Tab; label: string; count: number }[] = [
@@ -183,6 +187,7 @@ function BusinessCard({ v }: { v: PendingBusiness }) {
 
                     <div className="mt-4 border-t border-line pt-4">
                         <DecisionButtons kind="vendor" id={v.vendor_id} label={v.vendor_name} />
+                        <BusinessPagesLink vendorId={v.vendor_id} />
                     </div>
                 </div>
             </div>
@@ -229,10 +234,20 @@ function ListingCard({ l }: { l: PendingListing }) {
                     <p className="mt-2 text-[0.75rem] text-muted">Added {when.format(new Date(l.listing_created_at))}</p>
                     <div className="mt-4 border-t border-line pt-4">
                         <DecisionButtons kind="listing" id={l.listing_id} label={l.listing_title} />
+                        <BusinessPagesLink vendorId={l.vendor_id} />
                     </div>
                 </div>
             </div>
         </article>
+    );
+}
+
+// Opens the business's own dashboard pages in admin view, to check or correct the details.
+function BusinessPagesLink({ vendorId }: { vendorId: number }) {
+    return (
+        <Link href={`/vendors/dashboard?vendor=${vendorId}`} className="mt-3 inline-block text-[0.8125rem] font-medium text-brand-600 hover:underline">
+            Open the business&apos;s pages
+        </Link>
     );
 }
 

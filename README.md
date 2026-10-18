@@ -1,237 +1,101 @@
 # shahebbazar-web
 
-COS40005 — Group 23 · Shaheb Bazar
+COS40005 Group 23 · Shaheb Bazar
 
 A local business directory and B2B/B2C discovery platform for Rajshahi,
-Bangladesh. Express API + Next.js frontend + PostgreSQL.
+Bangladesh. Customers find and contact local businesses; business owners manage
+their profile, listings and messages; administrators approve and moderate.
+
+**Stack:** Express 5 API · Next.js 16 (React 19, TypeScript, Tailwind 4) · PostgreSQL
 
 ---
 
-## Architecture
+## Contents
 
-```text
-                          ┌─ /        ──:3000──> Next.js (SSR frontend)
-Browser ──HTTPS:443──> Caddy                          │ server-side fetch
-                          └─ /api/*   ──:4000──> Express API ──:5432──> PostgreSQL
-```
-
-Two processes run behind one origin. Next.js pages fetch public and protected
-data from Express on the server where appropriate, supporting crawlable public
-business pages and authenticated private account areas.
-
-| Path | Purpose |
-| --- | --- |
-| `backend/` | Express API, port 4000 |
-| `frontend/shahebbazar/` | Next.js 16 + TypeScript + Tailwind 4 |
-| `database/` | PostgreSQL schema, seed data and database notes |
-
-### Role-based frontend areas
-
-Route groups organise files without adding their folder names to URLs.
-
-```text
-app/
-  layout.tsx                 Root layout, fonts and metadata
-  (public)/                  Public browsing and authentication
-    page.tsx                 /
-    login/                   /login
-    admin/login/             /admin/login
-    vendors/register/        /vendors/register
-  (seeker)/                  Authenticated customer area
-    layout.tsx               Customer authentication gate
-    account/                 /account
-  (provider)/                Authenticated business-owner area
-    layout.tsx               Vendor authentication gate
-    vendors/dashboard/       /vendors/dashboard
-  (admin)/                   Authenticated administrator area
-    layout.tsx               Administrator authentication gate
-    admin/                   /admin
-
-components/
-  shared/                    Shared site UI
-  public/                    Public browsing UI
-  seeker/                    Customer account UI
-  provider/                  Business-owner UI
-  admin/                     Administrator UI
-```
-
-Public discovery pages remain readable while signed out. Customer, provider and
-administrator layouts resolve the active server-side session and redirect users
-who are signed out or attempting to access an area assigned to another role.
-Backend authentication, role and ownership middleware remains authoritative.
-
-Registration stays in `(public)` because an account is not yet authenticated as
-a provider while registration is being completed.
+- [Quick start](#quick-start)
+- [Setup in detail](#setup-in-detail)
+- [Scripts](#scripts)
+- [Project structure](#project-structure)
+- [Authentication and access control](#authentication-and-access-control)
+- [API](#api)
+- [Testing](#testing)
+- [Conventions](#conventions)
+- [Troubleshooting](#troubleshooting)
+- [Known gaps](#known-gaps)
 
 ---
 
-## Authentication and RBAC
+## Quick start
 
-Shahebbazar uses phone-based OTP verification, server-side sessions and
-role-based access control.
+Needs Node.js 24 and Docker Desktop. From the repository root:
 
-| Role | Protected area | Login destination |
-| --- | --- | --- |
-| `customer` | Customer account | `/account` |
-| `vendor` | Business-owner dashboard | `/vendors/dashboard` |
-| `admin` | Administrator dashboard | `/admin` |
-
-Customer and business-owner login is available at `/login`. Administrator login
-is available separately at `/admin/login`.
-
-### Dynamic login flow
-
-```text
-User selects the relevant login portal
-        ↓
-Backend normalises the phone number and finds the active account
-        ↓
-Backend confirms the stored role matches the selected portal
-        ↓
-A hashed six-digit OTP is stored with a five-minute expiry
-        ↓
-Development delivery prints the raw code in the API terminal
-        ↓
-Successful verification consumes the OTP and creates a session
-        ↓
-The browser receives the HTTP-only shaheb_session cookie
-        ↓
-The frontend redirects according to the stored account role
+```powershell
+npm install
+npm run setup                                  # backend and frontend dependencies
+Copy-Item backend\.env.example backend\.env    # macOS/Linux/Git Bash: cp backend/.env.example backend/.env
+docker compose up -d --wait                    # PostgreSQL
+npm run db:load                                # schema and seed data
+npm run dev                                    # API on :4000, website on :3000
 ```
 
-The selected portal does not assign a role. The backend compares the expected
-role with the role already stored for the account in PostgreSQL.
-
-### Sessions and protected routes
-
-Successful verification creates a row in the `sessions` table. Only a hash of
-the session token is stored. The browser receives the raw token in an HTTP-only
-`shaheb_session` cookie.
-
-Authentication middleware:
-
-1. Reads and hashes the supplied session token.
-2. Resolves an active, unexpired database session.
-3. Loads the associated active user.
-4. Adds the user and session to the Express request.
-5. Applies the role and ownership checks required by the route.
-
-Expected frontend access behaviour:
-
-```text
-Signed out + customer/provider page → /login
-Signed out + administrator page     → /admin/login
-Customer + provider/admin page      → /account
-Vendor + customer/admin page        → /vendors/dashboard
-Admin + customer/provider page      → /admin
-```
-
-Private customer routes use `req.user.user_id` rather than a seeded customer
-identity. Protected Server Component reads use `authenticatedApiGet()`, while
-protected Server Actions use `authenticatedApiSend()`.
-
-### Vendor ownership
-
-Vendor access is not granted solely from a `vendorId` supplied in the URL. The
-backend verifies that the requested business belongs to the authenticated user:
-
-```text
-vendors.vendor_id = requested vendor ID
-AND
-vendors.user_id = authenticated user ID
-```
-
-A vendor account connected to one business is redirected directly to that
-business dashboard. An account connected to multiple businesses receives a
-selector containing only its owned businesses.
-
-### Logout and session-aware navigation
-
-Logout deletes the active database session and expires the `shaheb_session`
-cookie. The active header displays the signed-in account state and returns to
-login/register controls after logout. `localStorage` is not the authentication
-source of truth.
+Open <http://localhost:3000> and sign in with a [seeded account](#seeded-accounts).
+Sign-in codes appear in the terminal running `npm run dev`.
 
 ---
 
-## Setup
+## Setup in detail
 
-### 1. Install prerequisites
+### 1. Prerequisites
 
 - Git
-- VS Code
-- [Node.js 24.x](https://nodejs.org/en/download)
-- [Docker Desktop](https://www.docker.com/products/docker-desktop/)
-
-Docker runs PostgreSQL using `docker-compose.yml` at the repository root.
-[pgAdmin](https://www.pgadmin.org/download/) is optional.
+- [Node.js 24](https://nodejs.org/en/download)
+- [Docker Desktop](https://www.docker.com/products/docker-desktop/), which runs
+  PostgreSQL from `docker-compose.yml`
+- Optional: VS Code, [pgAdmin](https://www.pgadmin.org/download/)
 
 <details>
-<summary>Using an existing PostgreSQL installation</summary>
+<summary>Using an existing PostgreSQL installation instead of Docker</summary>
 
-Install PostgreSQL 15 or later and skip the Docker startup command. Set
-`PGUSER`, `PGPASSWORD` and `PGPORT` in `backend/.env` to match the local
-installation, then run `npm run db:load`.
+Install PostgreSQL 15 or later and skip `docker compose`. Set `PGUSER`,
+`PGPASSWORD` and `PGPORT` in `backend/.env` to match your installation, then
+run `npm run db:load`. The user needs permission to create databases
+(`db:load` and `npm test` create them).
+
+If port 5432 is already taken by another PostgreSQL, put `DB_PORT=5433` in a
+`.env` file at the repository root to move the Docker one, and set `PGPORT=5433`
+in `backend/.env`.
 
 </details>
 
-### 2. Install dependencies
+### 2. Backend configuration
 
-From the repository root:
+`backend/.env` is not stored in Git. Create it from the template (see
+[Quick start](#quick-start)). The template already matches the Docker database,
+so nothing needs changing for local development.
 
-```bash
-npm install
-npm run setup
-```
+The first `npm run dev` fills in what is still missing: it generates a unique
+`OTP_HASH_SECRET` and turns on console delivery of sign-in codes
+(`backend/scripts/ensure-local-auth-env.js`). Never commit `backend/.env`,
+sign-in codes or session tokens.
 
-`npm install` installs the root development tooling. `npm run setup` installs
-the backend and frontend dependencies.
+| Variable | Purpose | Local value |
+| --- | --- | --- |
+| `PGHOST`, `PGPORT`, `PGDATABASE`, `PGUSER`, `PGPASSWORD` | PostgreSQL connection | `localhost`, `5432`, `shahebbazar`, `postgres`, `postgres` |
+| `PORT` | API port | `4000` |
+| `CORS_ORIGIN` | Browser origins allowed to call the API, comma-separated | `http://localhost:3000` |
+| `ANALYTICS_SALT` | Key for anonymous visitor hashes | any text |
+| `MOCK_VERIFICATION_DELIVERY` | `console` prints sign-in codes in the API terminal (never in production) | `console` |
+| `OTP_HASH_SECRET` | Secret used to hash sign-in codes | generated |
+| `UPLOAD_DIR` | Where uploaded images are stored | unset (`backend/uploads`) |
+| `TRUST_PROXY` | Set behind a reverse proxy so visitor IPs are correct | unset |
+| `NOTIFY_DELAY_MINUTES` | Wait before an unread message triggers an SMS/email alert | unset (5) |
 
-### 3. Configure the backend
+The frontend runs locally with no configuration. For other environments, set
+`API_BASE_URL` (server-side API calls), `NEXT_PUBLIC_API_BASE_URL` (browser API
+calls), `NEXT_PUBLIC_ASSET_BASE_URL` (uploaded images) and `NEXT_PUBLIC_SITE_URL`
+(links and link previews). `NEXT_PUBLIC_` values are fixed at `npm run build`.
 
-The real backend environment file is not stored in Git. Create it from the safe
-template.
-
-Windows PowerShell:
-
-```powershell
-Copy-Item backend\.env.example backend\.env
-```
-
-macOS, Linux or Git Bash:
-
-```bash
-cp backend/.env.example backend/.env
-```
-
-Example local configuration:
-
-```env
-PGHOST=localhost
-PGPORT=5432
-PGDATABASE=shahebbazar
-PGUSER=postgres
-PGPASSWORD=YOUR_POSTGRES_PASSWORD
-
-PORT=4000
-ANALYTICS_SALT=shahebbazar-local-dev
-CORS_ORIGIN=http://localhost:3000
-
-# Phase 1 mock phone verification
-MOCK_VERIFICATION_DELIVERY=console
-OTP_HASH_SECRET=GENERATE_A_UNIQUE_LOCAL_SECRET
-```
-
-Generate a local OTP hashing secret:
-
-```bash
-node -e "console.log(require('node:crypto').randomBytes(32).toString('hex'))"
-```
-
-Copy the generated value into `OTP_HASH_SECRET`. Never commit `backend/.env`,
-the generated secret, raw verification codes or session tokens.
-
-### 4. Start and load the database
+### 3. Database
 
 ```bash
 docker compose up -d --wait
@@ -239,179 +103,226 @@ npm run db:load
 ```
 
 `db:load` builds the database from `database/baseline/schema.sql` and
-`database/baseline/seed.sql`, copies any seed images from `database/seed-assets/` into `backend/uploads/`
-and verifies the result. It only loads an empty database; to wipe and rebuild
-an existing one, run `npm run db:reset` and follow the prompt. Run
-`npm run db:verify` at any time to check a database is complete.
+`database/baseline/seed.sql`, copies seed images from `database/seed-assets/`
+into the upload folder, and checks the result. It only loads an empty database.
+To wipe and rebuild, run `npm run db:reset`.
 
 | Command | Purpose |
 | --- | --- |
-| `docker compose up -d` | Start PostgreSQL |
-| `docker compose ps` | Check container health |
+| `docker compose ps` | Check the database container is healthy |
 | `docker compose logs -f db` | Follow PostgreSQL logs |
-| `docker compose stop` | Stop PostgreSQL and keep data |
-| `docker compose down` | Remove the container and keep the named volume |
-| `docker compose down -v` | Remove the container and delete local database data |
+| `docker compose stop` | Stop PostgreSQL, keep the data |
+| `docker compose down -v` | Remove the container **and delete the data** |
 
-For how the database files are organised and how schema changes are made, see
-`database/README.md`. The historical versioned files in `database/legacy/` are
-kept for reference only and are never loaded.
+How the database files are organised and how schema changes are made is in
+[`database/README.md`](database/README.md). Files in `database/legacy/` are kept
+for reference and never loaded.
 
-### 5. Run the application
+### 4. Run
 
 ```bash
 npm run dev
 ```
 
-Expected startup:
+The API terminal lines start with `[api]` and should include:
 
 ```text
-[api] Authentication routes loaded.
 [api] API running on http://localhost:4000
 [api] Database schema verified.
-[web] Ready on http://localhost:3000
 ```
 
-Open `http://localhost:3000`. Use `?lang=bn` for the current Bangla-language
-version. Press `Ctrl+C` to stop both processes.
+The website is at <http://localhost:3000> (`?lang=bn` for Bangla).
+`Ctrl+C` stops both. The API restarts on code changes; uploads and
+`node_modules` are ignored (`backend/nodemon.json`).
 
-The backend uses the project-local Nodemon dependency and
-`backend/nodemon.json`. Nodemon watches relevant backend source files and
-ignores `node_modules` and uploaded files, preventing unnecessary restarts
-during dependency or upload changes.
+### Seeded accounts
+
+Sign in at `/login` (customers and business owners) or `/admin/login`. Enter the
+phone number, then the six-digit code printed in the API terminal:
+
+```text
+[mock verification] code: 123456
+```
+
+| Account | Phone | Notes |
+| --- | --- | --- |
+| Admin | `+8801711000001` | Platform Admin |
+| Business owner | `+8801711000005` | Rajshahi Mango Traders |
+| Business owner, two businesses | `+8801711000002` | Shaheb Bazar Silk House (approved) and Cloth Store (pending), so shows the business picker |
+| Business owner | `+8801711000006` | Uttara Light Engineering; useful as "another vendor" |
+| Customer | `+8801722000001` | Imran Chowdhury |
+| Customer | `+8801722000002` | Farhana Yasmin |
+
+Codes are limited to 3 requests per number in 10 minutes. To create new
+accounts, use any unused number at `/register/customer` or `/vendors/register`.
 
 ---
 
 ## Scripts
 
-Run these from the repository root.
+Run from the repository root.
 
 | Command | Purpose |
 | --- | --- |
-| `npm run dev` | Start the Next.js frontend and Nodemon-managed Express API |
-| `npm run dev:api` | Start only the Express API with Nodemon |
-| `npm run dev:web` | Start only the Next.js frontend |
-| `npm run db:load` | Create the database if required and load the baseline schema, seed data and seed images |
-| `npm run db:reset` | Drop, recreate and reload the database after confirmation |
-| `npm run db:verify` | Check the database has every required table, view and column |
-| `npm test` | Run the backend API tests against a throwaway `<PGDATABASE>_test` database |
-| `npm run build` | Build the frontend for production |
-| `npm start` | Start both production processes after a frontend build |
-| `npm run lint` | Run frontend lint checks |
-| `npm run typecheck` | Run frontend TypeScript checks |
 | `npm run setup` | Install backend and frontend dependencies |
-
-Each subproject can also run separately:
-
-```bash
-cd backend && npm run dev
-cd frontend/shahebbazar && npm run dev
-```
+| `npm run dev` | Start the API (with auto-restart) and the website |
+| `npm run dev:api` / `npm run dev:web` | Start only one of them |
+| `npm run db:load` | Create and load an empty database: schema, seed data, seed images |
+| `npm run db:reset` | Drop, recreate and reload the database (asks first) |
+| `npm run db:verify` | Check the database has every required table, view and column |
+| `npm run uploads:check` | Compare stored image paths with the upload folder. `-- --fix` removes references to missing files and moves unused files to `uploads/.unreferenced/` |
+| `npm test` | API tests against a throwaway database (see [Testing](#testing)) |
+| `npm run lint` | Frontend lint |
+| `npm run typecheck` | Frontend TypeScript check |
+| `npm run build` | Production build of the website |
+| `npm start` | Start the API and the built website |
+| `npm run docs:erd` | Regenerate `docs/ER-DIAGRAM.md` from the database |
 
 ---
 
-## Phase 1 phone verification
+## Project structure
 
-Phone number is the primary account identifier. Live SMS delivery is deferred
-for Phase 1 due to provider costs, so development uses a client-approved console
-mock.
+| Path | Contents |
+| --- | --- |
+| `backend/` | Express API: `routes/`, shared code in `lib/`, `scripts/` for database and maintenance commands, `test/` |
+| `frontend/shahebbazar/` | Next.js website: `app/` pages, `components/`, `lib/` (API helpers, types, translations) |
+| `database/` | `baseline/` schema and seed, `checks/`, `snapshots/`, `legacy/` |
+| `docs/` | File reference, ER diagram, requirements, OpenAPI spec, audits, `testing/` validation reports |
 
-```text
-Client submits phone number, purpose and expected role
-        ↓
-Backend validates the phone and matching account role
-        ↓
-Backend generates a secure six-digit code
-        ↓
-Only an HMAC-SHA256 hash is stored
-        ↓
-The code expires after five minutes
-        ↓
-Mock delivery prints the code in the local API terminal
-```
+### Website areas
 
-The raw code is not stored in PostgreSQL or returned by the API.
+Route groups in brackets organise files without appearing in URLs. Each private
+area's `layout.tsx` checks the session and sends visitors elsewhere if they
+are signed out or in the wrong role.
 
-Example request:
+| Folder | Who | Main pages |
+| --- | --- | --- |
+| `app/(public)/` | Everyone | `/`, `/search`, `/categories`, `/business/[slug]`, `/events`, `/login`, `/admin/login`, `/register/customer`, `/vendors/register`, legal pages |
+| `app/(seeker)/` | Signed-in customers | `/account`, `/account/saved`, `/account/reviews`, `/account/messages`, `/report` |
+| `app/(provider)/` | Business owners (and admins viewing a business) | `/vendors/dashboard` and its pages: business, listings, payment methods, reviews, messages, inquiries, settings |
+| `app/(admin)/` | Admins | `/admin` approvals, reports, reviews, search trends, categories |
 
-```http
-POST /api/auth/request-verification
-Content-Type: application/json
-```
+### How requests flow
 
-```json
-{
-  "phone": "+8801700000100",
-  "purpose": "login",
-  "expectedRole": "customer"
-}
-```
+In development the website (port 3000) and the API (port 4000) run separately.
+Pages are rendered on the Next.js server, which calls the API, so public business
+pages are crawlable. A few browser components call the API directly, such as
+image uploads and analytics beacons.
 
-Supported purposes:
+The planned production layout (KAN-254) puts both behind one HTTPS origin, with
+a reverse proxy sending `/api/*` and `/uploads/*` to Express and everything else
+to Next.js.
 
-```text
-login
-register
-recover
-verify
-```
+---
 
-Development-only terminal output:
+## Authentication and access control
 
-```text
-[mock verification] phone: <normalised phone>
-[mock verification] purpose: <purpose>
-[mock verification] code: <six-digit code>
-```
+### Sign-in
 
-Do not include mock codes in commits, screenshots, Jira evidence or project
-documentation.
+Accounts are identified by phone number. There are no passwords.
 
-Implemented verification controls include:
+1. The user picks a portal (customer, business owner or admin) and enters their phone.
+2. The API checks an active account with that role exists, then stores an
+   HMAC-SHA256 hash of a random six-digit code that expires in five minutes.
+3. The code is delivered. During Phase 1 it is printed in the API terminal
+   instead of sent by SMS, as agreed with the client.
+4. The user enters the code. The API marks it used, creates a session, and sets
+   an HTTP-only `shaheb_session` cookie. Only a hash of the session token is stored.
+5. The website sends the user to their area: `/account`, `/vendors/dashboard` or `/admin`.
 
-- Australian and Bangladesh phone-number normalisation
-- Phone-format and verification-purpose validation
-- Role matching for customer, vendor and administrator login portals
-- Secure six-digit code generation and HMAC-SHA256 hashing
-- Five-minute expiry and attempt limiting
-- Request limiting by phone number and purpose
-- Request-IP recording
-- One-time OTP consumption
-- Database-backed session creation
-- Console-only mock delivery outside production
+Protections: Australian and Bangladeshi number normalisation; 5 wrong guesses per
+code; 3 code requests per number and purpose per 10 minutes; request IP
+recorded; codes are never stored or returned in plain text.
 
-Code confirmation, customer registration, session creation, dynamic role
-redirection, protected role layouts and logout are implemented. Only live SMS
-delivery is mocked for Phase 1.
+**Registration** works the same way with purpose `register`: customers at
+`/register/customer`, businesses at `/vendors/register`. The account is created
+only after the code is confirmed. A new business starts as pending and stays out
+of public listings until an admin approves it, but its owner can edit it straight away.
+
+Logout deletes the session and expires the cookie.
+
+### Who can do what
+
+The API enforces these rules whatever the website shows. The middleware is in
+`backend/lib/middleware/auth.js`, and `npm test` checks every route against
+every role.
+
+| Routes | Signed out | Customer | Another vendor | Owner | Admin |
+| --- | --- | --- | --- | --- | --- |
+| Public browsing (`/api/home`, `/api/businesses/...`, `/api/categories`, `/api/events`) | yes | yes | yes | yes | yes |
+| Customer area (`/api/me/...`, reports, writing reviews) | 401 | yes | 403 | 403 | 403 |
+| Managing a business: profile, images, listings, payment methods, owner details, dashboard, reading reviews | 401 | 403 | 403 | yes | yes |
+| Acting as the business: messages, inquiries, alerts, review replies | 401 | 403 | 403 | yes | 403 |
+| Administration (`/api/admin/...`) | 401 | 403 | 403 | 403 | yes |
+
+- **Ownership** comes from the database, never from the URL. A business id in the
+  path is accepted only if `vendors.user_id` is the signed-in user.
+- **Owners with several businesses** get a picker on `/vendors/dashboard`; with
+  one business they go straight to it.
+- **Admins viewing a business:** "Open the business's pages" on the Approvals
+  cards opens the business's dashboard with an admin banner. Messages,
+  inquiries and review replies stay hidden because they belong to the owner.
+- **Audit log:** admin decisions, category changes, report resolutions and
+  review moderation are recorded in `audit_logs` against the signed-in admin.
+
+The website's area redirects:
+
+| Visitor | Customer pages | Business pages | Admin pages |
+| --- | --- | --- | --- |
+| Signed out | `/login` | `/login` | `/admin/login` |
+| Customer | allowed | `/account` | `/account` |
+| Business owner | `/vendors/dashboard` | allowed | `/vendors/dashboard` |
+| Admin | `/admin` | allowed, in admin view | allowed |
 
 ---
 
 ## API
 
-Public discovery endpoints return approved records only. Private routes require
-an active session and the required role or ownership relationship.
+Browse every endpoint with request and response examples at
+<http://localhost:4000/api/docs> while the API is running. The spec is
+[`docs/openapi.yaml`](docs/openapi.yaml), which can be imported into Postman.
+
+Public endpoints return approved records only. Start with these:
 
 | Method | Route | Purpose |
 | --- | --- | --- |
-| GET | `/api/health` | API, database and schema health |
+| GET | `/api/health` | API, database and schema status; check this first when something fails |
 | GET | `/api/home` | Categories, featured businesses, events and popular searches |
-| GET | `/api/categories` | Category tree |
-| GET | `/api/businesses` | Search results, sponsored results, pagination and facets |
-| GET | `/api/businesses/:slug` | Approved public business profile |
-| GET | `/api/auth/me` | Safe details for the authenticated account |
-| POST | `/api/auth/request-verification` | Validate account/role and create a hashed OTP |
-| POST | `/api/auth/verify` | Consume the OTP, create a session and set the session cookie |
-| POST | `/api/auth/register/customer` | Create a verified customer account |
-| POST | `/api/auth/logout` | Delete the active session and expire the cookie |
-| GET | `/api/vendor-account/businesses` | Businesses owned by the authenticated vendor account |
-| GET / POST | `/api/vendors/:vendorId/listings` | The owner's listings with their photos / create a listing (owner or admin) |
-| PUT / DELETE | `/api/listings/:listingId` | Update or delete a listing (owner or admin) |
-| POST | `/api/listings/:listingId/photos` | Upload up to 8 JPG/PNG/WEBP photos, 5 MB each (owner or admin) |
-| PUT | `/api/listings/:listingId/photos/:photoId/primary` | Make a photo the listing's main photo (owner or admin) |
-| DELETE | `/api/listings/:listingId/photos/:photoId` | Remove a listing photo; the next one becomes main (owner or admin) |
+| GET | `/api/businesses` | Search: results, sponsored results, pagination and filters |
+| GET | `/api/businesses/:slug` | A public business profile |
+| POST | `/api/auth/request-verification` | Send a sign-in or registration code |
+| POST | `/api/auth/verify` | Sign in with the code; sets the session cookie |
+| POST | `/api/auth/register/customer`, `/api/auth/register/vendor` | Create an account with a `register` code |
+| GET | `/api/auth/me` | The signed-in account |
 
-Sponsored results are returned separately from ordinary search results and must
-render with a visible sponsored label.
+Sponsored results come back separately from ordinary results and must be shown
+with a visible "Sponsored" label.
+
+Uploaded images are stored as `uploads/<file>` paths and served by the API at
+`/uploads/<file>`. Listings take up to 8 JPG, PNG or WEBP photos of up to 5 MB each.
+
+---
+
+## Testing
+
+```bash
+npm test
+```
+
+This creates a throwaway `<PGDATABASE>_test` database from the baseline, starts
+the real API against it, signs in through the normal code flow as each role,
+runs the tests, and drops the database. Your development data is not touched.
+
+| Suite | Covers |
+| --- | --- |
+| `backend/test/access.test.js` | Every signed-in route against every role; refused requests change nothing; admin actions audited against the right admin |
+| `backend/test/listings.test.js` | Listings and photos from upload to the public page; upload validation |
+| `backend/test/registration.test.js` | Customer and business registration with codes |
+| `backend/test/uploads.test.js` | `npm run uploads:check` |
+
+Before opening a pull request, also run `npm run lint`, `npm run typecheck` and
+`npm run build`. Manual and browser test evidence goes in `docs/testing/`, one
+report per Jira task.
 
 ---
 
@@ -419,116 +330,81 @@ render with a visible sponsored label.
 
 ### Database
 
-- Table names: plural `snake_case`
-- Column names: table-prefixed `snake_case`
-- Foreign keys: `<table>_id`
-
-Examples: `vendor_id`, `category_id`, `user_email`, `vendor_created_at`.
+- Tables: plural `snake_case`. Columns: `snake_case` prefixed with the table, e.g. `vendor_created_at`.
+- Foreign keys: `<table>_id`, e.g. `vendor_id`, `category_id`.
+- Schema changes follow `database/README.md`.
 
 ### Frontend
 
-- Pages are Server Components by default.
-- Add `"use client"` only for browser state or interactivity.
-- Do not perform ordinary page data fetching in `useEffect`.
-- Protected server reads use `authenticatedApiGet()`.
-- Protected Server Actions use `authenticatedApiSend()`.
-- Shared response types live in `frontend/shahebbazar/lib/types.ts`.
-- Translated copy belongs in `lib/i18n.ts`.
+- Pages are Server Components. Add `"use client"` only for browser state or interactivity.
+- Fetch page data on the server, not in `useEffect`.
+- Signed-in data: `authenticatedApiGet()` in pages and `authenticatedApiSend()` in
+  Server Actions (`lib/auth-server.ts`). Both forward the session cookie. The
+  helpers in `lib/api.ts` are for public data only.
+- Browser `fetch` calls to private API routes need `credentials: "include"`.
+- Shared response types live in `lib/types.ts`; translated text in `lib/i18n.ts`.
 
 ### Styling
 
-Use Tailwind utilities and the tokens declared in `app/globals.css`, including
+Use Tailwind utilities with the tokens in `app/globals.css`, such as
 `bg-brand-600`, `text-muted`, `border-line`, `bg-surface` and `shadow-card`.
-Avoid raw hex values and unnecessary new CSS classes.
+The tokens switch automatically for dark mode, so avoid raw hex colours.
 
-Tailwind class names must appear complete in source. Dynamic fragments such as
-`` `bg-${colour}-50` `` are not generated reliably.
+Write Tailwind class names out in full. Built strings such as
+`` `bg-${colour}-50` `` are not generated.
 
-### Icons
+Icons: `lucide-react` for interface icons, `@icons-pack/react-simple-icons` for
+brand marks such as Facebook or WhatsApp.
 
-| Library | Use |
-| --- | --- |
-| `lucide-react` | General interface icons |
-| `@icons-pack/react-simple-icons` | Brand marks such as Facebook or WhatsApp |
+### Branches and commits
 
-Inline SVG remains appropriate for original illustrations rather than ordinary
-interface icons.
-
-### Branches
-
-```text
-main               protected, production-ready
-develop            shared development
-ari/feature-rbac   authentication and RBAC development
-feature/<task>     other individual task branches
-```
+- `main` is protected. Work on a branch named `<name>/<type>-<task>`, for example
+  `ari/fix-listing-photo-upload`, and open a pull request into `main`.
+- Start commit messages with the Jira key, for example `KAN-260 Fix listing photo upload`.
+- Never commit `.env` files, sign-in codes, session tokens or files from `backend/uploads/`.
 
 ---
 
 ## Troubleshooting
 
-Check `http://localhost:4000/api/health` first. It reports the database and
-schema state separately.
+Check <http://localhost:4000/api/health> first. It reports the database and the
+schema separately.
 
-| Symptom | Cause and fix |
+| Symptom | Fix |
 | --- | --- |
-| API endpoint returns `500` after startup | Check the `[api]` terminal. A partly loaded database is a common cause. Run `npm run db:reset`. |
-| Home page renders with no data | Confirm the API and PostgreSQL are running, then check `/api/health`. |
-| Data changed but the page remains stale | Remove `frontend/shahebbazar/.next` and restart the frontend. |
-| `EADDRINUSE` or stale API responses | Run `npx kill-port 4000` or `npx kill-port 3000`, then restart. |
-| PostgreSQL refuses the connection | Run `docker compose up -d` and check `docker compose ps`. |
-| PostgreSQL password authentication fails | Make `PGPASSWORD` in `backend/.env` match the database configuration. |
-| Database does not exist | Run `npm run db:load`. |
-| OTP request returns `500` | Configure `OTP_HASH_SECRET` in `backend/.env` and restart the API. |
-| OTP succeeds but no code appears | Confirm `MOCK_VERIFICATION_DELIVERY=console` and restart outside production mode. |
-| OTP request returns `429` | Wait for the request window or use another synthetic test number. |
-| `/api/auth/me` returns `401` | No valid active session was supplied. Log in again and confirm `shaheb_session` exists for `localhost`. |
-| Login succeeds but a protected page returns `401` | The page may still use an unauthenticated API helper. Use `authenticatedApiGet()` or `authenticatedApiSend()`. |
-| Customer data shows a seeded account | Replace the seeded identity helper with protected middleware and `req.user.user_id`. |
-| Vendor dashboard returns `403` | The authenticated account does not own the requested business. Select an owned business. |
-| Vendor dashboard repeatedly reloads | Remove unnecessary `router.refresh()` calls after login navigation. Use one `router.replace()` navigation. |
-| API repeatedly restarts after startup | Confirm `backend/nodemon.json` ignores `node_modules/**` and `uploads/**`. |
-| `'nodemon' is not recognized` | Run `npm install --prefix backend --save-dev nodemon`. |
+| PostgreSQL refuses the connection | `docker compose up -d --wait`, then `docker compose ps` |
+| Password authentication failed | `PGPASSWORD` in `backend/.env` must match the database (`postgres` for Docker) |
+| Database does not exist | `npm run db:load` |
+| API returns `500`, or health reports missing objects | The database is incomplete or old. Run `npm run db:reset`. |
+| Home page has no data | Check the API and database are running, then `/api/health` |
+| Page shows old data after changing the seed | Home data is cached for 5 minutes. Delete `frontend/shahebbazar/.next` and restart. |
+| `EADDRINUSE` | Another process holds the port: `npx kill-port 4000` (or `3000`), then restart |
+| Code request returns `500` | `OTP_HASH_SECRET` is missing. Restart with `npm run dev`, which generates it. |
+| No code appears in the terminal | `MOCK_VERIFICATION_DELIVERY=console` must be set and `NODE_ENV` must not be `production` |
+| Code request returns `429` | 3 requests per 10 minutes per number. Wait, or use another number. |
+| Page redirects to `/login` while signed in, or `/api/auth/me` returns `401` | The session expired or the cookie is missing. Sign in again. |
+| A private page shows no data or "not found" | The page or component calls the API without the session. Use the authenticated helpers or `credentials: "include"`. |
+| `403` on a business page | The signed-in account does not own that business |
+| Broken images | `npm run uploads:check`, then `npm run uploads:check -- --fix` |
+| `npm test` cannot create the test database | The `PGUSER` needs permission to create databases |
+| `'nodemon' is not recognized` | `npm run setup` |
 
 ---
 
 ## Known gaps
 
-- **Live SMS delivery is deferred for Phase 1.** OTP generation, hashing,
-  expiry, one-time consumption and session creation are implemented. Only the
-  delivery mechanism is mocked.
-
-- **Some provider subpages still require authenticated migration.** The
-  provider layout, owned-business selector and main dashboard use session and
-  ownership checks. Remaining provider reads, writes and uploads must use the
-  authenticated helpers and backend ownership middleware.
-
-- **Vendor profile validation needs clearer field-level feedback.** The backend
-  returns validation details, but invalid categories, description, location or
-  contact fields are not always obvious in the form.
-
-- **The seed has no photos yet.** Seeded businesses and listings show
-  placeholders until suitable development images are chosen; see
-  `database/README.md`.
-
-- **Business and listing image uploads require completion.** Image rendering
-  and URL resolution are present, but seed businesses may have no logo, cover
-  or listing-photo records. Multipart uploads still require full authenticated
-  ownership handling and testing.
-
-- **New businesses begin as pending.** They remain hidden from public discovery
-  until approved but should remain editable by the authenticated owner.
-
-- **Administrator login is implemented at `/admin/login`.** Signed-out access
-  to `/admin` redirects there, while customer and vendor sessions are redirected
-  to their own areas.
-
-- **Language currently uses `?lang=bn`.** Locale-prefixed `/en` and `/bn`
-  routes remain a future improvement.
-
-- **Bookings and promotions are later-phase provider features.**
-
-- **Maps are SVG illustrations rather than a live mapping integration.**
-
-- **`/api/home` is cached for five minutes.** Restart the frontend or remove
-  `frontend/shahebbazar/.next` after changing seed data if stale content remains.
+- **SMS delivery** is mocked for Phase 1. Codes print in the API terminal. An
+  SMS provider must be connected before launch.
+- **Seed images:** seeded businesses and listings have no photos and show
+  placeholders until development images are chosen (`database/README.md`).
+- **One role per account:** a customer cannot also register a business with the
+  same phone number yet (KAN-249).
+- **Admin edits in the business pages** (profile, listings, payment methods) are
+  not yet written to the audit log. Approved businesses have no admin link yet;
+  open `/vendors/dashboard?vendor=<id>` directly.
+- **Business form feedback:** some invalid fields (categories, description,
+  location, contact details) are not clearly highlighted in the form.
+- **Deployment** (KAN-254): no production configuration or CI pipeline yet.
+- **Language** uses `?lang=bn`; `/en` and `/bn` URL prefixes are a future improvement.
+- **Maps** are illustrations, not a live map.
+- **Bookings and promotions** are later-phase features.

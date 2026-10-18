@@ -18,6 +18,7 @@
     "db:load": "npm --prefix backend run db:load",
     "db:reset": "npm --prefix backend run db:reset",
     "db:verify": "npm --prefix backend run db:verify",
+    "uploads:check": "npm --prefix backend run uploads:check --",
     "test": "npm --prefix backend test",
     "docs:erd": "npm --prefix backend run docs:erd",
 

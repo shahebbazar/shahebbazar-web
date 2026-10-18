@@ -30,7 +30,8 @@ const authRouter = require("./routes/auth");
 
 const {
     resolveSession,
-    requireAuthenticatedUser
+    requireAuthenticatedUser,
+    adminOnly
 } = require("./lib/middleware/auth");
 
 const app = express();
@@ -55,6 +56,9 @@ app.use('/api/auth', authRouter);
 
 // Serves the paths stored in listing_photos.photo_url and vendors.vendor_cover_url.
 app.use('/uploads', express.static(UPLOAD_DIR));
+
+// Every admin route, in any router, needs a signed-in admin. Applied before the routers so new ones are covered too.
+app.use('/api/admin', ...adminOnly);
 
 app.use('/api/vendors', vendorsRouter);
 app.use('/api', vendorListingsRouter);

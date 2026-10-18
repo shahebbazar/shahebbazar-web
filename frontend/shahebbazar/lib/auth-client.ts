@@ -278,3 +278,40 @@ export async function registerCustomer(input: {
         };
     }
 }
+
+export type VendorRegistrationInput = {
+    vendor_name: string;
+    vendor_email: string;
+    vendor_phone: string;
+    vendor_address: string;
+    vendor_city: string;
+    vendor_nid_reference: string;
+};
+
+/** Creates the business owner's account and pending business, and signs them in. */
+export async function registerVendor(
+    input: VendorRegistrationInput & { code: string }
+): Promise<RegisterCustomerResult> {
+    try {
+        const response = await fetch(`${AUTH_API_BASE}/api/auth/register/vendor`, {
+            method: "POST",
+            credentials: "include",
+            headers: { Accept: "application/json", "Content-Type": "application/json" },
+            body: JSON.stringify(input),
+        });
+        const body = await readJson(response);
+
+        if (!response.ok) {
+            return { ok: false, error: errorFrom(body, "Unable to register the business.") };
+        }
+
+        const user = body.user as AuthUser | undefined;
+        if (!user) {
+            return { ok: false, error: "The server did not return the new business account." };
+        }
+        return { ok: true, user };
+    } catch (error) {
+        console.error("Vendor registration failed:", error);
+        return { ok: false, error: "Unable to contact the registration service." };
+    }
+}

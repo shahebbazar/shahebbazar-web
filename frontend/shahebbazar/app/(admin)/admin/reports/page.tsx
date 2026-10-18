@@ -2,7 +2,7 @@ import type { Metadata } from "next";
 import Link from "next/link";
 import { AdminShell } from "@/components/admin/AdminShell";
 import { ActionButton } from "@/components/admin/ActionButton";
-import { apiGet } from "@/lib/api";
+import { authenticatedApiGet } from "@/lib/auth-server";
 import { formatDateTime } from "@/lib/format";
 import type { AdminReport } from "@/lib/types";
 import { resolveReport } from "../moderation-actions";
@@ -29,7 +29,7 @@ const TAKE_DOWN: Record<AdminReport["target_type"], string> = {
 };
 
 export default async function AdminReportsPage() {
-    const reports = (await apiGet<AdminReport[]>("/admin/reports")) ?? [];
+    const reports = (await authenticatedApiGet<AdminReport[]>("/admin/reports")) ?? [];
     const open = reports.filter((r) => r.status === "open");
     const resolved = reports.filter((r) => r.status !== "open");
 
