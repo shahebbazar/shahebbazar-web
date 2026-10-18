@@ -1,6 +1,8 @@
 import "server-only";
 
+import { cache } from "react";
 import { cookies } from "next/headers";
+import type { AuthUser } from "./auth-client";
 
 const API_BASE =
     process.env.API_BASE_URL ||
@@ -56,6 +58,12 @@ export async function authenticatedApiGet<T>(
 
     return response.json() as Promise<T>;
 }
+
+/** The signed-in user, or null. Looked up once per request however many components ask. */
+export const getViewer = cache(async (): Promise<AuthUser | null> => {
+    const session = await authenticatedApiGet<{ user: AuthUser }>("/auth/me");
+    return session?.user ?? null;
+});
 
 export type AuthenticatedSendResult<T = unknown> =
     | {

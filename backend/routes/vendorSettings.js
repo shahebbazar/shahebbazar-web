@@ -1,6 +1,7 @@
 const express = require("express");
 const pool = require("../db");
 const { parseId, cleanText } = require("../lib/currentUser");
+const { vendorOwnerOrAdmin } = require("../lib/middleware/auth");
 
 const router = express.Router();
 const EMAIL = /^[^\s@]+@[^\s@]+\.[^\s@]+$/;
@@ -16,7 +17,7 @@ async function ownerDetails(vendorId) {
     return result.rows[0] ?? null;
 }
 
-router.get("/vendors/:vendorId/owner", async (req, res) => {
+router.get("/vendors/:vendorId/owner", ...vendorOwnerOrAdmin, async (req, res) => {
     const vendorId = parseId(req.params.vendorId);
     if (!vendorId) return res.status(400).json({ error: "Invalid business id" });
     try {
@@ -29,7 +30,7 @@ router.get("/vendors/:vendorId/owner", async (req, res) => {
     }
 });
 
-router.put("/vendors/:vendorId/owner", async (req, res) => {
+router.put("/vendors/:vendorId/owner", ...vendorOwnerOrAdmin, async (req, res) => {
     const vendorId = parseId(req.params.vendorId);
     if (!vendorId) return res.status(400).json({ error: "Invalid business id" });
     const name = cleanText(req.body?.user_name) ?? "";

@@ -7,6 +7,16 @@ const {
     hashSessionToken,
     requireAuthenticatedUser,
 } = require("../lib/middleware/auth");
+const {
+    OTP_ATTEMPT_LIMIT,
+    SESSION_DURATION_DAYS,
+    hashVerificationCode,
+    hashesMatch,
+    sessionCookieOptions,
+    useVerificationCode,
+    createSession,
+} = require("../lib/verification");
+const { validateVendorRegistration, createVendor } = require("../lib/vendorRegistration");
 
 const router = express.Router();
 
@@ -27,62 +37,6 @@ const LOGIN_ROLES = new Set([
 const OTP_EXPIRY_MINUTES = 5;
 const OTP_REQUEST_LIMIT = 3;
 const OTP_REQUEST_WINDOW_MINUTES = 10;
-
-const OTP_ATTEMPT_LIMIT = 5;
-const SESSION_DURATION_DAYS = 7;
-const SESSION_DURATION_MS =
-    SESSION_DURATION_DAYS * 24 * 60 * 60 * 1000;
-
-
-// Creates a one-way hash using the code and a private server secret.
-function hashVerificationCode({ phone, purpose, code }) {
-    const secret = process.env.OTP_HASH_SECRET;
-
-    if (!secret) {
-        throw new Error(
-            "OTP_HASH_SECRET is not configured."
-        );
-    }
-
-    return crypto
-        .createHmac("sha256", secret)
-        .update(`${phone}:${purpose}:${code}`)
-        .digest("hex");
-}
-
-function sessionCookieOptions() {
-    return {
-        httpOnly: true,
-        secure: process.env.NODE_ENV === "production",
-        sameSite: "lax",
-        path: "/",
-        maxAge: SESSION_DURATION_MS,
-    };
-}
-
-function hashesMatch(first, second) {
-    if (
-        typeof first !== "string" ||
-        typeof second !== "string"
-    ) {
-        return false;
-    }
-
-    const firstBuffer = Buffer.from(first, "hex");
-    const secondBuffer = Buffer.from(second, "hex");
-
-    if (
-        firstBuffer.length === 0 ||
-        firstBuffer.length !== secondBuffer.length
-    ) {
-        return false;
-    }
-
-    return crypto.timingSafeEqual(
-        firstBuffer,
-        secondBuffer
-    );
-}
 // Generates and stores a verification code.
 // In local development, code delivery is mocked through the API terminal.
 router.post("/request-verification", async (req, res) => {
@@ -616,79 +570,8 @@ router.post("/register/customer", async (req, res) => {
             });
         }
 
-        const otpResult = await client.query(
-            `SELECT
-                otp_id,
-                otp_code_hash,
-                otp_attempts,
-                otp_expires_at,
-                otp_consumed_at
-             FROM otp_codes
-             WHERE otp_phone = $1
-               AND otp_purpose = 'register'
-             ORDER BY otp_created_at DESC
-             LIMIT 1
-             FOR UPDATE`,
-            [phone]
-        );
-
-        if (otpResult.rowCount === 0) {
-            await client.query("ROLLBACK");
-
-            return res.status(401).json({
-                success: false,
-                error:
-                    "The verification code is invalid or has expired.",
-            });
-        }
-
-        const otp = otpResult.rows[0];
-
-        const expired =
-            new Date(otp.otp_expires_at).getTime() <=
-            Date.now();
-
-        const unavailable =
-            otp.otp_consumed_at !== null ||
-            expired ||
-            otp.otp_attempts >= OTP_ATTEMPT_LIMIT;
-
-        if (unavailable) {
-            await client.query("ROLLBACK");
-
-            return res.status(401).json({
-                success: false,
-                error:
-                    "The verification code is invalid or has expired.",
-            });
-        }
-
-        const submittedHash = hashVerificationCode({
-            phone,
-            purpose: "register",
-            code,
-        });
-
-        if (
-            !hashesMatch(
-                submittedHash,
-                otp.otp_code_hash
-            )
-        ) {
-            await client.query(
-                `UPDATE otp_codes
-                 SET
-                    otp_attempts = otp_attempts + 1,
-                    otp_consumed_at =
-                        CASE
-                            WHEN otp_attempts + 1 >= $2
-                            THEN NOW()
-                            ELSE otp_consumed_at
-                        END
-                 WHERE otp_id = $1`,
-                [otp.otp_id, OTP_ATTEMPT_LIMIT]
-            );
-
+        if (!(await useVerificationCode(client, { phone, purpose: "register", code }))) {
+            // Commit so a wrong guess still counts towards the attempt limit.
             await client.query("COMMIT");
 
             return res.status(401).json({
@@ -724,45 +607,7 @@ router.post("/register/customer", async (req, res) => {
 
         const user = userResult.rows[0];
 
-        await client.query(
-            `UPDATE otp_codes
-             SET
-                otp_consumed_at = NOW(),
-                otp_attempts = otp_attempts + 1
-             WHERE otp_id = $1`,
-            [otp.otp_id]
-        );
-
-        const sessionToken = crypto
-            .randomBytes(32)
-            .toString("base64url");
-
-        const sessionTokenHash =
-            hashSessionToken(sessionToken);
-
-        await client.query(
-            `INSERT INTO sessions (
-                user_id,
-                session_token_hash,
-                session_expires_at,
-                session_user_agent,
-                session_ip
-             )
-             VALUES (
-                $1,
-                $2,
-                NOW() + ($3 * INTERVAL '1 day'),
-                $4,
-                $5
-             )`,
-            [
-                user.user_id,
-                sessionTokenHash,
-                SESSION_DURATION_DAYS,
-                req.get("user-agent") || null,
-                req.ip || null,
-            ]
-        );
+        const sessionToken = await createSession(client, user.user_id, req);
 
         await client.query("COMMIT");
 
@@ -801,6 +646,85 @@ router.post("/register/customer", async (req, res) => {
         client.release();
     }
 });
+
+// Registers a business owner: the phone is verified with a "register" code first, then the
+// account and its pending business are created together and the owner is signed in.
+router.post("/register/vendor", async (req, res) => {
+    const fields = validateVendorRegistration(req.body);
+    if (fields.error) {
+        return res.status(400).json({ success: false, error: fields.error });
+    }
+
+    const code = typeof req.body?.code === "string" ? req.body.code.trim() : "";
+    if (!/^\d{6}$/.test(code)) {
+        return res.status(400).json({ success: false, error: "Enter the six-digit verification code." });
+    }
+
+    const client = await pool.connect();
+
+    try {
+        await client.query("BEGIN");
+
+        const existing = await client.query(
+            `SELECT user_phone FROM users
+             WHERE user_phone = $1 OR ($2::text IS NOT NULL AND user_email = $2)
+             LIMIT 1`,
+            [fields.phone, fields.email]
+        );
+        if (existing.rowCount > 0) {
+            await client.query("ROLLBACK");
+            return res.status(409).json({
+                success: false,
+                error: existing.rows[0].user_phone === fields.phone
+                    ? "That phone number is already registered. Sign in instead."
+                    : "That email address is already registered.",
+            });
+        }
+
+        if (!(await useVerificationCode(client, { phone: fields.phone, purpose: "register", code }))) {
+            // Commit so a wrong guess still counts towards the attempt limit.
+            await client.query("COMMIT");
+            return res.status(401).json({ success: false, error: "The verification code is invalid or has expired." });
+        }
+
+        const userResult = await client.query(
+            `INSERT INTO users (user_name, user_phone, user_email, user_role, user_phone_verified_at)
+             VALUES ($1, $2, $3, 'vendor', NOW())
+             RETURNING user_id, user_name, user_phone, user_email, user_role`,
+            [fields.name, fields.phone, fields.email]
+        );
+        const user = userResult.rows[0];
+        const vendor = await createVendor(client, user.user_id, fields);
+        const sessionToken = await createSession(client, user.user_id, req);
+
+        await client.query("COMMIT");
+
+        res.cookie(SESSION_COOKIE_NAME, sessionToken, sessionCookieOptions());
+
+        return res.status(201).json({
+            success: true,
+            message: "Business registered and submitted for NID verification.",
+            user,
+            vendor,
+        });
+    } catch (error) {
+        await client.query("ROLLBACK").catch(() => { });
+
+        if (error.code === "23505") {
+            return res.status(409).json({
+                success: false,
+                error: "That phone number or email address is already registered.",
+            });
+        }
+
+        console.error("POST /api/auth/register/vendor failed:", error);
+
+        return res.status(500).json({ success: false, error: "Unable to register the business." });
+    } finally {
+        client.release();
+    }
+});
+
 router.post(
     "/logout",
     requireAuthenticatedUser,

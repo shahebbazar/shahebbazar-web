@@ -16,6 +16,7 @@ import {
 } from "lucide-react";
 import { MobileMenu } from "../shared/MobileMenu";
 import { ThemeSelector } from "@/components/theme/ThemeSelector";
+import { getViewer } from "@/lib/auth-server";
 
 // Page frame for the provider area: header, navigation rail and content.
 
@@ -53,6 +54,9 @@ const NAV: NavItem[] = [
     { key: "settings", label: "Settings", Icon: Settings, path: "/vendors/dashboard/settings" },
 ];
 
+// Private to the owner: an admin can manage a business but never reads or writes as it.
+const OWNER_ONLY: string[] = ["messages", "inquiries"];
+
 
 export function parseVendorParam(
     raw: string | string[] | undefined
@@ -80,7 +84,7 @@ export function businessCode(vendorId: number): string {
     return `SB-${String(vendorId).padStart(6, "0")}`;
 }
 
-export function ProviderShell({
+export async function ProviderShell({
     vendor,
     current,
     children,
@@ -90,10 +94,12 @@ export function ProviderShell({
     children: React.ReactNode;
 }) {
     const initial = vendor.vendor_name.trim().charAt(0).toUpperCase() || "?";
+    const adminView = (await getViewer())?.user_role === "admin";
+    const nav = adminView ? NAV.filter((item) => !OWNER_ONLY.includes(item.key)) : NAV;
 
     const navList = (
         <ul className="space-y-0.5">
-            {NAV.map((item) => (
+            {nav.map((item) => (
                 <li key={item.key}>
                     <NavRow item={item} vendorId={vendor.vendor_id} active={item.key === current} />
                 </li>
@@ -130,7 +136,7 @@ export function ProviderShell({
                                     {vendor.vendor_name}
                                 </p>
                                 <p className="text-[0.75rem] text-muted">
-                                    Business Owner
+                                    {adminView ? "Admin view" : "Business Owner"}
                                 </p>
                             </div>
                         </div>
@@ -177,7 +183,25 @@ export function ProviderShell({
                     </nav>
                 </aside>
 
-                <main className="min-w-0 flex-1">{children}</main>
+                <main className="min-w-0 flex-1">
+                    {adminView && (
+                        <p role="status" className="mb-5 flex flex-wrap items-center justify-between gap-2 rounded-lg border border-sponsor-ink/20 bg-sponsor-bg px-4 py-2.5 text-sm text-sponsor-ink">
+                            <span>
+                                You are viewing <strong>{vendor.vendor_name}</strong> as an administrator. Changes you save apply to this business.
+                            </span>
+                            <Link href="/admin" className="font-medium underline">
+                                Back to admin
+                            </Link>
+                        </p>
+                    )}
+                    {adminView && OWNER_ONLY.includes(current) ? (
+                        <p className="rounded-xl border border-line bg-surface p-5 text-sm text-muted shadow-card">
+                            Messages and inquiries are private to the business owner, so they are not shown in admin view.
+                        </p>
+                    ) : (
+                        children
+                    )}
+                </main>
             </div>
         </div>
     );

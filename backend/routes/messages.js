@@ -1,7 +1,6 @@
 const express = require("express");
 const pool = require("../db");
 const {
-    vendorOwnerId,
     parseId,
     cleanText,
 } = require("../lib/currentUser");
@@ -9,6 +8,7 @@ const {
 const {
     requireAuthenticatedUser,
     requireRole,
+    vendorOwnerOnly,
 } = require("../lib/middleware/auth");
 const { notifyNewMessage, listAlerts, markAlertsRead } = require("../lib/notify");
 
@@ -256,12 +256,11 @@ router.post("/me/alerts/read", async (req, res) => {
 });
 
 // Business side --------------------------------------------------------
+// Only the signed-in owner of :vendorId; admins cannot read or send a business's messages.
 
-router.get("/vendors/:vendorId/conversations", async (req, res) => {
-    const vendorId = parseId(req.params.vendorId);
-    if (!vendorId) return res.status(400).json({ error: "Invalid business id" });
+router.get("/vendors/:vendorId/conversations", ...vendorOwnerOnly, async (req, res) => {
+    const vendorId = req.vendor.vendor_id;
     try {
-        if (!(await vendorOwnerId(vendorId))) return res.status(404).json({ error: "Business not found" });
         res.json(await listConversations({ vendorId, inquiriesOnly: req.query.type === "inquiries" }));
     } catch (err) {
         console.error(`GET /api/vendors/${vendorId}/conversations failed:`, err);
@@ -269,13 +268,15 @@ router.get("/vendors/:vendorId/conversations", async (req, res) => {
     }
 });
 
-router.get("/vendors/:vendorId/conversations/:id", async (req, res) => {
-    const vendorId = parseId(req.params.vendorId);
+router.get("/vendors/:vendorId/conversations/:id", ...vendorOwnerOnly, async (req, res) => {
+    const vendorId = req.vendor.vendor_id;
     const id = parseId(req.params.id);
-    if (!vendorId || !id) return res.status(400).json({ error: "Invalid id" });
+    if (!id) return res.status(400).json({ error: "Invalid id" });
     try {
-        const ownerId = await vendorOwnerId(vendorId);
-        const thread = ownerId ? await openConversation(id, ownerId) : null;
+        // Check the conversation belongs to this business before opening it, which marks messages read.
+        const head = await conversationHead(id);
+        if (!head || head.vendor_id !== vendorId) return res.status(404).json({ error: "Conversation not found" });
+        const thread = await openConversation(id, req.user.user_id);
         if (!thread || thread.conversation.vendor_id !== vendorId) return res.status(404).json({ error: "Conversation not found" });
         res.json(thread);
     } catch (err) {
@@ -284,43 +285,37 @@ router.get("/vendors/:vendorId/conversations/:id", async (req, res) => {
     }
 });
 
-router.post("/vendors/:vendorId/conversations/:id/messages", async (req, res) => {
-    const vendorId = parseId(req.params.vendorId);
+router.post("/vendors/:vendorId/conversations/:id/messages", ...vendorOwnerOnly, async (req, res) => {
+    const vendorId = req.vendor.vendor_id;
     const id = parseId(req.params.id);
-    if (!vendorId || !id) return res.status(400).json({ error: "Invalid id" });
+    if (!id) return res.status(400).json({ error: "Invalid id" });
     const parsed = parseBody(req.body?.body);
     if (parsed.error) return res.status(400).json({ error: parsed.error });
     try {
         const conversation = await conversationHead(id);
         if (!conversation || conversation.vendor_id !== vendorId) return res.status(404).json({ error: "Conversation not found" });
         if (conversation.conversation_status !== "open") return res.status(409).json({ error: "This conversation has been closed." });
-        res.status(201).json(await addMessage(conversation, conversation.owner_user_id, parsed.body, conversation.vendor_name));
+        res.status(201).json(await addMessage(conversation, req.user.user_id, parsed.body, conversation.vendor_name));
     } catch (err) {
         console.error(`POST /api/vendors/${vendorId}/conversations/${id}/messages failed:`, err);
         res.status(500).json({ error: "Could not send the message. Try again." });
     }
 });
 
-router.get("/vendors/:vendorId/alerts", async (req, res) => {
-    const vendorId = parseId(req.params.vendorId);
-    if (!vendorId) return res.status(400).json({ error: "Invalid business id" });
+router.get("/vendors/:vendorId/alerts", ...vendorOwnerOnly, async (req, res) => {
+    const vendorId = req.vendor.vendor_id;
     try {
-        const ownerId = await vendorOwnerId(vendorId);
-        if (!ownerId) return res.status(404).json({ error: "Business not found" });
-        res.json(await listAlerts(ownerId));
+        res.json(await listAlerts(req.user.user_id));
     } catch (err) {
         console.error(`GET /api/vendors/${vendorId}/alerts failed:`, err);
         res.status(500).json({ error: "Could not load alerts" });
     }
 });
 
-router.post("/vendors/:vendorId/alerts/read", async (req, res) => {
-    const vendorId = parseId(req.params.vendorId);
-    if (!vendorId) return res.status(400).json({ error: "Invalid business id" });
+router.post("/vendors/:vendorId/alerts/read", ...vendorOwnerOnly, async (req, res) => {
+    const vendorId = req.vendor.vendor_id;
     try {
-        const ownerId = await vendorOwnerId(vendorId);
-        if (!ownerId) return res.status(404).json({ error: "Business not found" });
-        await markAlertsRead(ownerId);
+        await markAlertsRead(req.user.user_id);
         res.json({ ok: true });
     } catch (err) {
         console.error(`POST /api/vendors/${vendorId}/alerts/read failed:`, err);

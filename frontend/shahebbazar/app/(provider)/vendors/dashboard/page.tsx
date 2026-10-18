@@ -2,7 +2,7 @@ import type { Metadata } from "next";
 import Link from "next/link";
 import { notFound, redirect } from "next/navigation";
 import { ChevronRight } from "lucide-react";
-import { authenticatedApiGet } from "@/lib/auth-server";
+import { authenticatedApiGet, getViewer } from "@/lib/auth-server";
 import type {
     AlertList,
     DashboardPeriod,
@@ -46,6 +46,9 @@ export default async function ProviderDashboardPage({
     // The picker is restricted to businesses owned by the signed-in vendor.
     const vendorId = parseVendorParam(query.vendor);
     if (vendorId === null) {
+        // Admins own no businesses; they open one from the admin pages.
+        if ((await getViewer())?.user_role === "admin") redirect("/admin");
+
         const vendors =
             (await authenticatedApiGet<VendorPickerRow[]>(
                 "/vendor-account/businesses"

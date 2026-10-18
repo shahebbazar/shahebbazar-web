@@ -1,5 +1,6 @@
 "use client";
 
+import { useRouter } from "next/navigation";
 import {
     useState,
     type ChangeEvent,
@@ -10,10 +11,7 @@ import {
     MapPin,
     UserRound,
 } from "lucide-react";
-
-const API_BASE =
-    process.env.NEXT_PUBLIC_API_BASE_URL ||
-    "http://localhost:4000";
+import { registerVendor, requestVerification } from "@/lib/auth-client";
 
 const EMPTY_FORM = {
     vendor_name: "",
@@ -33,9 +31,15 @@ type FormStatus =
       }
     | null;
 
+// Step 1 collects the business details and sends a code to the phone; step 2 checks the
+// code, creates the account and pending business, and signs the owner in.
 export function VendorRegistrationForm() {
+    const router = useRouter();
     const [form, setForm] =
         useState<VendorForm>(EMPTY_FORM);
+    const [stage, setStage] =
+        useState<"details" | "verification">("details");
+    const [code, setCode] = useState("");
     const [status, setStatus] =
         useState<FormStatus>(null);
     const [submitting, setSubmitting] =
@@ -52,7 +56,7 @@ export function VendorRegistrationForm() {
         }));
     }
 
-    async function handleSubmit(
+    async function handleRequestCode(
         event: FormEvent<HTMLFormElement>
     ) {
         event.preventDefault();
@@ -60,63 +64,121 @@ export function VendorRegistrationForm() {
         setSubmitting(true);
         setStatus(null);
 
-        try {
-            const response = await fetch(
-                `${API_BASE}/api/vendors`,
-                {
-                    method: "POST",
-                    credentials: "include",
-                    headers: {
-                        Accept: "application/json",
-                        "Content-Type": "application/json",
-                    },
-                    body: JSON.stringify(form),
-                }
-            );
+        const result = await requestVerification({
+            phone: form.vendor_phone,
+            purpose: "register",
+        });
 
-            const data = (await response
-                .json()
-                .catch(() => null)) as {
-                error?: string;
-            } | null;
+        setSubmitting(false);
 
-            if (!response.ok) {
-                setStatus({
-                    type: "error",
-                    message:
-                        data?.error ||
-                        "Unable to register the business.",
-                });
-
-                return;
-            }
-
-            setStatus({
-                type: "success",
-                message:
-                    "Business registration submitted. NID verification and business approval are pending.",
-            });
-
-            setForm(EMPTY_FORM);
-        } catch (error) {
-            console.error(
-                "Vendor registration failed:",
-                error
-            );
-
-            setStatus({
-                type: "error",
-                message:
-                    "Unable to contact the registration service.",
-            });
-        } finally {
-            setSubmitting(false);
+        if (!result.ok) {
+            setStatus({ type: "error", message: result.error });
+            return;
         }
+
+        setStage("verification");
+    }
+
+    async function handleRegistration(
+        event: FormEvent<HTMLFormElement>
+    ) {
+        event.preventDefault();
+
+        setSubmitting(true);
+        setStatus(null);
+
+        const result = await registerVendor({ ...form, code });
+
+        if (!result.ok) {
+            setSubmitting(false);
+            setStatus({ type: "error", message: result.error });
+            return;
+        }
+
+        // Signed in: the dashboard shows the new business as awaiting approval.
+        router.push("/vendors/dashboard");
+        router.refresh();
+    }
+
+    function returnToDetails() {
+        setStage("details");
+        setCode("");
+        setStatus(null);
+    }
+
+    if (stage === "verification") {
+        return (
+            <form
+                onSubmit={handleRegistration}
+                className="space-y-4 rounded-xl border border-line bg-surface p-5 shadow-raised sm:p-6"
+            >
+                <div className="rounded-lg border border-brand-200 bg-brand-50 p-3 text-sm leading-6 text-brand-700">
+                    <p>Development mode: check the API terminal for the verification code.</p>
+                    <p>The code expires after five minutes.</p>
+                </div>
+
+                <div>
+                    <label
+                        htmlFor="vendor-register-code"
+                        className="mb-1.5 block text-sm font-medium text-ink"
+                    >
+                        Verification code sent to {form.vendor_phone}
+                    </label>
+                    <input
+                        id="vendor-register-code"
+                        name="code"
+                        type="text"
+                        value={code}
+                        onChange={(event) =>
+                            setCode(event.target.value.replace(/\D/g, "").slice(0, 6))
+                        }
+                        placeholder="Enter the six-digit code"
+                        inputMode="numeric"
+                        autoComplete="one-time-code"
+                        pattern="[0-9]{6}"
+                        maxLength={6}
+                        className="form-input mb-0 text-center text-xl tracking-[0.4em]"
+                        required
+                    />
+                </div>
+
+                <div className="rounded-lg border border-line bg-surface-2 p-3 text-sm text-muted">
+                    <p>Registering:</p>
+                    <p className="mt-1 font-medium text-ink">{form.vendor_name}</p>
+                    {form.vendor_email && <p>{form.vendor_email}</p>}
+                    <p>{[form.vendor_address, form.vendor_city].filter(Boolean).join(", ")}</p>
+                </div>
+
+                {status && (
+                    <div role="alert" className="form-status-error mb-0">
+                        {status.message}
+                    </div>
+                )}
+
+                <div className="flex flex-col gap-2">
+                    <button
+                        type="submit"
+                        className="form-button-primary disabled:cursor-not-allowed disabled:opacity-60"
+                        disabled={submitting || code.length !== 6}
+                    >
+                        {submitting ? "Verifying..." : "Complete registration"}
+                    </button>
+                    <button
+                        type="button"
+                        onClick={returnToDetails}
+                        className="text-sm text-muted underline hover:text-ink"
+                        disabled={submitting}
+                    >
+                        Change details / Resend code
+                    </button>
+                </div>
+            </form>
+        );
     }
 
     return (
         <form
-            onSubmit={handleSubmit}
+            onSubmit={handleRequestCode}
             className="space-y-6"
         >
             {status && (
@@ -237,8 +299,8 @@ export function VendorRegistrationForm() {
                     disabled={submitting}
                 >
                     {submitting
-                        ? "Submitting registration..."
-                        : "Register business"}
+                        ? "Sending verification code..."
+                        : "Continue with phone verification"}
                 </button>
             </div>
         </form>

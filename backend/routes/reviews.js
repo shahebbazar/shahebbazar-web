@@ -8,6 +8,8 @@ const {
 const {
     requireAuthenticatedUser,
     requireRole,
+    vendorOwnerOrAdmin,
+    vendorOwnerOnly,
 } = require("../lib/middleware/auth");
 
 const router = express.Router();
@@ -65,7 +67,7 @@ router.post(
     }
 );
 
-router.get("/vendors/:vendorId/reviews", async (req, res) => {
+router.get("/vendors/:vendorId/reviews", ...vendorOwnerOrAdmin, async (req, res) => {
     const vendorId = parseId(req.params.vendorId);
     if (!vendorId) return res.status(400).json({ error: "Invalid business id" });
     try {
@@ -88,7 +90,8 @@ router.get("/vendors/:vendorId/reviews", async (req, res) => {
     }
 });
 
-router.put("/vendors/:vendorId/reviews/:reviewId/reply", async (req, res) => {
+// Replies are posted as the business, so only its owner can write them.
+router.put("/vendors/:vendorId/reviews/:reviewId/reply", ...vendorOwnerOnly, async (req, res) => {
     const vendorId = parseId(req.params.vendorId);
     const reviewId = parseId(req.params.reviewId);
     if (!vendorId || !reviewId) return res.status(400).json({ error: "Invalid id" });

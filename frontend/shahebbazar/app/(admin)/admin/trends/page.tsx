@@ -1,7 +1,7 @@
 import type { Metadata } from "next";
 import Link from "next/link";
 import { AdminShell } from "@/components/admin/AdminShell";
-import { apiGet } from "@/lib/api";
+import { authenticatedApiGet } from "@/lib/auth-server";
 import type { AdminTrends } from "@/lib/types";
 
 export const metadata: Metadata = {
@@ -13,7 +13,7 @@ const PERIODS = [7, 30, 90];
 export default async function AdminTrendsPage({ searchParams }: { searchParams: Promise<{ days?: string }> }) {
     const requested = Number((await searchParams).days);
     const days = PERIODS.includes(requested) ? requested : 30;
-    const data = await apiGet<AdminTrends>(`/admin/trends?days=${days}`);
+    const data = await authenticatedApiGet<AdminTrends>(`/admin/trends?days=${days}`);
 
     if (!data) {
         return (

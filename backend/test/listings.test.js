@@ -1,135 +1,16 @@
 // End-to-end API tests for listings, listing photos and business images.
-//
-// Builds a throwaway database from the baseline, starts the real API against it, signs in
-// through the normal OTP flow (codes are read from the console mock), and exercises the
-// routes as each role. Run with `npm test` from the repository root or backend/.
-//
-// Uses the PostgreSQL settings in backend/.env. The test database is
-// "<PGDATABASE>_test" unless TEST_PGDATABASE is set, and is dropped afterwards.
+// Runs against the real API and a throwaway database; see test/support/harness.js.
 
 const { describe, it, before, after } = require("node:test");
 const assert = require("node:assert/strict");
-const { spawn, spawnSync } = require("node:child_process");
 const fs = require("node:fs");
-const os = require("node:os");
 const path = require("node:path");
-const { Client } = require("pg");
-require("dotenv").config({ path: path.join(__dirname, "..", ".env"), quiet: true });
+const { ORIGIN, UPLOAD_DIR, JPEG, PNG, query, call, startApi, stopApi } = require("./support/harness");
 
-const BACKEND_DIR = path.join(__dirname, "..");
-const DEV_DB = process.env.PGDATABASE || "shahebbazar";
-const TEST_DB = process.env.TEST_PGDATABASE || `${DEV_DB}_test`;
-const PORT = Number(process.env.TEST_PORT) || 4100;
-const API = `http://localhost:${PORT}/api`;
-const UPLOAD_DIR = fs.mkdtempSync(path.join(os.tmpdir(), "shahebbazar-uploads-"));
-
-// Seeded accounts (database/baseline/seed.sql).
-const PHONES = {
-    owner: "+8801711000005", // owns business 1, rajshahi-mango-traders
-    otherVendor: "+8801711000006", // owns business 6
-    customer: "+8801722000001",
-    admin: "+8801711000001",
-};
 const OWNED_VENDOR = 1;
 const OWNED_VENDOR_SLUG = "rajshahi-mango-traders";
 
-// Minimal files whose first bytes match their type, which is what the upload check reads.
-const JPEG = Buffer.from(
-    "/9j/4AAQSkZJRgABAQEASABIAAD/2wBDAP//////////////////////////////////////////////////////////////////////////////////////wgALCAABAAEBAREA/8QAFBABAAAAAAAAAAAAAAAAAAAAAP/aAAgBAQABPxA=",
-    "base64"
-);
-const PNG = Buffer.concat([Buffer.from([0x89, 0x50, 0x4e, 0x47, 0x0d, 0x0a, 0x1a, 0x0a]), Buffer.alloc(64)]);
-
-let server;
-let serverLog = "";
-const cookies = {};
-
 // ---------- helpers ----------
-
-function adminClient() {
-    return new Client({
-        host: process.env.PGHOST || "localhost",
-        user: process.env.PGUSER || "postgres",
-        password: process.env.PGPASSWORD,
-        port: Number(process.env.PGPORT) || 5432,
-        database: "postgres",
-    });
-}
-
-async function query(sql, params) {
-    const client = new Client({
-        host: process.env.PGHOST || "localhost",
-        user: process.env.PGUSER || "postgres",
-        password: process.env.PGPASSWORD,
-        port: Number(process.env.PGPORT) || 5432,
-        database: TEST_DB,
-    });
-    await client.connect();
-    try {
-        return (await client.query(sql, params)).rows;
-    } finally {
-        await client.end();
-    }
-}
-
-function waitFor(check, label, timeoutMs = 15000) {
-    return new Promise((resolve, reject) => {
-        const started = Date.now();
-        const timer = setInterval(() => {
-            const value = check();
-            if (value) {
-                clearInterval(timer);
-                resolve(value);
-            } else if (Date.now() - started > timeoutMs) {
-                clearInterval(timer);
-                reject(new Error(`Timed out waiting for ${label}.\n--- API output ---\n${serverLog}`));
-            }
-        }, 50);
-    });
-}
-
-async function call(method, route, { as, json, form } = {}) {
-    const headers = {};
-    if (as) headers.Cookie = cookies[as];
-    let body;
-    if (json) {
-        headers["Content-Type"] = "application/json";
-        body = JSON.stringify(json);
-    } else if (form) {
-        body = form;
-    }
-    const res = await fetch(`${API}${route}`, { method, headers, body });
-    const text = await res.text();
-    let data = null;
-    try {
-        data = JSON.parse(text);
-    } catch {
-        data = text;
-    }
-    return { status: res.status, data, headers: res.headers };
-}
-
-/** Signs in through the real OTP flow, reading the code from the console mock. */
-async function signIn(role, expectedRole) {
-    const phone = PHONES[role];
-    const from = serverLog.length;
-    const requested = await call("POST", "/auth/request-verification", {
-        json: { phone, purpose: "login", expectedRole },
-    });
-    assert.equal(requested.status, 201, `request-verification for ${role}: ${JSON.stringify(requested.data)}`);
-    const pattern = new RegExp(
-        `\\[mock verification\\] phone: ${phone.replace("+", "\\+")}\\s+\\[mock verification\\] purpose: login\\s+\\[mock verification\\] code: (\\d{6})`
-    );
-    const match = await waitFor(() => serverLog.slice(from).match(pattern), `the OTP for ${role}`);
-    const verified = await call("POST", "/auth/verify", {
-        json: { phone, purpose: "login", expectedRole, code: match[1] },
-    });
-    assert.equal(verified.status, 200, `verify for ${role}: ${JSON.stringify(verified.data)}`);
-    const setCookie = verified.headers.get("set-cookie") || "";
-    const session = setCookie.split(";")[0];
-    assert.match(session, /^shaheb_session=/, `${role} received a session cookie`);
-    cookies[role] = session;
-}
 
 function photoForm(files) {
     const form = new FormData();
@@ -159,51 +40,8 @@ async function categoryId() {
     return cachedCategory;
 }
 
-// ---------- setup ----------
-
-before(async () => {
-    assert.notEqual(TEST_DB, DEV_DB, "The test database must not be the development database.");
-
-    const load = spawnSync(process.execPath, ["scripts/load-db.js", "--reset", "--yes", `--database=${TEST_DB}`], {
-        cwd: BACKEND_DIR,
-        env: { ...process.env, UPLOAD_DIR },
-        encoding: "utf8",
-    });
-    assert.equal(load.status, 0, `Loading the test database failed:\n${load.stdout}\n${load.stderr}`);
-
-    server = spawn(process.execPath, ["index.js"], {
-        cwd: BACKEND_DIR,
-        env: {
-            ...process.env,
-            PORT: String(PORT),
-            PGDATABASE: TEST_DB,
-            UPLOAD_DIR,
-            NODE_ENV: "test",
-            MOCK_VERIFICATION_DELIVERY: "console",
-        },
-    });
-    server.stdout.on("data", (chunk) => (serverLog += chunk));
-    server.stderr.on("data", (chunk) => (serverLog += chunk));
-    await waitFor(() => serverLog.includes("API running on"), "the API to start");
-
-    await signIn("owner", "vendor");
-    await signIn("otherVendor", "vendor");
-    await signIn("customer", "customer");
-    await signIn("admin", "admin");
-});
-
-after(async () => {
-    if (server) {
-        server.kill();
-        await new Promise((resolve) => server.once("exit", resolve));
-    }
-    const admin = adminClient();
-    await admin.connect();
-    await admin.query("SELECT pg_terminate_backend(pid) FROM pg_stat_activity WHERE datname = $1", [TEST_DB]);
-    await admin.query(`DROP DATABASE IF EXISTS "${TEST_DB}"`);
-    await admin.end();
-    fs.rmSync(UPLOAD_DIR, { recursive: true, force: true });
-});
+before(startApi);
+after(stopApi);
 
 // ---------- access control ----------
 
@@ -298,7 +136,7 @@ describe("listing photos, from upload to the public page", () => {
     });
 
     it("the uploaded file is served at /uploads", async () => {
-        const res = await fetch(`http://localhost:${PORT}/${photos[0].photo_url}`);
+        const res = await fetch(`${ORIGIN}/${photos[0].photo_url}`);
         assert.equal(res.status, 200);
         assert.equal(res.headers.get("content-type"), "image/jpeg");
     });
@@ -339,7 +177,7 @@ describe("listing photos, from upload to the public page", () => {
         const card = page.data.listings.find((l) => l.listing_id === listingId);
         assert.ok(card, "approved listing is returned");
         assert.equal(card.photo_url, photos[0].photo_url, "the card uses the main photo");
-        const served = await fetch(`http://localhost:${PORT}/${card.photo_url}`);
+        const served = await fetch(`${ORIGIN}/${card.photo_url}`);
         assert.equal(served.status, 200, "the card's photo exists");
     });
 

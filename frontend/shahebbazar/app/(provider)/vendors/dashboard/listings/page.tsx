@@ -15,7 +15,7 @@ export default async function ListingsPage({
 }: {
     searchParams: Promise<{ vendor?: string }>;
 }) {
-    // TODO(auth): take the business from the signed-in owner.
+    // The API only returns the business to its owner or an admin.
     const vendorId = parseVendorParam((await searchParams).vendor);
     if (vendorId === null) redirect("/vendors/dashboard");
 

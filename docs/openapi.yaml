@@ -11,13 +11,13 @@ info:
     **Browse it:** run the API and open `http://localhost:4000/api/docs`.
     **Postman:** File → Import → this file (`docs/openapi.yaml`).
 
-    **Authentication is not built yet.** Every provider and admin
-    endpoint is marked `TODO(auth)` in the code and is currently open.
-    The customer (`/api/me/...`) endpoints act as the first active
-    customer account until sign-in exists.
-    They must not be deployed publicly until sessions and role checks
-    exist. The provider endpoints take the business id in the path for
-    now; with sign-in, it will come from the session.
+    **Authentication.** Sign in with `/api/auth/request-verification` and
+    `/api/auth/verify`; the API sets an HTTP-only `shaheb_session` cookie.
+    Customer endpoints need a customer session. Provider and Listings
+    endpoints need the business's owner or an admin; messages, alerts and
+    review replies need the owner. Admin endpoints need an admin. Without
+    a session the API answers 401, with the wrong role or business 403.
+    The access table is in the repository README.
 
     **Conventions**
     - All public responses contain approved records only.
@@ -30,9 +30,7 @@ info:
       field.
   contact:
     name: COS40005 Group 23
-# No authentication exists yet, so no security scheme is declared. When
-# sessions arrive, add a cookie scheme under components.securitySchemes and
-# require it on the Provider and Admin operations.
+# Protected operations use the session cookie; see the description above.
 security: []
 servers:
   - url: http://localhost:4000
@@ -45,17 +43,17 @@ tags:
   - name: Analytics
     description: Beacons the browser sends once a page is on screen.
   - name: Registration
-    description: Vendor sign-up. Part of the sign-in work.
+    description: Business sign-up, verified by a phone code.
   - name: Provider
-    description: A business owner's own data. `TODO(auth)`.
+    description: A business owner's own data. Owner or admin; messages and replies owner only.
   - name: Listings
-    description: A business's products and services. `TODO(auth)`.
+    description: A business's products and services. Owner or admin.
   - name: Admin
-    description: Approvals, reports, review moderation and search trends. `TODO(auth)`.
+    description: Approvals, reports, review moderation and search trends. Admin only.
   - name: Customer
-    description: The customer's saved businesses, reviews, reports and alerts. `TODO(auth)`.
+    description: The customer's saved businesses, reviews, reports and alerts. Customer only.
   - name: Messaging
-    description: Buyer-seller conversations and alerts, for both sides. `TODO(auth)`.
+    description: Buyer-seller conversations and alerts. The customer, or the business's owner.
   - name: Reviews
     description: Writing reviews and owner replies.
   - name: Events
@@ -291,16 +289,12 @@ paths:
   /api/vendors:
     get:
       operationId: getVendors
-      tags: [Registration]
-      summary: Every vendor, every column (development only)
-      deprecated: true
-      description: |
-        Used by the development business picker on `/vendors/dashboard`
-        until sign-in exists. Returns unapproved businesses and moderation
-        fields: **remove before deployment**.
+      tags: [Public]
+      summary: Approved businesses
+      description: Public contact details of every approved business, by name.
       responses:
         "200":
-          description: Raw `vendors` rows.
+          description: Approved `vendors` rows.
           content:
             application/json:
               schema:
@@ -312,27 +306,35 @@ paths:
                     vendor_id: { type: integer }
                     vendor_name: { type: string }
                     vendor_status: { $ref: "#/components/schemas/VendorStatus" }
+
+  /api/auth/register/vendor:
     post:
-      operationId: postVendors
+      operationId: postAuthRegisterVendor
       tags: [Registration]
       summary: Register a business and its owner account
-      description: Creates a `vendor` user (phone is the identifier) and a pending business in one transaction.
+      description: |
+        First request a code with `POST /api/auth/request-verification`
+        (`purpose: "register"`) for `vendor_phone`. With the right code this
+        creates a verified `vendor` user and a pending business in one
+        transaction, and signs the owner in (sets `shaheb_session`).
       requestBody:
         required: true
         content:
           application/json:
             schema:
               type: object
-              required: [vendor_name, vendor_phone]
+              required: [vendor_name, vendor_phone, vendor_nid_reference, code]
               properties:
-                vendor_name: { type: string }
+                vendor_name: { type: string, maxLength: 255 }
                 vendor_phone: { type: string }
                 vendor_email: { type: string, format: email }
                 vendor_address: { type: string }
                 vendor_city: { type: string, description: "Area or city name, matched to a location." }
+                vendor_nid_reference: { type: string, maxLength: 50 }
+                code: { type: string, pattern: "^[0-9]{6}$" }
       responses:
         "201":
-          description: Created, awaiting approval.
+          description: Created, awaiting approval; the owner is signed in.
           content:
             application/json:
               schema:
@@ -346,6 +348,7 @@ paths:
                       vendor_slug: { type: string }
                       vendor_status: { const: pending }
         "400": { $ref: "#/components/responses/LegacyError" }
+        "401": { $ref: "#/components/responses/LegacyError" }
         "409": { $ref: "#/components/responses/LegacyError" }
 
   # ------------------------------------------------------------ provider
@@ -1263,7 +1266,7 @@ components:
       name: vendorId
       in: path
       required: true
-      description: TODO(auth) — will come from the session.
+      description: A business the signed-in user owns (any business for an admin).
       schema: { type: integer, minimum: 1 }
       example: 13
     ListingId:

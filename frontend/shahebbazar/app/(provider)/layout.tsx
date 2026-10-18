@@ -30,9 +30,6 @@ export default async function ProviderLayout({
     redirect("/account");
   }
 
-  if (session.user.user_role === "admin") {
-    redirect("/admin");
-  }
-
+  // Admins may open a business's pages to check or fix them; the pages show they are in admin view.
   return children;
 }

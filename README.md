@@ -130,6 +130,29 @@ Private customer routes use `req.user.user_id` rather than a seeded customer
 identity. Protected Server Component reads use `authenticatedApiGet()`, while
 protected Server Actions use `authenticatedApiSend()`.
 
+### Server-side access rules
+
+Every rule below is enforced by the API, whatever the frontend shows. The
+middleware is in `backend/lib/middleware/auth.js`; `npm test` checks each
+route against each role (`backend/test/access.test.js`).
+
+| Routes | Signed out | Customer | Another vendor | Owner | Admin |
+| --- | --- | --- | --- | --- | --- |
+| Public browsing (`/api/home`, `/api/businesses/...`, `/api/categories`, `/api/events`) | yes | yes | yes | yes | yes |
+| Customer area (`/api/me/...`, `POST /api/reports`, writing reviews) | 401 | yes | 403 | 403 | 403 |
+| Managing a business: dashboard, summary, profile, logo and photos, listings and listing photos, payment methods, owner details, reading reviews (`/api/vendors/:vendorId/...`, `/api/listings/:listingId/...`) | 401 | 403 | 403 | yes | yes |
+| Acting as the business: messages, inquiries, alerts, review replies | 401 | 403 | 403 | yes | 403 |
+| Registering (`/api/auth/register/customer`, `/api/auth/register/vendor`) | with a phone code | | | | |
+| Administration (`/api/admin/...`, applied once in `index.js`, so new admin routes are covered automatically) | 401 | 403 | 403 | 403 | yes |
+
+Admin decisions, category changes, report resolutions and review moderation are
+recorded in `audit_logs` against the signed-in admin.
+
+Admins can open any business's provider pages ("Open the business's pages" on the
+Approvals cards) to check or correct its details, listings and payment methods. The
+pages show an admin banner, and messages, inquiries and review replies stay hidden
+because they belong to the owner.
+
 ### Vendor ownership
 
 Vendor access is not granted solely from a `vendorId` supplied in the URL. The
@@ -294,7 +317,8 @@ Run these from the repository root.
 | `npm run db:load` | Create the database if required and load the baseline schema, seed data and seed images |
 | `npm run db:reset` | Drop, recreate and reload the database after confirmation |
 | `npm run db:verify` | Check the database has every required table, view and column |
-| `npm test` | Run the backend API tests against a throwaway `<PGDATABASE>_test` database |
+| `npm run uploads:check` | Compare stored image paths with the upload folder; add `-- --fix` to remove references to missing files and move unused files to `uploads/.unreferenced/` |
+| `npm test` | Run the backend API tests (access rules, listings and photos, `uploads:check`) against a throwaway `<PGDATABASE>_test` database |
 | `npm run build` | Build the frontend for production |
 | `npm start` | Start both production processes after a frontend build |
 | `npm run lint` | Run frontend lint checks |
@@ -402,6 +426,7 @@ an active session and the required role or ownership relationship.
 | POST | `/api/auth/request-verification` | Validate account/role and create a hashed OTP |
 | POST | `/api/auth/verify` | Consume the OTP, create a session and set the session cookie |
 | POST | `/api/auth/register/customer` | Create a verified customer account |
+| POST | `/api/auth/register/vendor` | Create a verified business owner account and pending business, after a `register` code |
 | POST | `/api/auth/logout` | Delete the active session and expire the cookie |
 | GET | `/api/vendor-account/businesses` | Businesses owned by the authenticated vendor account |
 | GET / POST | `/api/vendors/:vendorId/listings` | The owner's listings with their photos / create a listing (owner or admin) |

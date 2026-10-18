@@ -1,6 +1,6 @@
 import type { Metadata } from "next";
 import { AdminShell } from "@/components/admin/AdminShell";
-import { apiGet } from "@/lib/api";
+import { authenticatedApiGet } from "@/lib/auth-server";
 import type { AdminCategory } from "@/lib/types";
 import { AddCategory, CategoryRow } from "./CategoryControls";
 
@@ -9,7 +9,7 @@ export const metadata: Metadata = {
 };
 
 export default async function AdminCategoriesPage() {
-    const all = (await apiGet<AdminCategory[]>("/admin/categories")) ?? [];
+    const all = (await authenticatedApiGet<AdminCategory[]>("/admin/categories")) ?? [];
     const mains = all.filter((c) => c.parent_id === null);
 
     return (

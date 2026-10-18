@@ -13,15 +13,7 @@ function parseId(raw) {
     return /^\d{1,10}$/.test(raw) && Number(raw) > 0 && Number(raw) <= 2147483647 ? Number(raw) : null;
 }
 
-// The admin recorded as making a decision.
-async function actingAdmin(db) {
-    const result = await db.query(
-        `SELECT user_id FROM users
-         WHERE user_role = 'admin' AND user_status = 'active'
-         ORDER BY user_id LIMIT 1`
-    );
-    return result.rows[0]?.user_id ?? null;
-}
+// Every /admin route needs a signed-in admin (see index.js); decisions are recorded against that admin.
 
 /** Validates { decision, reason }. Returns { error } or { decision, reason }. */
 function parseDecision(body) {
@@ -113,7 +105,7 @@ router.get("/admin/queue", async (req, res) => {
 // Decisions
 
 // Applies one decision in a transaction: lock the row, check it is still pending, update it, audit it.
-async function decide(res, { kind, id, decision, reason }) {
+async function decide(res, { kind, id, actor, decision, reason }) {
     const table = kind === "vendor"
         ? { name: "vendors", key: "vendor_id", status: "vendor_status", reason: "vendor_rejection_reason", label: "vendor_name" }
         : { name: "vendor_listings", key: "listing_id", status: "listing_status", reason: "listing_rejection_reason", label: "listing_title" };
@@ -121,12 +113,6 @@ async function decide(res, { kind, id, decision, reason }) {
     const client = await pool.connect();
     try {
         await client.query("BEGIN");
-
-        const actor = await actingAdmin(client);
-        if (actor === null) {
-            await client.query("ROLLBACK");
-            return res.status(500).json({ error: "No active admin account exists to record this decision." });
-        }
 
         // Identifiers come from the fixed table above, never from input.
         const current = await client.query(
@@ -202,7 +188,7 @@ for (const kind of ["vendor", "listing"]) {
         const parsed = parseDecision(req.body);
         if (parsed.error) return res.status(400).json({ error: parsed.error });
 
-        await decide(res, { kind, id, ...parsed });
+        await decide(res, { kind, id, actor: req.user.user_id, ...parsed });
     });
 }
 

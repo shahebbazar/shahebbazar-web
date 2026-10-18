@@ -1,7 +1,8 @@
 import type { Metadata } from "next";
 import Link from "next/link";
 import { notFound, redirect } from "next/navigation";
-import { getVendorPaymentMethods } from "@/lib/api";
+import { authenticatedApiGet } from "@/lib/auth-server";
+import type { VendorPaymentMethods } from "@/lib/types";
 import { ProviderShell, parseVendorParam } from "@/components/provider/ProviderShell";
 import { PaymentMethodsForm } from "./PaymentMethodsForm";
 
@@ -16,11 +17,11 @@ export default async function PaymentMethodsPage({
 }: {
     searchParams: Promise<Query>;
 }) {
-    // TODO(auth): take the vendor from the signed-in user, not the query string.
+    // The API only returns the business to its owner or an admin.
     const vendorId = parseVendorParam((await searchParams).vendor);
     if (vendorId === null) redirect("/vendors/dashboard");
 
-    const data = await getVendorPaymentMethods(vendorId);
+    const data = await authenticatedApiGet<VendorPaymentMethods>(`/vendors/${vendorId}/payment-methods`);
     if (!data) notFound();
 
     const { vendor: business, methods } = data;
