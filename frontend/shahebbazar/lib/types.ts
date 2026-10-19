@@ -247,11 +247,24 @@ export interface VendorDashboard {
     }[];
 }
 
-/** Row of the business picker; from GET /api/vendor-account/businesses. */
+export type MemberRole = "owner" | "manager";
+
+/** GET /api/vendor-account/businesses: every business the signed-in vendor runs. */
 export interface VendorPickerRow {
     vendor_id: number;
     vendor_name: string;
+    vendor_slug: string;
     vendor_status: VendorStatus;
+    member_role: MemberRole;
+}
+
+/** GET /api/vendors/:id/members */
+export interface BusinessMember {
+    user_id: number;
+    user_name: string;
+    user_phone: string;
+    member_role: MemberRole;
+    added_at: string;
 }
 
 /** GET /api/vendors/:id/summary */
@@ -524,6 +537,7 @@ export interface OwnerDetails {
     user_name: string;
     user_phone: string;
     user_email: string | null;
+    member_role: MemberRole;
 }
 
 export type ReportTargetType = "vendor" | "listing" | "review" | "message";
