@@ -12,7 +12,8 @@
     "db:verify": "node scripts/verify-db.js",
     "uploads:check": "node scripts/check-uploads.js",
     "test": "node --test --test-concurrency=1 test/*.test.js",
-    "docs:erd": "node scripts/generate-erd.js"
+    "docs:erd": "node scripts/generate-erd.js",
+    "docs:access": "node scripts/generate-access-matrix.js"
   },
   "keywords": [],
   "author": "",

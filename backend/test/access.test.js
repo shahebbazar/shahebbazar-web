@@ -4,16 +4,36 @@
 
 const { describe, it, before, after } = require("node:test");
 const assert = require("node:assert/strict");
-const { PHONES, ROLES, query, call, signIn, startApi, stopApi, userIdOf } = require("./support/harness");
+const {
+     PHONES, 
+     ROLES, 
+     query, 
+     call,
+     requestCode,
+     signIn, 
+     startApi, 
+     stopApi, 
+     userIdOf,
+} = require("./support/harness");
 
 const OWNED = 1; // business 1 belongs to the "owner" account
 const OTHER = 6; // business 6 belongs to "otherVendor"
+
+const BUSINESS = {
+    vendor_name: "Farhana's Tailoring",
+    vendor_phone: "01722000099",
+    vendor_city: "Rajshahi",
+    vendor_nid_reference: "NID-TEST-249",
+};
 
 // Filled in before the tests run.
 const ids = {};
 
 before(async () => {
+    PHONES.upgrader = "+8801722000002";
+    ROLES.upgrader = "customer";
     await startApi();
+    
 
     // A second admin, so the audit tests can tell "the signed-in admin" apart from "the first admin".
     PHONES.secondAdmin = "+8801711000099";
@@ -107,12 +127,12 @@ describe("a customer cannot use business or admin routes", () => {
     expectStatus([...OWNER_OR_ADMIN, ...OWNER_ONLY, ...ADMIN_ONLY], "customer", 403);
 });
 
-describe("another vendor cannot use this business's routes, or admin routes", () => {
-    expectStatus([...OWNER_OR_ADMIN, ...OWNER_ONLY, ...ADMIN_ONLY, ...CUSTOMER_ONLY], "otherVendor", 403);
+describe("another vendor cannot use this business's routes or admin routes", () => {
+    expectStatus([...OWNER_OR_ADMIN, ...OWNER_ONLY, ...ADMIN_ONLY], "otherVendor", 403);
 });
 
-describe("the owner cannot use admin or customer routes", () => {
-    expectStatus([...ADMIN_ONLY, ...CUSTOMER_ONLY], "owner", 403);
+describe("the owner cannot use admin routes", () => {
+    expectStatus(ADMIN_ONLY, "owner", 403);
 });
 
 describe("an admin cannot read or write as the business", () => {
@@ -282,4 +302,183 @@ describe("public routes still work signed out", () => {
             assert.equal(res.status, 200, JSON.stringify(res.data).slice(0, 200));
         });
     }
+});
+
+describe("vendors retain customer access (KAN-253)", () => {
+    it("a vendor can still use customer features", async () => {
+        const account = await call("GET", "/me", { as: "owner" });
+        assert.equal(account.status, 200);
+
+        const saved = await call("GET", "/me/saved", { as: "owner" });
+        assert.equal(saved.status, 200);
+    });
+
+    it("a vendor can use the customer login flow", async () => {
+        const code = await requestCode(
+            PHONES.otherVendor,
+            "login",
+            "customer"
+        );
+
+        assert.match(code, /^\d{6}$/);
+    });
+
+    it("a customer trying business login is told to register a business first", async () => {
+        const res = await call("POST", "/auth/request-verification", {
+            json: {
+                phone: PHONES.customer,
+                purpose: "login",
+                expectedRole: "vendor",
+            },
+        });
+
+        assert.equal(res.status, 403);
+        assert.match(res.data.error, /no business yet/i);
+    });
+});
+
+describe("customers can register as providers (KAN-249)", () => {
+    let newVendorId;
+
+    it("a signed-in customer's business goes on their own account, and they become a vendor", async () => {
+        const res = await call(
+            "POST",
+            "/auth/register/vendor",
+            {
+                as: "upgrader",
+                json: BUSINESS,
+            }
+        );
+
+        assert.equal(
+            res.status,
+            201,
+            JSON.stringify(res.data)
+        );
+
+        newVendorId = res.data.vendor.vendor_id;
+
+        const [user] = await query(
+            "SELECT user_role FROM users WHERE user_phone = $1",
+            [PHONES.upgrader]
+        );
+
+        assert.equal(user.user_role, "vendor");
+
+        const [owner] = await query(
+            "SELECT u.user_phone FROM vendors v JOIN users u USING (user_id) WHERE v.vendor_id = $1",
+            [newVendorId]
+        );
+
+        assert.equal(
+            owner.user_phone,
+            PHONES.upgrader
+        );
+    });
+
+    it("the same session can open the new dashboard and still use customer features", async () => {
+        const businesses = await call(
+            "GET",
+            "/vendor-account/businesses",
+            {
+                as: "upgrader",
+            }
+        );
+
+        assert.equal(businesses.status, 200);
+
+        assert.deepEqual(
+            businesses.data.map((b) => b.vendor_id),
+            [newVendorId]
+        );
+
+        const dashboard = await call(
+            "GET",
+            `/vendors/${newVendorId}/dashboard`,
+            {
+                as: "upgrader",
+            }
+        );
+
+        assert.equal(dashboard.status, 200);
+
+        const saved = await call(
+            "GET",
+            "/me/saved",
+            {
+                as: "upgrader",
+            }
+        );
+
+        assert.equal(saved.status, 200);
+    });
+
+    it("a vendor can register a second business", async () => {
+        const res = await call(
+            "POST",
+            "/auth/register/vendor",
+            {
+                as: "otherVendor",
+                json: {
+                    ...BUSINESS,
+                    vendor_name: "Uttara Spare Parts",
+                },
+            }
+        );
+
+        assert.equal(
+            res.status,
+            201,
+            JSON.stringify(res.data)
+        );
+
+        const businesses = await call(
+            "GET",
+            "/vendor-account/businesses",
+            {
+                as: "otherVendor",
+            }
+        );
+
+        assert.equal(businesses.data.length, 2);
+    });
+
+    it("signing up with a phone that already has an account says to sign in instead", async () => {
+        const code = await requestCode(
+            PHONES.customer,
+            "register"
+        );
+
+        const res = await call(
+            "POST",
+            "/auth/register/vendor",
+            {
+                json: {
+                    ...BUSINESS,
+                    vendor_phone: PHONES.customer,
+                    code,
+                },
+            }
+        );
+
+        assert.equal(res.status, 409);
+
+        assert.match(
+            res.data.error,
+            /sign in instead/i
+        );
+    });
+
+    it("admins cannot register a business", async () => {
+        const res = await call(
+            "POST",
+            "/auth/register/vendor",
+            {
+                as: "admin",
+                json: BUSINESS,
+            }
+        );
+
+        assert.equal(res.status, 403);
+    });
 });

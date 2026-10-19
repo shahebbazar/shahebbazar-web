@@ -26,8 +26,9 @@ export default async function ProviderLayout({
     redirect("/login");
   }
 
+  // A customer reaching the business area is offered to register a business (KAN-249).
   if (session.user.user_role === "customer") {
-    redirect("/account");
+    redirect("/vendors/register");
   }
 
   // Admins may open a business's pages to check or fix them; the pages show they are in admin view.

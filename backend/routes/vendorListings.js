@@ -3,17 +3,13 @@ const router = express.Router();
 const pool = require("../db");
 const { imageUpload, receive, discard, storedPath, checkUploads, removeUnreferencedFiles } = require("../lib/uploads");
 const { parseId } = require("../lib/currentUser");
-const {
-    requireAuthenticatedUser,
-    requireRole,
-    requireVendorOwnership,
-    requireListingOwnership,
-} = require("../lib/middleware/auth");
+const { requireVendorOwnership, requireListingOwnership } = require("../lib/middleware/auth");
+const { requireFeature } = require("../lib/access");
 
-// Every route here is for the business owner (or an admin). Ownership is checked before any
+// Every route here is for the business's owners and managers (or an admin). Ownership is checked before any
 // request body or upload is read, so a refused request never writes a file to disk.
-const vendorAccess = [requireAuthenticatedUser, requireRole("vendor", "admin"), requireVendorOwnership];
-const listingAccess = [requireAuthenticatedUser, requireRole("vendor", "admin"), requireListingOwnership];
+const vendorAccess = [requireFeature("business.listings"), requireVendorOwnership];
+const listingAccess = [requireFeature("business.listings"), requireListingOwnership];
 
 // Schema v2 renamed every column this file writes (title -> listing_title,
 // price -> listing_price, free-text category -> category_id) and added a

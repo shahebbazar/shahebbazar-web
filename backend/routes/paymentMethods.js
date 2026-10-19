@@ -2,6 +2,7 @@ const express = require("express");
 const router = express.Router();
 const pool = require("../db");
 const { vendorOwnerOrAdmin } = require("../lib/middleware/auth");
+const { requireFeature } = require("../lib/access");
 
 // Must match the CHECK constraint on vendor_payment_methods.payment_method.
 const METHODS = [
@@ -45,8 +46,13 @@ router.get("/businesses/:slug/payment-methods", async (req, res) => {
 });
 
 // The vendor routes below are for the owner of :vendorId, or an admin.
+const ownerAccess = [
+    requireFeature("business.payments"),
+    ...vendorOwnerOrAdmin,
+];
 
-router.get("/vendors/:vendorId/payment-methods", ...vendorOwnerOrAdmin, async (req, res) => {
+router.get("/vendors/:vendorId/payment-methods", ...ownerAccess, async (req, res) => {
+    
     const vendorId = parseVendorId(req.params.vendorId);
     if (vendorId === null) {
         return res.status(400).json({ error: "Invalid vendor id" });
@@ -82,7 +88,7 @@ router.get("/vendors/:vendorId/payment-methods", ...vendorOwnerOrAdmin, async (r
 });
 
 // Replaces the vendor's whole set; array order becomes display order.
-router.put("/vendors/:vendorId/payment-methods", ...vendorOwnerOrAdmin, async (req, res) => {
+router.put("/vendors/:vendorId/payment-methods", ...ownerAccess, async (req, res) => {
     const vendorId = parseVendorId(req.params.vendorId);
     if (vendorId === null) {
         return res.status(400).json({ error: "Invalid vendor id" });

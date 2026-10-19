@@ -3,6 +3,7 @@ const pool = require("../db");
 const { parseId, cleanText } = require("../lib/currentUser");
 
 // Every /admin route needs a signed-in admin (see index.js); audit entries record that admin.
+const { requireFeature } = require("../lib/access");
 
 const router = express.Router();
 const NAME_MAX = 100;
@@ -59,7 +60,7 @@ const SELECT_CATEGORY = `
             WHERE c2.category_id = c.category_id OR c2.category_parent_id = c.category_id) AS business_count
     FROM categories c`;
 
-router.get("/admin/categories", async (req, res) => {
+router.get("/admin/categories", requireFeature("admin.categories"), async (req, res) => {
     try {
         const result = await pool.query(`${SELECT_CATEGORY} ORDER BY c.category_sort_order, c.category_name`);
         res.json(result.rows);
@@ -69,7 +70,7 @@ router.get("/admin/categories", async (req, res) => {
     }
 });
 
-router.post("/admin/categories", async (req, res) => {
+router.post("/admin/categories", requireFeature("admin.categories"), async (req, res) => {
     const fields = parseFields(req.body);
     if (fields.error) return res.status(400).json({ error: fields.error });
     const parentId = req.body?.parent_id == null || req.body.parent_id === "" ? null : parseId(req.body.parent_id);
@@ -124,7 +125,7 @@ router.post("/admin/categories", async (req, res) => {
     }
 });
 
-router.put("/admin/categories/:id", async (req, res) => {
+router.put("/admin/categories/:id", requireFeature("admin.categories"), async (req, res) => {
     const id = parseId(req.params.id);
     if (!id) return res.status(400).json({ error: "Invalid id" });
     const fields = parseFields(req.body);

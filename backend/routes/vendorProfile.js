@@ -2,11 +2,8 @@ const express = require("express");
 const pool = require("../db");
 const { LIMITS, validateProfile } = require("../lib/businessProfile");
 const { imageUpload, receive, discard, storedPath, checkUploads } = require("../lib/uploads");
-const {
-    requireAuthenticatedUser,
-    requireRole,
-    requireVendorOwnership,
-} = require("../lib/middleware/auth");
+const { requireVendorOwnership } = require("../lib/middleware/auth");
+const { requireFeature } = require("../lib/access");
 const router = express.Router();
 
 // Add / Edit Business: the provider's own profile.
@@ -114,9 +111,7 @@ async function loadOptions() {
 
 router.get(
     "/vendors/:vendorId/profile",
-    requireAuthenticatedUser,
-    requireRole("vendor", "admin"),
-    requireVendorOwnership,
+    requireFeature("business.profile"), requireVendorOwnership,
     async (req, res) => {
         const vendorId =
             req.user.user_role === "admin"
@@ -152,9 +147,7 @@ async function syncCover(db, vendorId) {
 // PUT /api/vendors/:id/profile: saves the form; 400 carries field errors, 409 means the business is suspended.
 router.put(
     "/vendors/:vendorId/profile",
-    requireAuthenticatedUser,
-    requireRole("vendor", "admin"),
-    requireVendorOwnership,
+    requireFeature("business.profile"), requireVendorOwnership,
     async (req, res) => {
         const vendorId =
             req.user.user_role === "admin"
@@ -298,7 +291,7 @@ router.put(
 // Upload handling (limits, generated names, image checks, cleanup) lives in lib/uploads.js.
 const vendorFilePrefix = (req) => `vendor-${req.params.vendorId}`;
 // Ownership is checked before multer runs, so a refused request never writes a file.
-const ownerAccess = [requireAuthenticatedUser, requireRole("vendor", "admin"), requireVendorOwnership];
+const ownerAccess = [requireFeature("business.profile"), requireVendorOwnership];
 
 router.post("/vendors/:vendorId/logo", ...ownerAccess, receive(imageUpload("logo", LOGO_MAX_BYTES, 1, vendorFilePrefix), "2 MB"), async (req, res) => {
     const vendorId = parseId(req.params.vendorId);
