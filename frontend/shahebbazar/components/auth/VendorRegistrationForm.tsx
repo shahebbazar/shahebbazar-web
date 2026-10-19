@@ -1,5 +1,6 @@
 "use client";
 
+import { BROWSER_API_BASE } from "@/lib/apiBase";
 import { useRouter } from "next/navigation";
 import {
     useState,
@@ -11,7 +12,10 @@ import {
     MapPin,
     UserRound,
 } from "lucide-react";
-import { registerVendor, requestVerification } from "@/lib/auth-client";
+import {
+    registerVendor,
+    requestVerification,
+} from "@/lib/auth-client";
 
 const EMPTY_FORM = {
     vendor_name: "",
@@ -31,14 +35,31 @@ type FormStatus =
       }
     | null;
 
-// Step 1 collects the business details and sends a code to the phone; step 2 checks the
-// code, creates the account and pending business, and signs the owner in.
-export function VendorRegistrationForm() {
+// Step 1 collects the business details and sends a code to the phone.
+// Step 2 verifies the code, creates the account and pending business,
+// and signs the owner in.
+//
+// When `account` is supplied, the user is already signed in.
+// KAN-249 adds the new business to that existing account without
+// creating another account or requiring another registration OTP.
+export function VendorRegistrationForm({
+    account,
+}: {
+    account?: {
+        name: string;
+        phone: string;
+    };
+}) {
     const router = useRouter();
-    const [form, setForm] =
-        useState<VendorForm>(EMPTY_FORM);
+
+    const [form, setForm] = useState<VendorForm>({
+        ...EMPTY_FORM,
+        vendor_phone: account?.phone ?? "",
+    });
+
     const [stage, setStage] =
         useState<"details" | "verification">("details");
+
     const [code, setCode] = useState("");
     const [status, setStatus] =
         useState<FormStatus>(null);
@@ -64,6 +85,76 @@ export function VendorRegistrationForm() {
         setSubmitting(true);
         setStatus(null);
 
+        // KAN-249:
+        // A customer who is already signed in adds the business
+        // directly to their existing account.
+        if (account) {
+            try {
+                const response = await fetch(
+                 `${BROWSER_API_BASE}/api/auth/register/vendor`,
+                 {
+                    method: "POST",
+                    credentials: "include",
+                    headers: {
+                        Accept: "application/json",
+                        "Content-Type": "application/json",
+                    },
+                    body: JSON.stringify(form),
+                 }
+            );
+
+                const data = (await response
+                    .json()
+                    .catch(() => null)) as {
+                    error?: string;
+                    vendor?: {
+                        vendor_id: number;
+                    };
+                } | null;
+
+                if (!response.ok) {
+                    setStatus({
+                        type: "error",
+                        message:
+                            data?.error ||
+                            "Unable to register the business.",
+                    });
+                    return;
+                }
+
+                if (!data?.vendor) {
+                    setStatus({
+                        type: "error",
+                        message:
+                            "The business was created, but its dashboard could not be opened.",
+                    });
+                    return;
+                }
+
+                router.push(
+                    `/vendors/dashboard?vendor=${data.vendor.vendor_id}`
+                );
+                router.refresh();
+                return;
+            } catch (error) {
+                console.error(
+                    "Vendor registration failed:",
+                    error
+                );
+
+                setStatus({
+                    type: "error",
+                    message:
+                        "Unable to contact the registration service.",
+                });
+                return;
+            } finally {
+                setSubmitting(false);
+            }
+        }
+
+        // Signed-out users continue through the normal
+        // phone verification registration flow.
         const result = await requestVerification({
             phone: form.vendor_phone,
             purpose: "register",
@@ -72,7 +163,10 @@ export function VendorRegistrationForm() {
         setSubmitting(false);
 
         if (!result.ok) {
-            setStatus({ type: "error", message: result.error });
+            setStatus({
+                type: "error",
+                message: result.error,
+            });
             return;
         }
 
@@ -87,15 +181,20 @@ export function VendorRegistrationForm() {
         setSubmitting(true);
         setStatus(null);
 
-        const result = await registerVendor({ ...form, code });
+        const result = await registerVendor({
+            ...form,
+            code,
+        });
 
         if (!result.ok) {
             setSubmitting(false);
-            setStatus({ type: "error", message: result.error });
+            setStatus({
+                type: "error",
+                message: result.error,
+            });
             return;
         }
 
-        // Signed in: the dashboard shows the new business as awaiting approval.
         router.push("/vendors/dashboard");
         router.refresh();
     }
@@ -113,8 +212,13 @@ export function VendorRegistrationForm() {
                 className="space-y-4 rounded-xl border border-line bg-surface p-5 shadow-raised sm:p-6"
             >
                 <div className="rounded-lg border border-brand-200 bg-brand-50 p-3 text-sm leading-6 text-brand-700">
-                    <p>Development mode: check the API terminal for the verification code.</p>
-                    <p>The code expires after five minutes.</p>
+                    <p>
+                        Development mode: check the API
+                        terminal for the verification code.
+                    </p>
+                    <p>
+                        The code expires after five minutes.
+                    </p>
                 </div>
 
                 <div>
@@ -122,15 +226,21 @@ export function VendorRegistrationForm() {
                         htmlFor="vendor-register-code"
                         className="mb-1.5 block text-sm font-medium text-ink"
                     >
-                        Verification code sent to {form.vendor_phone}
+                        Verification code sent to{" "}
+                        {form.vendor_phone}
                     </label>
+
                     <input
                         id="vendor-register-code"
                         name="code"
                         type="text"
                         value={code}
                         onChange={(event) =>
-                            setCode(event.target.value.replace(/\D/g, "").slice(0, 6))
+                            setCode(
+                                event.target.value
+                                    .replace(/\D/g, "")
+                                    .slice(0, 6)
+                            )
                         }
                         placeholder="Enter the six-digit code"
                         inputMode="numeric"
@@ -144,13 +254,30 @@ export function VendorRegistrationForm() {
 
                 <div className="rounded-lg border border-line bg-surface-2 p-3 text-sm text-muted">
                     <p>Registering:</p>
-                    <p className="mt-1 font-medium text-ink">{form.vendor_name}</p>
-                    {form.vendor_email && <p>{form.vendor_email}</p>}
-                    <p>{[form.vendor_address, form.vendor_city].filter(Boolean).join(", ")}</p>
+
+                    <p className="mt-1 font-medium text-ink">
+                        {form.vendor_name}
+                    </p>
+
+                    {form.vendor_email && (
+                        <p>{form.vendor_email}</p>
+                    )}
+
+                    <p>
+                        {[
+                            form.vendor_address,
+                            form.vendor_city,
+                        ]
+                            .filter(Boolean)
+                            .join(", ")}
+                    </p>
                 </div>
 
                 {status && (
-                    <div role="alert" className="form-status-error mb-0">
+                    <div
+                        role="alert"
+                        className="form-status-error mb-0"
+                    >
                         {status.message}
                     </div>
                 )}
@@ -159,10 +286,15 @@ export function VendorRegistrationForm() {
                     <button
                         type="submit"
                         className="form-button-primary disabled:cursor-not-allowed disabled:opacity-60"
-                        disabled={submitting || code.length !== 6}
+                        disabled={
+                            submitting || code.length !== 6
+                        }
                     >
-                        {submitting ? "Verifying..." : "Complete registration"}
+                        {submitting
+                            ? "Verifying..."
+                            : "Complete registration"}
                     </button>
+
                     <button
                         type="button"
                         onClick={returnToDetails}
@@ -198,9 +330,22 @@ export function VendorRegistrationForm() {
                 </div>
             )}
 
+            {account && (
+                <p className="rounded-xl border border-brand-200 bg-brand-50 p-4 text-sm leading-6 text-brand-700">
+                    You are signed in as{" "}
+                    <strong>{account.name}</strong>. The
+                    business will be added to this account
+                    and you will get a business dashboard.
+                    Your saved businesses, reviews and
+                    messages stay as they are.
+                </p>
+            )}
+
             <section className="rounded-xl border border-line bg-surface p-5 shadow-raised sm:p-6">
                 <SectionHeading
-                    icon={<UserRound className="size-5" />}
+                    icon={
+                        <UserRound className="size-5" />
+                    }
                     title="Business contact"
                     description="Enter the contact details connected to the business account."
                 />
@@ -234,9 +379,10 @@ export function VendorRegistrationForm() {
                         />
 
                         <p className="mt-1.5 text-xs leading-5 text-muted">
-                            Enter a local Australian or Bangladesh
-                            mobile number, or use international
-                            format with a country code.
+                            Enter a local Australian or
+                            Bangladesh mobile number, or use
+                            international format with a
+                            country code.
                         </p>
                     </div>
                 </div>
@@ -286,9 +432,9 @@ export function VendorRegistrationForm() {
                 </div>
 
                 <p className="mt-3 rounded-lg border border-line bg-surface-2 p-3 text-xs leading-5 text-muted">
-                    New business registrations remain pending
-                    until the NID reference and business are
-                    reviewed.
+                    New business registrations remain
+                    pending until the NID reference and
+                    business are reviewed.
                 </p>
             </section>
 
@@ -299,8 +445,12 @@ export function VendorRegistrationForm() {
                     disabled={submitting}
                 >
                     {submitting
-                        ? "Sending verification code..."
-                        : "Continue with phone verification"}
+                        ? account
+                            ? "Registering business..."
+                            : "Sending verification code..."
+                        : account
+                          ? "Register business"
+                          : "Continue with phone verification"}
                 </button>
             </div>
         </form>

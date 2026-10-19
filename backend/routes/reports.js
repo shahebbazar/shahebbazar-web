@@ -1,7 +1,8 @@
 const express = require("express");
 const pool = require("../db");
 const { parseId, cleanText } = require("../lib/currentUser");
-const { requireAuthenticatedUser, requireRole, } = require("../lib/middleware/auth");
+const { requireFeature } = require("../lib/access");
+
 
 const router = express.Router();
 
@@ -28,8 +29,7 @@ function audit(db, actor, action, type, id, before, after) {
 }
 
 router.post( "/reports", 
-    requireAuthenticatedUser, 
-    requireRole("customer"), 
+    requireFeature("reports.submit"),
     async (req, res) => {
     const type = req.body?.target_type;
     const targetId = parseId(req.body?.target_id);
@@ -66,7 +66,8 @@ router.post( "/reports",
 );
 
 // /admin routes need a signed-in admin (see index.js); actions are recorded against that admin.
-router.get("/admin/reports", async (req, res) => {
+router.get("/admin/reports", requireFeature("admin.moderation"), async (req, res) => {
+
     try {
         const result = await pool.query(
             `SELECT r.report_id, r.report_target_type AS target_type, r.report_target_id AS target_id,
@@ -97,7 +98,7 @@ router.get("/admin/reports", async (req, res) => {
     }
 });
 
-router.post("/admin/reports/:id/resolve", async (req, res) => {
+router.post("/admin/reports/:id/resolve", requireFeature("admin.moderation"), async (req, res) => {
     const id = parseId(req.params.id);
     const action = req.body?.action;
     if (!id) return res.status(400).json({ error: "Invalid id" });
@@ -151,7 +152,7 @@ router.post("/admin/reports/:id/resolve", async (req, res) => {
     }
 });
 
-router.get("/admin/reviews", async (req, res) => {
+router.get("/admin/reviews", requireFeature("admin.moderation"), async (req, res) => {
     const status = req.query.status === "hidden" ? "hidden" : "published";
     try {
         const result = await pool.query(
@@ -175,7 +176,7 @@ router.get("/admin/reviews", async (req, res) => {
     }
 });
 
-router.post("/admin/reviews/:id/status", async (req, res) => {
+router.post("/admin/reviews/:id/status", requireFeature("admin.moderation"), async (req, res) => {
     const id = parseId(req.params.id);
     const status = req.body?.status;
     if (!id) return res.status(400).json({ error: "Invalid id" });
@@ -204,7 +205,7 @@ router.post("/admin/reviews/:id/status", async (req, res) => {
     }
 });
 
-router.get("/admin/trends", async (req, res) => {
+router.get("/admin/trends", requireFeature("admin.trends"), async (req, res) => {
     const days = PERIODS.includes(Number(req.query.days)) ? Number(req.query.days) : 30;
     try {
         const [daily, top, noResults, totals] = await Promise.all([

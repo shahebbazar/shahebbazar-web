@@ -21,6 +21,7 @@
     "uploads:check": "npm --prefix backend run uploads:check --",
     "test": "npm --prefix backend test",
     "docs:erd": "npm --prefix backend run docs:erd",
+    "docs:access": "npm --prefix backend run docs:access",
 
     "lint": "npm --prefix frontend/shahebbazar run lint",
     "typecheck": "npm --prefix frontend/shahebbazar exec tsc -- --noEmit"
