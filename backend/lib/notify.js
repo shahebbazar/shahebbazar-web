@@ -80,32 +80,43 @@ function startNotificationWorker() {
 }
 
 // Lists a user's in-app alerts with the unread count.
-async function listAlerts(userId, limit = 20) {
+// A vendor gets alerts as a customer and for each business they run, so callers pick which:
+// { vendorId } for one business, { asCustomer: true } for their own conversations.
+function alertScope(scope) {
+    const conversation = "SELECT 1 FROM conversations c WHERE c.conversation_id = (n.notification_payload->>'conversation_id')::int";
+    if (scope.vendorId) return { sql: ` AND EXISTS (${conversation} AND c.vendor_id = $2)`, params: [scope.vendorId] };
+    if (scope.asCustomer) return { sql: ` AND EXISTS (${conversation} AND c.user_id = n.user_id)`, params: [] };
+    return { sql: "", params: [] };
+}
+
+async function listAlerts(userId, scope = {}, limit = 20) {
+    const { sql, params } = alertScope(scope);
     const [rows, unread] = await Promise.all([
         pool.query(
-            `SELECT notification_id AS id, notification_type AS type, notification_payload AS payload,
-                    notification_read_at AS read_at, notification_created_at AS created_at
-             FROM notifications
-             WHERE user_id = $1 AND notification_channel = 'in_app'
-             ORDER BY notification_created_at DESC, notification_id DESC
-             LIMIT $2`,
-            [userId, limit]
+            `SELECT n.notification_id AS id, n.notification_type AS type, n.notification_payload AS payload,
+                    n.notification_read_at AS read_at, n.notification_created_at AS created_at
+             FROM notifications n
+             WHERE n.user_id = $1 AND n.notification_channel = 'in_app'${sql}
+             ORDER BY n.notification_created_at DESC, n.notification_id DESC
+             LIMIT ${Number(limit)}`,
+            [userId, ...params]
         ),
         pool.query(
-            `SELECT COUNT(*)::int AS count FROM notifications
-             WHERE user_id = $1 AND notification_channel = 'in_app' AND notification_read_at IS NULL`,
-            [userId]
+            `SELECT COUNT(*)::int AS count FROM notifications n
+             WHERE n.user_id = $1 AND n.notification_channel = 'in_app' AND n.notification_read_at IS NULL${sql}`,
+            [userId, ...params]
         ),
     ]);
     return { alerts: rows.rows, unread: unread.rows[0].count };
 }
 
-// Marks all of a user's in-app alerts as read.
-async function markAlertsRead(userId) {
+// Marks a user's in-app alerts as read, within the same scope as listAlerts.
+async function markAlertsRead(userId, scope = {}) {
+    const { sql, params } = alertScope(scope);
     await pool.query(
-        `UPDATE notifications SET notification_read_at = NOW()
-         WHERE user_id = $1 AND notification_channel = 'in_app' AND notification_read_at IS NULL`,
-        [userId]
+        `UPDATE notifications n SET notification_read_at = NOW()
+         WHERE n.user_id = $1 AND n.notification_channel = 'in_app' AND n.notification_read_at IS NULL${sql}`,
+        [userId, ...params]
     );
 }
 
