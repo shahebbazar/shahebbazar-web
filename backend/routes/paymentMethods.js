@@ -1,7 +1,7 @@
 const express = require("express");
 const router = express.Router();
 const pool = require("../db");
-const { vendorOwnerOrAdmin } = require("../lib/middleware/auth");
+const { requireVendorOwnership } = require("../lib/middleware/auth");
 const { requireFeature } = require("../lib/access");
 
 // Must match the CHECK constraint on vendor_payment_methods.payment_method.
@@ -48,7 +48,7 @@ router.get("/businesses/:slug/payment-methods", async (req, res) => {
 // The vendor routes below are for the owner of :vendorId, or an admin.
 const ownerAccess = [
     requireFeature("business.payments"),
-    ...vendorOwnerOrAdmin,
+    requireVendorOwnership,
 ];
 
 router.get("/vendors/:vendorId/payment-methods", ...ownerAccess, async (req, res) => {
