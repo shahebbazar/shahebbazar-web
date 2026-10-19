@@ -5,12 +5,9 @@ const {
     cleanText,
 } = require("../lib/currentUser");
 
-const {
-    requireAuthenticatedUser,
-    requireRole,
-    vendorOwnerOrAdmin,
-    vendorOwnerOnly,
-} = require("../lib/middleware/auth");
+const { requireVendorOwnership } = require("../lib/middleware/auth");
+const { requireFeature } = require("../lib/access");
+const { memberRole } = require("../lib/membership");
 
 const router = express.Router();
 const REVIEW_MAX = 2000;
@@ -18,8 +15,7 @@ const REPLY_MAX = 1000;
 
 router.post(
     "/businesses/:slug/reviews",
-    requireAuthenticatedUser,
-    requireRole("customer"),
+    requireFeature("reviews.write"),
     async (req, res) => {
         const rating = Number(req.body?.rating);
         const body = cleanText(req.body?.body) || null;
@@ -34,11 +30,11 @@ router.post(
             const userId = req.user.user_id;
             //if (!userId) return res.status(500).json({ error: "No customer account exists to review from." });
             const vendor = await pool.query(
-                "SELECT vendor_id, user_id FROM vendors WHERE vendor_slug = $1 AND vendor_status = 'approved'",
+                "SELECT vendor_id FROM vendors WHERE vendor_slug = $1 AND vendor_status = 'approved'",
                 [req.params.slug]
             );
             if (vendor.rowCount === 0) return res.status(404).json({ error: "Business not found" });
-            if (vendor.rows[0].user_id === userId) return res.status(403).json({ error: "You cannot review your own business." });
+            if (await memberRole(userId, vendor.rows[0].vendor_id)) return res.status(403).json({ error: "You cannot review your own business." });
 
             const existing = await pool.query(
                 "SELECT review_status FROM reviews WHERE vendor_id = $1 AND user_id = $2",
@@ -67,12 +63,11 @@ router.post(
     }
 );
 
-router.get("/vendors/:vendorId/reviews", ...vendorOwnerOrAdmin, async (req, res) => {
-    const vendorId = parseId(req.params.vendorId);
-    if (!vendorId) return res.status(400).json({ error: "Invalid business id" });
+const ownerAccess = [requireFeature("business.reviews"), requireVendorOwnership];
+
+router.get("/vendors/:vendorId/reviews", ...ownerAccess, async (req, res) => {
+    const vendorId = req.vendor.vendor_id;
     try {
-        const vendor = await pool.query("SELECT 1 FROM vendors WHERE vendor_id = $1", [vendorId]);
-        if (vendor.rowCount === 0) return res.status(404).json({ error: "Business not found" });
         const result = await pool.query(
             `SELECT r.review_id, r.review_rating AS rating, r.review_body AS body, r.review_status AS status,
                     r.review_created_at AS created_at, r.review_reply AS reply, r.review_replied_at AS replied_at,
@@ -90,11 +85,10 @@ router.get("/vendors/:vendorId/reviews", ...vendorOwnerOrAdmin, async (req, res)
     }
 });
 
-// Replies are posted as the business, so only its owner can write them.
-router.put("/vendors/:vendorId/reviews/:reviewId/reply", ...vendorOwnerOnly, async (req, res) => {
-    const vendorId = parseId(req.params.vendorId);
+router.put("/vendors/:vendorId/reviews/:reviewId/reply", ...ownerAccess, async (req, res) => {
+    const vendorId = req.vendor.vendor_id;
     const reviewId = parseId(req.params.reviewId);
-    if (!vendorId || !reviewId) return res.status(400).json({ error: "Invalid id" });
+    if (!reviewId) return res.status(400).json({ error: "Invalid id" });
     const reply = cleanText(req.body?.reply) || null;
     if (reply && reply.length > REPLY_MAX) {
         return res.status(400).json({ error: `Keep the reply under ${REPLY_MAX} characters.` });
