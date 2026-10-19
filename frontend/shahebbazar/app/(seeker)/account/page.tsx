@@ -1,9 +1,10 @@
 import type { Metadata } from "next";
 import Link from "next/link";
-import { Bell, Bookmark, MessagesSquare, Star } from "lucide-react";
+import { Bell, Bookmark, Building2, ChevronRight, MessagesSquare, Star } from "lucide-react";
 import { AccountShell } from "@/components/customer/AccountShell";
 import { authenticatedApiGet } from "@/lib/auth-server";
 import { formatDateTime } from "@/lib/format";
+import type { AuthUser } from "@/lib/auth-client";
 import type { AlertList, Customer } from "@/lib/types";
 import { markMyAlertsRead } from "../actions";
 
@@ -12,10 +13,12 @@ export const metadata: Metadata = {
 };
 
 export default async function AccountPage() {
-    const [me, alerts] = await Promise.all([
+    const [me, alerts, session] = await Promise.all([
         authenticatedApiGet<Customer>("/me"),
         authenticatedApiGet<AlertList>("/me/alerts"),
+        authenticatedApiGet<{ user: AuthUser }>("/auth/me"),
     ]);
+    const isVendor = session?.user.user_role === "vendor";
 
     if (!me) {
         return (
@@ -56,6 +59,27 @@ export default async function AccountPage() {
                     </li>
                 ))}
             </ul>
+
+            {/* Customers can become providers from here (KAN-249). */}
+            <Link
+                href={isVendor ? "/vendors/dashboard" : "/vendors/register"}
+                className="mt-4 flex items-center gap-3 rounded-xl border border-line bg-surface p-4 shadow-card hover:border-brand-200"
+            >
+                <span className="grid size-10 shrink-0 place-items-center rounded-lg bg-brand-50 text-brand-600">
+                    <Building2 className="size-5" />
+                </span>
+                <span className="min-w-0 flex-1">
+                    <span className="block text-sm font-semibold">
+                        {isVendor ? "Go to your business dashboard" : "Do you run a business? Register it"}
+                    </span>
+                    <span className="block text-[0.8125rem] text-muted">
+                        {isVendor
+                            ? "Manage your listings, messages and reviews."
+                            : "It is added to this account. You keep everything you have here."}
+                    </span>
+                </span>
+                <ChevronRight className="size-4 shrink-0 text-soft" />
+            </Link>
 
             <section className="mt-6 rounded-xl border border-line bg-surface p-5 shadow-card">
                 <div className="flex items-center justify-between gap-3">
