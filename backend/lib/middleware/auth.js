@@ -167,12 +167,12 @@ async function requireVendorOwnership(req, res, next) {
     }
 
     try {
+        // Owners and managers both count; see vendor_members.
         const result = await pool.query(
-            `SELECT vendor_id
-             FROM vendors
+            `SELECT vendor_id, member_role
+             FROM vendor_members
              WHERE vendor_id = $1
-               AND user_id = $2
-             LIMIT 1`,
+               AND user_id = $2`,
             [vendorId, req.user.user_id]
         );
 
@@ -184,7 +184,8 @@ async function requireVendorOwnership(req, res, next) {
         }
 
         req.vendor = {
-            vendor_id: result.rows[0].vendor_id
+            vendor_id: result.rows[0].vendor_id,
+            member_role: result.rows[0].member_role
         };
 
         return next();
@@ -198,7 +199,7 @@ async function requireVendorOwnership(req, res, next) {
     }
 }
 
-// Allows admins, or the vendor who owns the business the listing belongs to.
+// Allows admins, or an owner or manager of the business the listing belongs to.
 // Sets req.listing and req.vendor for the route.
 async function requireListingOwnership(req, res, next) {
     if (!req.user) {
@@ -227,11 +228,11 @@ async function requireListingOwnership(req, res, next) {
 
     try {
         const result = await pool.query(
-            `SELECT l.listing_id, l.vendor_id, v.user_id
+            `SELECT l.listing_id, l.vendor_id, m.member_role
              FROM vendor_listings l
-             JOIN vendors v ON v.vendor_id = l.vendor_id
+             LEFT JOIN vendor_members m ON m.vendor_id = l.vendor_id AND m.user_id = $2
              WHERE l.listing_id = $1`,
-            [listingId]
+            [listingId, req.user.user_id]
         );
 
         if (result.rowCount === 0) {
@@ -243,7 +244,7 @@ async function requireListingOwnership(req, res, next) {
 
         const row = result.rows[0];
 
-        if (req.user.user_role !== "admin" && row.user_id !== req.user.user_id) {
+        if (req.user.user_role !== "admin" && !row.member_role) {
             return res.status(403).json({
                 success: false,
                 error: "You do not own this listing"
@@ -264,17 +265,6 @@ async function requireListingOwnership(req, res, next) {
     }
 }
 
-// Route guards for /vendors/:vendorId/... routes.
-// Owner or admin: managing the business (listings, profile, images, payment methods, settings).
-const vendorOwnerOrAdmin = [requireAuthenticatedUser, requireRole("vendor", "admin"), requireVendorOwnership];
-// Owner only: anything written or read as the business itself (messages, alerts, review replies),
-// so an admin can never speak for a business.
-const vendorOwnerOnly = [requireAuthenticatedUser, requireRole("vendor"), requireVendorOwnership];
-// Owner or admin, for /listings/:listingId/... routes.
-const listingOwnerOrAdmin = [requireAuthenticatedUser, requireRole("vendor", "admin"), requireListingOwnership];
-// Every /api/admin/... route (applied once in index.js).
-const adminOnly = [requireAuthenticatedUser, requireRole("admin")];
-
 module.exports = {
     SESSION_COOKIE_NAME,
     hashSessionToken,
@@ -282,9 +272,5 @@ module.exports = {
     requireAuthenticatedUser,
     requireRole,
     requireVendorOwnership,
-    requireListingOwnership,
-    vendorOwnerOrAdmin,
-    vendorOwnerOnly,
-    listingOwnerOrAdmin,
-    adminOnly
+    requireListingOwnership
 };
