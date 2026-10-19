@@ -28,6 +28,7 @@ WITH required_relations(object_name, object_type) AS (
         ('vendor_search_impressions', 'table'),
         ('vendor_photos', 'table'),
         ('vendor_social_links', 'table'),
+        ('vendor_members', 'table'),
         ('v_business_cards', 'view'),
         ('v_search_trends_daily', 'view'),
         ('v_moderation_queue', 'view'),
