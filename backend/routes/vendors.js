@@ -19,7 +19,7 @@ router.get("/", async (req, res) => {
                 vendor_cover_url,
                 vendor_business_type,
                 vendor_status,
-                vendor_is_featured,
+                (vendor_is_featured AND vendor_featured_until > now()) AS vendor_is_featured,
                 vendor_created_at
              FROM vendors
              WHERE vendor_status = 'approved'

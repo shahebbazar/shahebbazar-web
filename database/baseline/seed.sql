@@ -867,3 +867,34 @@ WHERE v.vendor_cover_url IS NOT NULL
       WHERE vp.vendor_id = v.vendor_id
         AND vp.vendor_photo_url = v.vendor_cover_url
   );
+
+-- Marketing passes (KAN-283). Also in database/migrations/001_marketing_passes.sql.
+-- Reference data: the three passes proposed in the feasibility summary (prices can be changed here).
+INSERT INTO public.marketing_packages
+    (package_name, package_duration_days, package_price_bdt, package_email_campaign_limit, package_ai_action_limit, package_sms_limit, package_sort_order)
+VALUES
+    ('Marketing pass: 7 days', 7, 299, 1, 10, 0, 1),
+    ('Marketing pass: 30 days', 30, 999, 4, 40, 0, 2),
+    ('Marketing pass: 90 days', 90, 2499, 12, 120, 0, 3)
+ON CONFLICT (package_name) DO NOTHING;
+
+-- Businesses that are already featured get a matching admin pass, so the admin page shows why
+-- they are sponsored and when that ends.
+INSERT INTO public.vendor_marketing_subscriptions (
+    vendor_id, package_id, subscription_status, subscription_starts_at, subscription_ends_at,
+    subscription_price_bdt, subscription_activation_source, subscription_activated_by, subscription_status_reason
+)
+SELECT v.vendor_id, p.package_id, 'active',
+       v.vendor_featured_until - make_interval(days => p.package_duration_days), v.vendor_featured_until,
+       p.package_price_bdt, 'admin',
+       (SELECT min(user_id) FROM public.users WHERE user_role = 'admin'),
+       'Existing featured business, given a pass when passes were introduced'
+FROM public.vendors v
+JOIN public.marketing_packages p
+  ON p.package_name = CASE WHEN v.vendor_featured_until <= now() + INTERVAL '30 days'
+                           THEN 'Marketing pass: 30 days' ELSE 'Marketing pass: 90 days' END
+WHERE v.vendor_is_featured
+  AND v.vendor_featured_until > now()
+  AND NOT EXISTS (
+      SELECT 1 FROM public.vendor_marketing_subscriptions s
+      WHERE s.vendor_id = v.vendor_id AND s.subscription_status IN ('pending', 'active'));

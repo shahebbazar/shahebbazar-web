@@ -589,3 +589,40 @@ export interface CategoryInput {
     icon: string;
     sort_order: number;
 }
+
+// ---------- Marketing passes (GET /api/admin/marketing) ----------
+
+export type MarketingPassStatus = "pending" | "active" | "expired" | "suspended" | "cancelled";
+
+export interface MarketingPackage {
+    package_id: number;
+    package_name: string;
+    package_duration_days: number;
+    /** NUMERIC, returned as a string. */
+    package_price_bdt: string;
+    package_email_campaign_limit: number;
+    package_ai_action_limit: number;
+    package_sms_limit: number;
+    package_is_active: boolean;
+}
+
+export interface MarketingPassRow {
+    subscription_id: number;
+    vendor_id: number;
+    vendor_name: string;
+    vendor_slug: string;
+    package_name: string;
+    /** The stored status, except a running pass past its end date shows as "expired". */
+    effective_status: MarketingPassStatus;
+    subscription_starts_at: string | null;
+    subscription_ends_at: string | null;
+    subscription_price_bdt: string;
+    subscription_status_reason: string | null;
+    activated_by_name: string | null;
+}
+
+export interface AdminMarketing {
+    packages: MarketingPackage[];
+    passes: MarketingPassRow[];
+    businesses: { vendor_id: number; vendor_name: string; has_active_pass: boolean }[];
+}

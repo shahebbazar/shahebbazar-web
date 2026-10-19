@@ -152,6 +152,7 @@ async function startApi() {
             UPLOAD_DIR,
             NODE_ENV: "test",
             MOCK_VERIFICATION_DELIVERY: "console",
+            MARKETING_WORKSPACE_ENABLED: "true",
         },
     });
     server.stdout.on("data", (chunk) => (serverLog += chunk));
@@ -175,6 +176,13 @@ async function stopApi() {
     fs.rmSync(UPLOAD_DIR, { recursive: true, force: true });
 }
 
+/** A connected client on the test database, for calling backend services directly. Call .end() when done. */
+async function testClient() {
+    const client = pgClient(TEST_DB);
+    await client.connect();
+    return client;
+}
+
 const userIdOf = async (role) =>
     (await query("SELECT user_id FROM users WHERE user_phone = $1", [PHONES[role]]))[0].user_id;
 
@@ -188,6 +196,7 @@ module.exports = {
     JPEG,
     PNG,
     query,
+    testClient,
     call,
     requestCode,
     signIn,
