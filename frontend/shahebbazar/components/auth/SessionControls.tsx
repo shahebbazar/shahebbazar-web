@@ -69,6 +69,11 @@ export async function SessionControls({
                 <Link href={href} className="btn btn-outline">
                     {label}
                 </Link>
+                {role === "vendor" && (
+                    <Link href="/account" className="btn btn-outline">
+                        My Account
+                    </Link>
+                )}
                 <LogoutButton />
             </div>
         );
@@ -86,6 +91,12 @@ export async function SessionControls({
                 </p>
             </div>
 
+            {/* Vendors keep their customer account too. */}
+            {role === "vendor" && (
+                <Link href="/account" className="hidden text-sm font-medium text-muted hover:text-ink xl:block">
+                    My Account
+                </Link>
+            )}
             <Link href={href} className="btn btn-outline">
                 {label}
             </Link>

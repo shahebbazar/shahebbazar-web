@@ -29,10 +29,7 @@ export default async function SeekerLayout({
         redirect("/login");
     }
 
-    if (session.user.user_role === "vendor") {
-        redirect("/vendors/dashboard");
-    }
-
+    // Vendors keep their customer account (KAN-253).
     if (session.user.user_role === "admin") {
         redirect("/admin");
     }
