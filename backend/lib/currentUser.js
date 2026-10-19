@@ -1,4 +1,4 @@
-// The signed-in user is req.user (set by resolveSession in lib/middleware/auth.js).
+// Small request helpers. The signed-in user is req.user (see lib/middleware/auth.js).
 
 // Parses a positive INT id from a route parameter, or returns null.
 function parseId(raw) {

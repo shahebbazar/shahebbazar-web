@@ -1,11 +1,9 @@
 const express = require("express");
 const router = express.Router();
 const pool = require("../db");
-const { 
-    requireAuthenticatedUser, 
-    requireRole, 
-    requireVendorOwnership, 
-} = require("../lib/middleware/auth");
+const { requireVendorOwnership } = require("../lib/middleware/auth");
+const { requireFeature } = require("../lib/access");
+const { memberBusinesses } = require("../lib/membership");
 // Provider dashboard data.
 
 
@@ -22,22 +20,10 @@ function parseVendorId(raw) {
 
 router.get(
     "/vendor-account/businesses",
-    requireAuthenticatedUser,
-    requireRole("vendor"),
+    requireFeature("business.list"),
     async (req, res) => {
         try {
-            const result = await pool.query(
-                `SELECT
-                    vendor_id,
-                    vendor_name,
-                    vendor_status
-                 FROM vendors
-                 WHERE user_id = $1
-                 ORDER BY vendor_name, vendor_id`,
-                [req.user.user_id]
-            );
-
-            return res.json(result.rows);
+            return res.json(await memberBusinesses(req.user.user_id));
         } catch (error) {
             console.error(
                 "GET /api/vendor-account/businesses failed:",
@@ -54,9 +40,7 @@ router.get(
 );
 // GET /api/vendors/:vendorId/dashboard?days=7|30|90: dashboard figures for a business in any status.
 router.get("/vendors/:vendorId/dashboard",
-    requireAuthenticatedUser,
-    requireRole("vendor", "admin"),
-    requireVendorOwnership,
+    requireFeature("business.dashboard"), requireVendorOwnership,
     async (req, res) => {
         const vendorId = req.user.user_role === "admin" ? parseVendorId(req.params.vendorId) : req.vendor.vendor_id;
         if (vendorId === null) {
@@ -202,8 +186,7 @@ router.get("/vendors/:vendorId/dashboard",
 
 // GET /api/vendors/:vendorId/summary: name, slug and status for a provider page's frame.
 router.get( "/vendors/:vendorId/summary", 
-    requireAuthenticatedUser, 
-    requireRole("vendor", "admin"), requireVendorOwnership, 
+    requireFeature("business.dashboard"), requireVendorOwnership, 
     async (req, res) => {    
         const vendorId = req.user.user_role === "admin" ? parseVendorId(req.params.vendorId) : req.vendor.vendor_id;
     if (vendorId === null) {
