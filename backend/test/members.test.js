@@ -2,7 +2,14 @@
 
 const { describe, it, before, after } = require("node:test");
 const assert = require("node:assert/strict");
-const { call, query, signIn, startApi, stopApi } = require("./harness");
+const { call, query, signIn: harnessSignIn, startApi, stopApi, PHONES: SIGN_IN_PHONES, ROLES } = require("./support/harness");
+
+// Signs in through the shared harness, registering accounts it does not know yet.
+async function signIn(name, phone, role) {
+    SIGN_IN_PHONES[name] = phone;
+    ROLES[name] = role;
+    await harnessSignIn(name);
+}
 
 // Seeded accounts (database/baseline/seed.sql).
 const PHONES = {
@@ -16,11 +23,8 @@ const MANGO = 1;
 const OTHER = 6;
 
 before(async () => {
-    await startApi();
-    await signIn("owner", PHONES.owner, "vendor");
+    await startApi(); // signs in owner, otherVendor, customer and admin
     await signIn("manager", PHONES.manager, "vendor");
-    await signIn("otherVendor", PHONES.otherVendor, "vendor");
-    await signIn("customer", PHONES.customer, "customer");
 });
 
 after(stopApi);
@@ -70,7 +74,8 @@ describe("businesses run by more than one person (KAN-250 to 252)", () => {
     });
 
     it("a new business gets its owner row automatically", async () => {
-        const res = await call("POST", "/vendors", {
+        // A signed-in vendor adds a second business (KAN-249), no new code needed.
+        const res = await call("POST", "/auth/register/vendor", {
             as: "otherVendor",
             json: { vendor_name: "Uttara Spare Parts", vendor_phone: "01711000066", vendor_city: "Rajshahi", vendor_nid_reference: "NID-250" },
         });

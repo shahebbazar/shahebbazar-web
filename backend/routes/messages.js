@@ -272,8 +272,11 @@ router.get("/vendors/:vendorId/conversations/:id", ...businessAccess, async (req
     const id = parseId(req.params.id);
     if (!id) return res.status(400).json({ error: "Invalid id" });
     try {
+        // Check first: opening a conversation marks its messages read.
+        const head = await conversationHead(id);
+        if (!head || head.vendor_id !== vendorId) return res.status(404).json({ error: "Conversation not found" });
         const thread = await openConversation(id, req.user.user_id, true);
-        if (!thread || thread.conversation.vendor_id !== vendorId) return res.status(404).json({ error: "Conversation not found" });
+        if (!thread) return res.status(404).json({ error: "Conversation not found" });
         res.json(thread);
     } catch (err) {
         console.error(`GET /api/vendors/${vendorId}/conversations/${id} failed:`, err);

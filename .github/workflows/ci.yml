@@ -1,0 +1,88 @@
+# Checks every pull request into main, and main itself after a merge (KAN-281).
+# Branch protection on main requires both jobs to pass before a pull request can be merged.
+
+name: CI
+
+on:
+  pull_request:
+    branches: [main]
+  push:
+    branches: [main]
+
+concurrency:
+  group: ci-${{ github.ref }}
+  cancel-in-progress: true
+
+jobs:
+  api:
+    name: API tests
+    runs-on: ubuntu-latest
+    timeout-minutes: 15
+
+    services:
+      postgres:
+        image: postgres:16-alpine
+        env:
+          POSTGRES_USER: postgres
+          POSTGRES_PASSWORD: postgres
+          POSTGRES_DB: shahebbazar
+          # Opening hours and "open now" are computed in Dhaka time, as in docker-compose.yml.
+          TZ: Asia/Dhaka
+          PGTZ: Asia/Dhaka
+        ports:
+          - 5432:5432
+        options: >-
+          --health-cmd "pg_isready -U postgres -d shahebbazar"
+          --health-interval 5s
+          --health-timeout 5s
+          --health-retries 10
+
+    env:
+      PGHOST: localhost
+      PGPORT: 5432
+      PGUSER: postgres
+      PGPASSWORD: postgres
+      PGDATABASE: shahebbazar
+      OTP_HASH_SECRET: ci-only-otp-secret
+      ANALYTICS_SALT: ci-only-salt
+      MOCK_VERIFICATION_DELIVERY: console
+
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-node@v4
+        with:
+          node-version: 24
+          cache: npm
+          cache-dependency-path: backend/package-lock.json
+      - name: Install
+        run: npm ci
+        working-directory: backend
+      # Builds a throwaway shahebbazar_test database from the baseline and runs every API test.
+      - name: Test
+        run: npm test
+        working-directory: backend
+
+  web:
+    name: Frontend checks
+    runs-on: ubuntu-latest
+    timeout-minutes: 15
+
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-node@v4
+        with:
+          node-version: 24
+          cache: npm
+          cache-dependency-path: frontend/shahebbazar/package-lock.json
+      - name: Install
+        run: npm ci
+        working-directory: frontend/shahebbazar
+      - name: Lint
+        run: npx eslint .
+        working-directory: frontend/shahebbazar
+      - name: Typecheck
+        run: npx tsc --noEmit
+        working-directory: frontend/shahebbazar
+      - name: Build
+        run: npx next build
+        working-directory: frontend/shahebbazar

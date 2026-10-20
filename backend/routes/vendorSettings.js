@@ -10,6 +10,27 @@ const EMAIL = /^[^\s@]+@[^\s@]+\.[^\s@]+$/;
 
 const memberAccess = [requireFeature("business.settings"), requireVendorOwnership];
 const teamAccess = [requireFeature("business.team"), requireVendorOwnership];
+// Reading who runs the business: its members, or an admin (read-only).
+const readAccess = [requireFeature("business.team.read"), requireVendorOwnership];
+
+// The business in the URL. Admins pass requireVendorOwnership without req.vendor; null when it does not exist.
+async function businessFor(req) {
+    if (req.vendor) return req.vendor.vendor_id;
+    const id = parseId(req.params.vendorId);
+    const found = id && (await pool.query("SELECT 1 FROM vendors WHERE vendor_id = $1", [id])).rowCount;
+    return found ? id : null;
+}
+
+// The business owner's details, shown to an admin.
+async function ownerOf(vendorId) {
+    const result = await pool.query(
+        `SELECT u.user_id, u.user_name, u.user_phone, u.user_email, m.member_role
+         FROM vendor_members m JOIN users u ON u.user_id = m.user_id
+         WHERE m.vendor_id = $1 AND m.member_role = 'owner'`,
+        [vendorId]
+    );
+    return result.rows[0] ?? null;
+}
 
 // Contact details of the person signed in. With several managers, each edits their own.
 async function memberDetails(vendorId, userId) {
@@ -38,11 +59,14 @@ function ownerOnly(req, res, next) {
     return res.status(403).json({ error: "Only the business owner can change who manages it." });
 }
 
-router.get("/vendors/:vendorId/owner", ...memberAccess, async (req, res) => {
+// A member sees their own details; an admin sees the owner's.
+router.get("/vendors/:vendorId/owner", ...readAccess, async (req, res) => {
     try {
-        res.json(await memberDetails(req.vendor.vendor_id, req.user.user_id));
+        const vendorId = await businessFor(req);
+        if (!vendorId) return res.status(404).json({ error: "Business not found" });
+        res.json(req.vendor ? await memberDetails(vendorId, req.user.user_id) : await ownerOf(vendorId));
     } catch (err) {
-        console.error(`GET /api/vendors/${req.vendor.vendor_id}/owner failed:`, err);
+        console.error(`GET /api/vendors/${req.params.vendorId}/owner failed:`, err);
         res.status(500).json({ error: "Could not load your details" });
     }
 });
@@ -68,11 +92,13 @@ router.put("/vendors/:vendorId/owner", ...memberAccess, async (req, res) => {
 
 // Team (KAN-252): the owner can let other accounts help run the business.
 
-router.get("/vendors/:vendorId/members", ...memberAccess, async (req, res) => {
+router.get("/vendors/:vendorId/members", ...readAccess, async (req, res) => {
     try {
-        res.json(await listMembers(req.vendor.vendor_id));
+        const vendorId = await businessFor(req);
+        if (!vendorId) return res.status(404).json({ error: "Business not found" });
+        res.json(await listMembers(vendorId));
     } catch (err) {
-        console.error(`GET /api/vendors/${req.vendor.vendor_id}/members failed:`, err);
+        console.error(`GET /api/vendors/${req.params.vendorId}/members failed:`, err);
         res.status(500).json({ error: "Could not load the team" });
     }
 });
