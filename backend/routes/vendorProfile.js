@@ -4,6 +4,7 @@ const { LIMITS, validateProfile } = require("../lib/businessProfile");
 const { imageUpload, receive, discard, storedPath, checkUploads, removeUnreferencedFiles } = require("../lib/uploads");
 const { requireVendorOwnership } = require("../lib/middleware/auth");
 const { requireFeature } = require("../lib/access");
+const { getSetting } = require("../lib/settings");
 const router = express.Router();
 
 // Add / Edit Business: the provider's own profile.
@@ -198,20 +199,23 @@ router.put(
             }
 
             const submitting = value.submit && (status === "draft" || status === "rejected");
+            // With business approval switched off (KAN-293), submitting publishes it at once.
+            const submittedStatus = submitting && !(await getSetting(client, "require_business_approval")) ? "approved" : "pending";
 
             await client.query(
                 `UPDATE vendors SET
                  vendor_name = $2, vendor_name_bn = $3, location_id = $4, vendor_address = $5,
                  vendor_phone = $6, vendor_whatsapp = $7, vendor_description = $8,
                  vendor_email = $9, vendor_website = $10,
-                 vendor_status = CASE WHEN $11 THEN 'pending' ELSE vendor_status END,
+                 vendor_status = CASE WHEN $11 THEN $12::text ELSE vendor_status END,
+                 vendor_verified_at = CASE WHEN $11 AND $12::text = 'approved' THEN NOW() ELSE vendor_verified_at END,
                  vendor_rejection_reason = CASE WHEN $11 THEN NULL ELSE vendor_rejection_reason END,
                  vendor_updated_at = NOW()
              WHERE vendor_id = $1`,
                 [
                     vendorId, value.name, value.nameBn, value.locationId, value.address,
                     value.phone, value.whatsapp, value.description, value.email, value.website,
-                    submitting,
+                    submitting, submittedStatus,
                 ]
             );
 

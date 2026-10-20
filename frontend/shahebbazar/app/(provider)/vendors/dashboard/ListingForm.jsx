@@ -160,7 +160,9 @@ export default function ListingForm({
                 type: "success",
                 message: editing
                     ? "Listing updated."
-                    : "Listing created. It appears publicly once an admin approves it.",
+                    : data.listing_status === "approved"
+                        ? "Listing created. It is public now."
+                        : "Listing created. It appears publicly once an admin approves it.",
             });
             if (!editing) setForm(EMPTY);
             setPhotos([]);

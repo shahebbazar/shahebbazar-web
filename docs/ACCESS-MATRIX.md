@@ -34,6 +34,7 @@ Business routes also check that the vendor runs that business (owner or manager,
 | Handle reports and hide reviews (`admin.moderation`) | - | - | - | Yes |  |
 | Manage categories (`admin.categories`) | - | - | - | Yes |  |
 | Search trends (`admin.trends`) | - | - | - | Yes |  |
+| Turn approval of new businesses and listings on or off (`admin.settings`) | - | - | - | Yes |  |
 | Activate and manage Marketing passes (`admin.marketing`) | - | - | - | Yes |  |
 
 A guest who tries a protected feature gets 401 (sign in). A signed-in user whose role is not allowed gets 403.

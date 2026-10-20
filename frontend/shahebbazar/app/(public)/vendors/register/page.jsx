@@ -3,15 +3,24 @@ import { Building2 } from "lucide-react";
 import { AppShell } from "@/components/public/AppShell";
 import { VendorRegistrationForm } from "@/components/auth/VendorRegistrationForm";
 import { authenticatedApiGet } from "@/lib/auth-server";
+import { apiGet } from "@/lib/api";
 
 export const metadata = {
     title: "Register your business",
     description:
-        "Create a Shahebbazar business account and submit the business for verification.",
+        "Create a Shahebbazar business account and list your business in Rajshahi's local directory.",
 };
 
 export default async function VendorRegisterPage() {
-    const session = await authenticatedApiGet("/auth/me");
+    const [session, settings] = await Promise.all([
+        authenticatedApiGet("/auth/me"),
+        apiGet("/settings/public").catch(() => null),
+    ]);
+    // What happens after registering depends on the admin's approval setting (KAN-293).
+    const next =
+        settings && settings.require_business_approval === false
+            ? "Your business is public as soon as you register."
+            : "Your business appears publicly once our team approves it.";
     const user = session?.user ?? null;
     // Signed-in customers and vendors add the business to their own account (KAN-249).
     const account = user && user.user_role !== "admin" ? { name: user.user_name, phone: user.user_phone } : undefined;
@@ -30,8 +39,8 @@ export default async function VendorRegisterPage() {
 
                     <p className="mx-auto mt-2 max-w-xl text-sm leading-6 text-muted">
                         {account
-                            ? "Fill in the business details below. New businesses stay pending until the business and NID reference are reviewed."
-                            : "Create a business account for Shahebbazar. New registrations remain pending until the business and NID reference are reviewed."}
+                            ? `Fill in the business details below. ${next}`
+                            : `Create a business account for Shahebbazar. ${next}`}
                     </p>
 
                     {!user && (

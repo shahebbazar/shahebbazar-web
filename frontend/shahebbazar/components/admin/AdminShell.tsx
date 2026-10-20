@@ -1,5 +1,5 @@
 import Link from "next/link";
-import { ChartLine, Flag, LayoutGrid, MapPin, Megaphone, ShieldCheck, Star, type LucideIcon } from "lucide-react";
+import { ChartLine, Flag, LayoutGrid, MapPin, Megaphone, Settings, ShieldCheck, Star, type LucideIcon } from "lucide-react";
 import { MobileMenu } from "../shared/MobileMenu";
 import { LogoutButton } from "@/components/auth/LogoutButton";
 import { ThemeSelector } from "@/components/theme/ThemeSelector";
@@ -14,6 +14,7 @@ const NAV: Item[] = [
     { key: "trends", label: "Search trends", Icon: ChartLine, href: "/admin/trends" },
     { key: "categories", label: "Categories", Icon: LayoutGrid, href: "/admin/categories" },
     { key: "marketing", label: "Marketing", Icon: Megaphone, href: "/admin/marketing" },
+    { key: "settings", label: "Settings", Icon: Settings, href: "/admin/settings" },
 ];
 
 export function AdminShell({

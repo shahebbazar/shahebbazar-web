@@ -109,7 +109,7 @@ const GROUPS: { id: string; title: string; items: Answer[] }[] = [
             },
             {
                 q: "When will my business appear?",
-                a: "After our team checks it. Until then it stays pending and is not shown publicly. Products and services you add are checked the same way.",
+                a: "Usually after our team checks it; until then it shows as pending in your dashboard and is not public. Products and services you add work the same way. The dashboard and the message after registering always tell you whether it is public yet.",
             },
             {
                 q: "Can more than one person run a business page?",

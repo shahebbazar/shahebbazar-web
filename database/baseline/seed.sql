@@ -917,3 +917,10 @@ SELECT u.user_id, v.vendor_id, 'sms', 'save_prompt', now() - INTERVAL '3 days'
 FROM public.users u
 JOIN public.vendors v ON v.vendor_slug = 'shaheb-bazar-silk-house'
 WHERE u.user_phone = '+8801722000001';
+
+-- Platform settings (KAN-293). Also in database/migrations/003_platform_settings.sql.
+-- Approval of new businesses and listings starts on, as the site has always worked.
+INSERT INTO public.platform_settings (setting_key, setting_value) VALUES
+    ('require_business_approval', 'true'),
+    ('require_listing_approval', 'true')
+ON CONFLICT (setting_key) DO NOTHING;

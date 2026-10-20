@@ -31,7 +31,7 @@ export default async function AboutPage({ searchParams }: { searchParams: Promis
                         light manufacturing and everyday services be found online.
                     </p>
                     <p className="mt-3 text-[0.9375rem] leading-relaxed text-muted">
-                        Every business is checked by our team before it appears, and customers can report anything that looks wrong.
+                        Our team reviews businesses and listings, and customers can report anything that looks wrong.
                     </p>
                 </section>
 

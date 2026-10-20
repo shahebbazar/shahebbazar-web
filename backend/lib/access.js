@@ -30,6 +30,7 @@ const FEATURES = {
     "admin.moderation": { roles: ["admin"], label: "Handle reports and hide reviews" },
     "admin.categories": { roles: ["admin"], label: "Manage categories" },
     "admin.trends": { roles: ["admin"], label: "Search trends" },
+    "admin.settings": { roles: ["admin"], label: "Turn approval of new businesses and listings on or off" },
     "admin.marketing": { roles: ["admin"], label: "Activate and manage Marketing passes" },
 };
 

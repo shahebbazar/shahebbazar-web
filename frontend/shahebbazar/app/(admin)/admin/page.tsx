@@ -4,7 +4,7 @@ import { AlertTriangle, CheckCircle2, Clock, MapPin, Package, Phone, RotateCcw, 
 import { redirect } from "next/navigation";
 import { assetUrl } from "@/lib/api";
 import { authenticatedApiGet } from "@/lib/auth-server";
-import type { AdminDecisionLog, AdminQueue, PendingBusiness, PendingListing } from "@/lib/types";
+import type { AdminDecisionLog, AdminQueue, AdminSettings, PendingBusiness, PendingListing } from "@/lib/types";
 import { AdminShell } from "@/components/admin/AdminShell";
 import { StatusBadge } from "@/components/provider/StatusBadge";
 import { listingPrice } from "@/components/provider/DashboardCards";
@@ -32,7 +32,14 @@ export default async function AdminApprovalsPage({
     searchParams: Promise<{ tab?: string }>;
 }) {
     const { tab: rawTab } = await searchParams;
-    const queue = await authenticatedApiGet<AdminQueue>("/admin/queue");
+    const [queue, settings] = await Promise.all([
+        authenticatedApiGet<AdminQueue>("/admin/queue"),
+        authenticatedApiGet<AdminSettings>("/admin/settings"),
+    ]);
+    // Which kinds currently go public without review (KAN-293).
+    const unreviewed = (settings?.settings ?? [])
+        .filter((s) => !s.value)
+        .map((s) => (s.key === "require_business_approval" ? "new businesses" : "new products and services"));
     // Null when the session ended after the layout checked it.
     if (!queue) redirect("/admin/login");
     const tab: Tab = rawTab === "listings" ? "listings" : "businesses";
@@ -46,8 +53,19 @@ export default async function AdminApprovalsPage({
         <AdminShell current="approvals">
             <h1 className="text-[1.75rem] leading-tight font-bold tracking-tight">Approvals</h1>
             <p className="mt-1.5 text-[0.9375rem] text-muted">
-                Nothing appears on the public site until it is approved here. Oldest requests are listed first.
+                {unreviewed.length === 2
+                    ? "Requests that were waiting before approval was switched off. Oldest requests are listed first."
+                    : "Nothing that needs approval appears on the public site until it is approved here. Oldest requests are listed first."}
             </p>
+            {unreviewed.length > 0 && (
+                <p className="mt-3 rounded-lg border border-sponsor-ink/30 bg-sponsor-bg p-3 text-sm text-sponsor-ink">
+                    Approval is switched off for {unreviewed.join(" and ")}, so they go public without review. Anything
+                    already waiting is still listed here.{" "}
+                    <Link href="/admin/settings" className="font-semibold underline">
+                        Change in Settings
+                    </Link>
+                </p>
+            )}
 
             <nav aria-label="Queue" className="mt-6 flex gap-2 border-b border-line">
                 {tabs.map((t) => (

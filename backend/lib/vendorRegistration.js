@@ -2,6 +2,7 @@
 // which verifies the phone number first.
 
 const { normalisePhone } = require("./phone");
+const { getSetting } = require("./settings");
 
 const EMAIL = /^[^\s@]+@[^\s@]+\.[^\s@]+$/;
 const text = (value) => (value === undefined || value === null ? "" : String(value).trim());
@@ -12,7 +13,6 @@ function validateVendorRegistration(body) {
     const email = text(body?.vendor_email).toLowerCase() || null;
     const address = text(body?.vendor_address) || null;
     const city = text(body?.vendor_city) || null;
-    const nidReference = text(body?.vendor_nid_reference);
 
     if (!name) return { error: "Business name is required" };
     if (name.length > 255) return { error: "The business name is too long." };
@@ -20,10 +20,8 @@ function validateVendorRegistration(body) {
     const phone = normalisePhone(body.vendor_phone);
     if (!phone) return { error: "Enter a valid phone number" };
     if (email && (email.length > 255 || !EMAIL.test(email))) return { error: "Enter a valid email address." };
-    if (!nidReference) return { error: "NID reference is required" };
-    if (nidReference.length > 50) return { error: "The NID reference is too long." };
-
-    return { name, phone, email, address, city, nidReference };
+    // NID is no longer collected (client decision, 20 October 2026); the columns stay for later use.
+    return { name, phone, email, address, city };
 }
 
 // Converts a business name to a URL slug.
@@ -66,21 +64,41 @@ async function resolveLocation(client, city) {
     return rows.length ? rows[0].location_id : null;
 }
 
-/** Inserts the pending business for an existing user, inside the caller's transaction. */
+/**
+ * Inserts the business for an existing user, inside the caller's transaction. It waits for an admin
+ * unless business approval is switched off (KAN-293), in which case it is approved at once and the
+ * automatic approval is recorded in the audit log.
+ */
 async function createVendor(client, userId, fields) {
     const locationId = await resolveLocation(client, fields.city);
     const slug = await uniqueSlug(client, slugify(fields.name));
+    const needsApproval = await getSetting(client, "require_business_approval");
     const result = await client.query(
         `INSERT INTO vendors (
             user_id, vendor_name, vendor_slug, vendor_phone, vendor_email, vendor_address,
-            location_id, vendor_nid_reference, vendor_nid_status, vendor_nid_submitted_at
+            location_id, vendor_status, vendor_verified_at
          )
-         VALUES ($1, $2, $3, $4, $5, $6, $7, $8, 'pending', NOW())
+         VALUES ($1, $2, $3, $4, $5, $6, $7, $8::text, CASE WHEN $8::text = 'approved' THEN NOW() END)
          RETURNING vendor_id, vendor_name, vendor_slug, vendor_phone, vendor_email, vendor_address,
-                   location_id, vendor_status, vendor_nid_status, vendor_nid_submitted_at, vendor_created_at`,
-        [userId, fields.name, slug, fields.phone, fields.email, fields.address, locationId, fields.nidReference]
+                   location_id, vendor_status, vendor_created_at`,
+        [userId, fields.name, slug, fields.phone, fields.email, fields.address, locationId, needsApproval ? "pending" : "approved"]
     );
-    return result.rows[0];
+    const vendor = result.rows[0];
+    if (!needsApproval) {
+        await client.query(
+            `INSERT INTO audit_logs (audit_actor_user_id, audit_action, audit_target_type, audit_target_id, audit_before, audit_after)
+             VALUES ($1, 'vendor.auto_approve', 'vendor', $2, NULL, $3)`,
+            [userId, vendor.vendor_id, JSON.stringify({ status: "approved", reason: "Business approval is switched off" })]
+        );
+    }
+    return vendor;
 }
 
-module.exports = { validateVendorRegistration, createVendor };
+/** What to tell the owner after registering. */
+function registeredMessage(vendor) {
+    return vendor.vendor_status === "approved"
+        ? "Business registered. It is public now."
+        : "Business registered. It appears publicly once an administrator approves it.";
+}
+
+module.exports = { validateVendorRegistration, createVendor, registeredMessage };

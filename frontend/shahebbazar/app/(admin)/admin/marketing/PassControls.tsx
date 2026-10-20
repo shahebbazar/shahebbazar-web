@@ -2,6 +2,7 @@
 
 import { useState, useTransition } from "react";
 import { Loader2 } from "lucide-react";
+import { ConfirmDialog } from "@/components/admin/ConfirmDialog";
 import type { AdminMarketing, MarketingPassRow } from "@/lib/types";
 import { activatePass, changePass, type PassAction } from "./actions";
 
@@ -79,11 +80,13 @@ export function ActivatePass({ packages, businesses }: Pick<AdminMarketing, "pac
 export function PassActions({ pass }: { pass: MarketingPassRow }) {
     const [endDate, setEndDate] = useState("");
     const [error, setError] = useState<string | null>(null);
+    // The action waiting for confirmation in the dialog, if any.
+    const [asking, setAsking] = useState<"end-now" | "suspend" | "cancel" | null>(null);
     const [pending, startTransition] = useTransition();
     const status = pass.effective_status;
 
-    function run(action: PassAction, body: Parameters<typeof changePass>[2] = {}, confirmText?: string) {
-        if (confirmText && !window.confirm(confirmText)) return;
+    function run(action: PassAction, body: Parameters<typeof changePass>[2] = {}) {
+        setAsking(null);
         setError(null);
         startTransition(async () => {
             const result = await changePass(pass.subscription_id, action, body);
@@ -91,11 +94,27 @@ export function PassActions({ pass }: { pass: MarketingPassRow }) {
         });
     }
 
-    function withReason(action: "suspend" | "cancel", question: string) {
-        const reason = window.prompt(question);
-        if (reason === null) return;
-        run(action, { reason });
-    }
+    const dialogs = {
+        "end-now": {
+            title: `End ${pass.vendor_name}'s pass now?`,
+            body: "Sponsored placement stops immediately. The pass stays in the history.",
+            confirmLabel: "End pass",
+            reasonLabel: undefined,
+        },
+        suspend: {
+            title: `Suspend ${pass.vendor_name}'s pass?`,
+            body: "Sponsored placement and paid actions stop until you resume it.",
+            confirmLabel: "Suspend",
+            reasonLabel: "Reason",
+        },
+        cancel: {
+            title: `Cancel ${pass.vendor_name}'s pass?`,
+            body: "Sponsored placement stops for good. A cancelled pass cannot be resumed.",
+            confirmLabel: "Cancel pass",
+            reasonLabel: "Reason",
+        },
+    };
+    const dialog = asking ? dialogs[asking] : null;
 
     if (status === "expired" || status === "cancelled") return null;
 
@@ -128,12 +147,12 @@ export function PassActions({ pass }: { pass: MarketingPassRow }) {
                         <button
                             type="button"
                             disabled={pending}
-                            onClick={() => run("end-now", {}, `End ${pass.vendor_name}'s pass now? Sponsored placement stops immediately.`)}
+                            onClick={() => setAsking("end-now")}
                             className={NEUTRAL}
                         >
                             End now
                         </button>
-                        <button type="button" disabled={pending} onClick={() => withReason("suspend", "Why is this pass being suspended? (optional)")} className={NEUTRAL}>
+                        <button type="button" disabled={pending} onClick={() => setAsking("suspend")} className={NEUTRAL}>
                             Suspend
                         </button>
                     </>
@@ -143,7 +162,7 @@ export function PassActions({ pass }: { pass: MarketingPassRow }) {
                         Resume
                     </button>
                 )}
-                <button type="button" disabled={pending} onClick={() => withReason("cancel", "Why is this pass being cancelled? (optional)")} className={DANGER}>
+                <button type="button" disabled={pending} onClick={() => setAsking("cancel")} className={DANGER}>
                     Cancel pass
                 </button>
                 {pending && <Loader2 className="size-4 animate-spin text-muted" />}
@@ -153,6 +172,15 @@ export function PassActions({ pass }: { pass: MarketingPassRow }) {
                     {error}
                 </p>
             )}
+            <ConfirmDialog
+                open={dialog !== null}
+                title={dialog?.title ?? ""}
+                body={dialog?.body}
+                confirmLabel={dialog?.confirmLabel ?? ""}
+                reasonLabel={dialog?.reasonLabel}
+                onConfirm={(reason) => asking && run(asking, asking === "end-now" ? {} : { reason })}
+                onCancel={() => setAsking(null)}
+            />
         </div>
     );
 }

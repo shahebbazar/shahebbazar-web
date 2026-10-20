@@ -27,6 +27,7 @@ const vendorSettingsRouter = require('./routes/vendorSettings');
 const adminCategoriesRouter = require('./routes/adminCategories');
 const marketingRouter = require('./routes/marketing');
 const consentsRouter = require('./routes/consents');
+const adminSettingsRouter = require('./routes/adminSettings');
 const { startNotificationWorker } = require('./lib/notify');
 const authRouter = require("./routes/auth");
 
@@ -81,6 +82,7 @@ app.use('/api', vendorSettingsRouter);
 app.use('/api', adminCategoriesRouter);
 app.use('/api', marketingRouter);
 app.use('/api', consentsRouter);
+app.use('/api', adminSettingsRouter);
 
 app.get(
     "/api/auth/me",
