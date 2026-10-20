@@ -29,6 +29,9 @@ WITH required_relations(object_name, object_type) AS (
         ('vendor_photos', 'table'),
         ('vendor_social_links', 'table'),
         ('vendor_members', 'table'),
+        ('marketing_packages', 'table'),
+        ('vendor_marketing_subscriptions', 'table'),
+        ('marketing_usage_events', 'table'),
         ('v_business_cards', 'view'),
         ('v_search_trends_daily', 'view'),
         ('v_moderation_queue', 'view'),
@@ -66,6 +69,9 @@ WITH required_relations(object_name, object_type) AS (
     UNION ALL
     SELECT 'data', 'no approved public business cards'
     WHERE NOT EXISTS (SELECT 1 FROM v_business_cards)
+    UNION ALL
+    SELECT 'data', 'marketing_packages is missing the 7, 30 or 90-day pass'
+    WHERE (SELECT COUNT(DISTINCT package_duration_days) FROM marketing_packages WHERE package_is_active) < 3
 )
 SELECT * FROM missing_relations
 UNION ALL SELECT * FROM missing_columns

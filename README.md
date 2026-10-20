@@ -18,6 +18,7 @@ their profile, listings and messages; administrators approve and moderate.
 - [Project structure](#project-structure)
 - [Authentication and access control](#authentication-and-access-control)
 - [API](#api)
+- [Marketing passes](#marketing-passes)
 - [Testing](#testing)
 - [Conventions](#conventions)
 - [Troubleshooting](#troubleshooting)
@@ -89,6 +90,8 @@ sign-in codes or session tokens.
 | `UPLOAD_DIR` | Where uploaded images are stored | unset (`backend/uploads`) |
 | `TRUST_PROXY` | Set behind a reverse proxy so visitor IPs are correct | unset |
 | `NOTIFY_DELAY_MINUTES` | Wait before an unread message triggers an SMS/email alert | unset (5) |
+| `MARKETING_WORKSPACE_ENABLED` | `true` shows the business owner's Marketing pages and routes. Admin pass management is always on | `false` |
+| `MARKETING_EXPIRED_EMAILS_PER_WEEK` | Free emails a business may still send after its pass ends | unset (1) |
 
 The frontend runs locally with no configuration. For other environments, set
 `API_BASE_URL` (server-side API calls), `NEXT_PUBLIC_API_BASE_URL` (browser API
@@ -106,6 +109,10 @@ npm run db:load
 `database/baseline/seed.sql`, copies seed images from `database/seed-assets/`
 into the upload folder, and checks the result. It only loads an empty database.
 To wipe and rebuild, run `npm run db:reset`.
+
+When a pull request adds a file to `database/migrations/`, apply it to your existing
+database instead of resetting: `psql -d shahebbazar -f database/migrations/<file>.sql`
+(the files are safe to run twice).
 
 | Command | Purpose |
 | --- | --- |
@@ -200,7 +207,7 @@ are signed out or in the wrong role.
 | `app/(public)/` | Everyone | `/`, `/search`, `/categories`, `/business/[slug]`, `/events`, `/login`, `/admin/login`, `/register/customer`, `/vendors/register`, legal pages |
 | `app/(seeker)/` | Signed-in customers | `/account`, `/account/saved`, `/account/reviews`, `/account/messages`, `/report` |
 | `app/(provider)/` | Business owners (and admins viewing a business) | `/vendors/dashboard` and its pages: business, listings, payment methods, reviews, messages, inquiries, settings |
-| `app/(admin)/` | Admins | `/admin` approvals, reports, reviews, search trends, categories |
+| `app/(admin)/` | Admins | `/admin` approvals, reports, reviews, search trends, categories, marketing passes |
 
 ### How requests flow
 
@@ -251,7 +258,7 @@ every role.
 | --- | --- | --- | --- | --- | --- |
 | Public browsing (`/api/home`, `/api/businesses/...`, `/api/categories`, `/api/events`) | yes | yes | yes | yes | yes |
 | Customer area (`/api/me/...`, reports, writing reviews) | 401 | yes | 403 | 403 | 403 |
-| Managing a business: profile, images, listings, payment methods, owner details, dashboard, reading reviews | 401 | 403 | 403 | yes | yes |
+| Managing a business: profile, images, listings, payment methods, owner details, dashboard, reading reviews, Marketing pass status | 401 | 403 | 403 | yes | yes |
 | Acting as the business: messages, inquiries, alerts, review replies | 401 | 403 | 403 | yes | 403 |
 | Administration (`/api/admin/...`) | 401 | 403 | 403 | 403 | yes |
 
@@ -262,8 +269,9 @@ every role.
 - **Admins viewing a business:** "Open the business's pages" on the Approvals
   cards opens the business's dashboard with an admin banner. Messages,
   inquiries and review replies stay hidden because they belong to the owner.
-- **Audit log:** admin decisions, category changes, report resolutions and
-  review moderation are recorded in `audit_logs` against the signed-in admin.
+- **Audit log:** admin decisions, category changes, report resolutions,
+  review moderation and Marketing pass changes are recorded in `audit_logs`
+  against the signed-in admin.
 
 The website's area redirects:
 
@@ -303,6 +311,25 @@ Uploaded images are stored as `uploads/<file>` paths and served by the API at
 
 ---
 
+## Marketing passes
+
+The vendor marketing package (KAN-242/243) is being built in six stages
+(KAN-283 to KAN-288); see the delivery plan. Stage 1 is in place:
+
+- Three passes (7, 30 and 90 days; proposed BDT 299, 999 and 2,499) in
+  `marketing_packages`, each with email-campaign, AI-draft and SMS allowances.
+- Admins give a business a pass on **Admin → Marketing** (`/admin/marketing`), and
+  can extend, end, suspend, resume or cancel it. Payment is recorded outside the
+  site until SSLCommerz is added.
+- A running pass puts the business in the Sponsored slot on the home and search
+  pages. Placement ends by itself when the pass ends (`v_business_cards` only treats
+  a business as featured until `vendor_featured_until`).
+- `backend/services/marketing/entitlements.js` is the only place that decides what a
+  business may do with its pass (`checkEntitlement`, `useEntitlement`). Later stages
+  call it before every paid action.
+
+---
+
 ## Testing
 
 ```bash
@@ -313,7 +340,7 @@ This creates a throwaway `<PGDATABASE>_test` database from the baseline, starts
 the real API against it, signs in through the normal code flow as each role,
 runs the tests, and drops the database. Your development data is not touched.
 
-About 375 tests across 12 suites. Every API route is called by at least one test.
+About 415 tests across 13 suites. Every API route is called by at least one test.
 
 | Suite | Covers |
 | --- | --- |
@@ -329,6 +356,7 @@ About 375 tests across 12 suites. Every API route is called by at least one test
 | `backend/test/admin.test.js` | Approvals, categories, resolving each kind of report, review moderation, search trends |
 | `backend/test/analytics.test.js` | Search and view beacons: repeat visits and bots not counted, appearances for approved businesses only |
 | `backend/test/uploads.test.js` | `npm run uploads:check` |
+| `backend/test/marketing.test.js` | Marketing passes: activation and management, sponsored placement ending with the pass, allowances |
 
 CI runs the same suite on every pull request, so a new feature should come with
 tests in the suite that matches it (or a new one).

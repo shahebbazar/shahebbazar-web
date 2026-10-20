@@ -10,6 +10,7 @@ one consolidated baseline; nothing else is loaded.
 | `baseline/schema.sql` | The complete schema: every table, view, index and constraint. The single source of truth. |
 | `baseline/seed.sql` | Sample data for development and demonstrations: locations, categories, businesses, listings, accounts, reviews and events. |
 | `seed-assets/` | Images the seed references as `uploads/<file>`. `db:load` copies them into the upload folder. |
+| `migrations/` | Numbered changes for databases that already exist, e.g. `001_marketing_passes.sql`. Each is also in the baseline, so a fresh load does not need them. |
 | `checks/verify-baseline.sql` | Returns a row for every missing table, view, column or required sample data. No rows means the database is complete. |
 | `snapshots/current-schema.sql` | A `pg_dump --schema-only` of a freshly loaded database, for reviewing schema differences. |
 | `legacy/` | The historical versioned files (`schema.v2*.sql`, `seed.v2*.sql`), the original `schema.sql` and `sampleinput.sql`, and the v2 design notes in `SCHEMA-NOTES.md`. Kept for reference only; never loaded. |
@@ -53,10 +54,23 @@ concern, but each one must suit the business or listing it illustrates.
 
 ## Changing the schema
 
-Until the migration process is in place, a schema change is made by editing
-`baseline/schema.sql` (and `baseline/seed.sql` if sample data is affected),
-adding any new object to `checks/verify-baseline.sql` and
-`backend/lib/verifySchema.js`, and rebuilding with `npm run db:reset`.
+A schema change is made in two places in the same pull request:
+
+1. A numbered file in `migrations/` that brings an existing database up to date.
+   Write it so it is safe to run twice (`IF NOT EXISTS`, `ON CONFLICT DO NOTHING`).
+2. The same objects in `baseline/schema.sql` (and `baseline/seed.sql` for sample
+   data), so a fresh `npm run db:load` matches a migrated database.
+
+Then add any new table or view to `checks/verify-baseline.sql` and
+`backend/lib/verifySchema.js`.
+
+Until the migration runner exists (KAN-279), apply a migration to your own
+database with `psql -d shahebbazar -f database/migrations/<file>.sql`, or rebuild
+with `npm run db:reset` (which loses local test data).
+
+| Migration | Adds |
+| --- | --- |
+| `001_marketing_passes.sql` | Marketing passes (KAN-283): `marketing_packages`, `vendor_marketing_subscriptions`, `marketing_usage_events`, the three passes, a pass for each business that was already featured, and sponsored placement that ends with `vendor_featured_until`. |
 
 Conventions:
 

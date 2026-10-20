@@ -3,7 +3,8 @@
         "index.js",
         "db.js",
         "routes",
-        "lib"
+        "lib",
+        "services"
     ],
     "ext": "js,json",
     "ignore": [

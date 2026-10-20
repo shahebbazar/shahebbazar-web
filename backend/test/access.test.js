@@ -77,6 +77,7 @@ const OWNER_OR_ADMIN = [
     ["owner details", "GET", () => `/vendors/${OWNED}/owner`],
     ["save owner details", "PUT", () => `/vendors/${OWNED}/owner`, { user_name: "Changed Name" }],
     ["business reviews", "GET", () => `/vendors/${OWNED}/reviews`],
+    ["marketing pass", "GET", () => `/vendors/${OWNED}/marketing`],
 ];
 
 const OWNER_ONLY = [
@@ -100,6 +101,9 @@ const ADMIN_ONLY = [
     ["reviews to moderate", "GET", () => "/admin/reviews"],
     ["hide a review", "POST", () => `/admin/reviews/${ids.review}/status`, { status: "hidden" }],
     ["search trends", "GET", () => "/admin/trends"],
+    ["marketing passes", "GET", () => "/admin/marketing"],
+    ["activate a marketing pass", "POST", () => "/admin/marketing/subscriptions", { vendor_id: OWNED, package_id: 1 }],
+    ["change a marketing pass", "POST", () => "/admin/marketing/subscriptions/1/extend", { days: 7 }],
     ["an admin route that does not exist", "GET", () => "/admin/anything-new"],
 ];
 

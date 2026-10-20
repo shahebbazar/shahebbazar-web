@@ -25,10 +25,12 @@ const FEATURES = {
     "business.team.read": { roles: BUSINESS, label: "See who runs the business and their contact details", rule: "vendors: own businesses only" },
     "business.settings": { roles: ["vendor"], label: "Edit their own contact details", rule: "own businesses only" },
     "business.team": { roles: ["vendor"], label: "Add or remove managers", rule: "business owner only" },
+    "business.marketing": { roles: BUSINESS, label: "See the business's Marketing pass and allowance left", rule: "vendors: own businesses only" },
     "admin.approvals": { roles: ["admin"], label: "Approve or reject businesses and listings" },
     "admin.moderation": { roles: ["admin"], label: "Handle reports and hide reviews" },
     "admin.categories": { roles: ["admin"], label: "Manage categories" },
     "admin.trends": { roles: ["admin"], label: "Search trends" },
+    "admin.marketing": { roles: ["admin"], label: "Activate and manage Marketing passes" },
 };
 
 function roleOf(req) {
