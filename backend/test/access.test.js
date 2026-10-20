@@ -111,6 +111,7 @@ const CUSTOMER_ONLY = [
     ["my account", "GET", () => "/me"],
     ["my conversations", "GET", () => "/me/conversations"],
     ["my alerts", "GET", () => "/me/alerts"],
+    ["change my details", "PUT", () => "/me/profile", { name: "Blocked", email: "" }],
     ["report something", "POST", () => "/reports", { target_type: "vendor", target_id: OWNED, reason: "spam" }],
 ];
 

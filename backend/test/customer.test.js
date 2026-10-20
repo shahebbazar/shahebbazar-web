@@ -32,6 +32,47 @@ describe("account summary", () => {
     });
 });
 
+describe("my details (KAN-294)", () => {
+    const save = (body, as = "customer2") => call("PUT", "/me/profile", { as, json: body });
+
+    it("a customer can add an email address and tidy their name", async () => {
+        const res = await save({ name: "  Farhana Yasmin ", email: "  Farhana.Y@Example.COM " });
+        assert.equal(res.status, 200, JSON.stringify(res.data));
+        assert.deepEqual([res.data.user_name, res.data.user_email, res.data.user_phone], ["Farhana Yasmin", "farhana.y@example.com", PHONES.customer2]);
+        assert.equal((await call("GET", "/me", { as: "customer2" })).data.user_email, "farhana.y@example.com");
+    });
+
+    it("reports each invalid field and saves nothing", async () => {
+        const res = await save({ name: "F", email: "not an email" });
+        assert.equal(res.status, 400);
+        assert.ok(res.data.errors.name && res.data.errors.email);
+        const me = (await call("GET", "/me", { as: "customer2" })).data;
+        assert.deepEqual([me.user_name, me.user_email], ["Farhana Yasmin", "farhana.y@example.com"], "unchanged");
+    });
+
+    it("refuses an email address used by another account", async () => {
+        const [admin] = await query("SELECT user_email FROM users WHERE user_phone = $1", [PHONES.admin]);
+        const res = await save({ name: "Farhana Yasmin", email: admin.user_email });
+        assert.equal(res.status, 409);
+        assert.ok(res.data.errors.email);
+    });
+
+    it("an empty email removes it; the phone number cannot be changed here", async () => {
+        const res = await save({ name: "Farhana Yasmin", email: "", phone: "+8801799000000" });
+        assert.equal(res.status, 200);
+        assert.equal(res.data.user_email, null);
+        assert.equal(res.data.user_phone, PHONES.customer2);
+    });
+
+    it("only changes the signed-in customer's own details", async () => {
+        const before = (await call("GET", "/me", { as: "customer" })).data;
+        await save({ name: "Someone Else", email: "" });
+        const after = (await call("GET", "/me", { as: "customer" })).data;
+        assert.deepEqual([after.user_name, after.user_email], [before.user_name, before.user_email]);
+        await save({ name: "Farhana Yasmin", email: "" });
+    });
+});
+
 describe("saved businesses", () => {
     it("saving is idempotent and shows everywhere the business is listed", async () => {
         for (let i = 0; i < 2; i++) {
