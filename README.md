@@ -313,12 +313,25 @@ This creates a throwaway `<PGDATABASE>_test` database from the baseline, starts
 the real API against it, signs in through the normal code flow as each role,
 runs the tests, and drops the database. Your development data is not touched.
 
+About 375 tests across 12 suites. Every API route is called by at least one test.
+
 | Suite | Covers |
 | --- | --- |
-| `backend/test/access.test.js` | Every signed-in route against every role; refused requests change nothing; admin actions audited against the right admin |
-| `backend/test/listings.test.js` | Listings and photos from upload to the public page; upload validation |
+| `backend/test/unit.test.js` | Pure helpers, no database: phone and web-address rules, opening hours, ID parsing, search-text normalising, and the role matrix (every `requireFeature` names a real feature; `docs/ACCESS-MATRIX.md` matches `lib/access.js`) |
+| `backend/test/public.test.js` | Home page, categories, search (filters, sorting, paging, Sponsored slot, only approved businesses), business pages, payment methods, events, sitemap, API docs, health |
+| `backend/test/auth.test.js` | Sign-in codes (portals, rate limit, wrong-code lockout, expiry, single use), sessions (cookie flags, hashed tokens, expiry, suspension, logout), customer registration rules |
 | `backend/test/registration.test.js` | Customer and business registration with codes |
+| `backend/test/access.test.js` | Every signed-in route against every role; refused requests change nothing; admin actions audited against the right admin |
+| `backend/test/customer.test.js` | Account summary, saved businesses, reviews (one per business, moderation), reports, messages and alerts |
+| `backend/test/vendor.test.js` | Business profile rules, payment methods, business photos and logo (files removed when no longer used), dashboard |
+| `backend/test/members.test.js` | Businesses run by several people: managers, team changes, shared messages, separate alerts |
+| `backend/test/listings.test.js` | Listings and photos from upload to the public page; upload validation |
+| `backend/test/admin.test.js` | Approvals, categories, resolving each kind of report, review moderation, search trends |
+| `backend/test/analytics.test.js` | Search and view beacons: repeat visits and bots not counted, appearances for approved businesses only |
 | `backend/test/uploads.test.js` | `npm run uploads:check` |
+
+CI runs the same suite on every pull request, so a new feature should come with
+tests in the suite that matches it (or a new one).
 
 Before opening a pull request, also run `npm run lint`, `npm run typecheck` and
 `npm run build`. Manual and browser test evidence goes in `docs/testing/`, one
@@ -416,7 +429,7 @@ schema separately.
   open `/vendors/dashboard?vendor=<id>` directly.
 - **Business form feedback:** some invalid fields (categories, description,
   location, contact details) are not clearly highlighted in the form.
-- **Deployment** (KAN-254): no production configuration or CI pipeline yet.
+- **Deployment** (KAN-254): no production configuration yet. CI checks every pull request (`.github/workflows/ci.yml`).
 - **Language** uses `?lang=bn`; `/en` and `/bn` URL prefixes are a future improvement.
 - **Maps** are illustrations, not a live map.
 - **Bookings and promotions** are later-phase features.
