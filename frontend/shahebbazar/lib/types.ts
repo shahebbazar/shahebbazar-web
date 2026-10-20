@@ -447,10 +447,21 @@ export interface Customer {
     saved_count: number;
     review_count: number;
     unread_messages: number;
+    offers_count: number;
 }
+
+export type OfferChannel = "email" | "sms";
 
 export interface SavedBusiness extends BusinessCard {
     saved_at: string;
+    // Channels the customer gets offers on from this business (KAN-284).
+    offer_channels: OfferChannel[];
+}
+
+export interface UnsubscribeLink {
+    business: { vendor_name: string; vendor_name_bn: string | null; vendor_slug: string };
+    channel: OfferChannel;
+    subscribed: boolean;
 }
 
 export interface ViewerState {

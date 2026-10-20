@@ -30,7 +30,7 @@ export function SiteFooter({ locale }: { locale: Locale }) {
                 { label: copy.footerTerms, href: "/terms" },
                 { label: copy.footerPrivacy, href: "/privacy" },
                 { label: copy.footerRefunds, href: "/refunds" },
-                { label: copy.footerCookies, href: "/privacy" },
+                { label: copy.footerCookies, href: "/privacy#cookies" },
                 { label: copy.footerFaq, href: "/faq" },
             ],
         },
@@ -97,26 +97,22 @@ export function SiteFooter({ locale }: { locale: Locale }) {
                         <p className="mt-3 text-[0.8125rem] leading-relaxed text-muted">
                             {copy.footerNewsletter}
                         </p>
-                        {/* Target route is not yet implemented; the form fails visibly rather than appearing to succeed. */}
-                        <form action="/api/subscribe" method="post" className="mt-4 flex gap-2">
-                            <label htmlFor="newsletter-email" className="sr-only">
-                                {copy.footerEmailPlaceholder}
-                            </label>
-                            <input
-                                id="newsletter-email"
-                                name="email"
-                                type="email"
-                                required
-                                placeholder={copy.footerEmailPlaceholder}
-                                className="h-10 w-full rounded-[10px] border border-line-strong bg-surface px-3.5 text-sm text-ink outline-none transition placeholder:text-soft focus:border-brand-500 focus:ring-3 focus:ring-brand-100"
-                            />
-                            <button
-                                type="submit"
-                                className="shrink-0 rounded-[10px] bg-brand-600 px-[1.125rem] py-2.5 text-sm font-medium whitespace-nowrap text-white transition-colors hover:bg-brand-700"
+                        {/* Updates come as offers from businesses the customer saves and opts in to (KAN-284),
+                            not a separate mailing list. */}
+                        <div className="mt-4 flex flex-wrap items-center gap-x-4 gap-y-2">
+                            <Link
+                                href={localeHref("/register", locale)}
+                                className="rounded-[10px] bg-brand-600 px-[1.125rem] py-2.5 text-sm font-medium whitespace-nowrap text-white transition-colors hover:bg-brand-700"
                             >
-                                {copy.subscribe}
-                            </button>
-                        </form>
+                                {copy.footerJoin}
+                            </Link>
+                            <Link
+                                href={localeHref("/faq#offers", locale)}
+                                className="text-[0.8125rem] font-medium text-brand-600 hover:underline"
+                            >
+                                {copy.footerHowOffers}
+                            </Link>
+                        </div>
                     </div>
                 </div>
             </div>

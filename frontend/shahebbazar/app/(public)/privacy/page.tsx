@@ -54,6 +54,7 @@ const SECTIONS: PolicySection[] = [
     },
     {
         heading: "5. Cookies",
+        id: "cookies",
         body: [
             "We use a small number of cookies: one to keep you signed in, and one to remember your language. We do not use advertising cookies.",
         ],

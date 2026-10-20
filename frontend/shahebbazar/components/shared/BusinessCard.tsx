@@ -51,6 +51,8 @@ export function BusinessCard({
                     label={`${copy.save}: ${name}`}
                     savedLabel={`${copy.saved}: ${name}`}
                     variant="icon"
+                    businessName={name}
+                    locale={locale}
                 />
             </div>
 

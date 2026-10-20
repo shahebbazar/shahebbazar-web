@@ -85,7 +85,7 @@ INSERT INTO users (user_phone, user_email, user_name, user_password_hash, user_r
     ('+8801711000007', NULL, 'Jahangir Alam',  NULL, 'vendor', NOW()),
     ('+8801711000008', NULL, 'Tanvir Hossain', NULL, 'vendor', NOW()),
     ('+8801711000009', NULL, 'Selina Parvin',  NULL, 'vendor', NOW()),
-    ('+8801722000001', NULL, 'Imran Chowdhury', NULL, 'customer', NOW()),
+    ('+8801722000001', 'imran.customer@example.com', 'Imran Chowdhury', NULL, 'customer', NOW()),
     ('+8801722000002', NULL, 'Farhana Yasmin',  NULL, 'customer', NOW());
 
 -- Vendors: eight approved, one pending and one rejected, so the moderation queue is populated on first load.
@@ -908,3 +908,12 @@ WHERE v.vendor_is_featured
   AND NOT EXISTS (
       SELECT 1 FROM public.vendor_marketing_subscriptions s
       WHERE s.vendor_id = v.vendor_id AND s.subscription_status IN ('pending', 'active'));
+
+-- Marketing consent (KAN-284). Also in database/migrations/002_marketing_consents.sql.
+-- The demo customer saved Shaheb Bazar Silk House and agreed to offers by SMS; saving Green Life
+-- Pharmacy gave no consent.
+INSERT INTO public.marketing_consents (user_id, vendor_id, consent_channel, consent_source, consent_given_at)
+SELECT u.user_id, v.vendor_id, 'sms', 'save_prompt', now() - INTERVAL '3 days'
+FROM public.users u
+JOIN public.vendors v ON v.vendor_slug = 'shaheb-bazar-silk-house'
+WHERE u.user_phone = '+8801722000001';

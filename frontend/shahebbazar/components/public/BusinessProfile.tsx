@@ -570,7 +570,13 @@ function ActionButtons({ locale, detail }: { locale: Locale; detail: BusinessDet
                 {copy.getDirections}
             </a>
 
-            <SaveButton vendorId={business.vendor_id} label={copy.save} savedLabel={copy.saved} />
+            <SaveButton
+                vendorId={business.vendor_id}
+                label={copy.save}
+                savedLabel={copy.saved}
+                businessName={pick(locale, business.vendor_name, business.vendor_name_bn)}
+                locale={locale}
+            />
 
             <ShareMenu
                 url={pageUrl}

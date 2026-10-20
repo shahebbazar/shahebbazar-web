@@ -13,7 +13,7 @@ type SitemapData = {
 };
 
 export default async function sitemap(): Promise<MetadataRoute.Sitemap> {
-    const fixed: MetadataRoute.Sitemap = ["/", "/categories", "/terms", "/privacy", "/refunds"].map((path) => ({
+    const fixed: MetadataRoute.Sitemap = ["/", "/categories", "/about", "/faq", "/terms", "/privacy", "/refunds"].map((path) => ({
         url: `${SITE_URL}${path === "/" ? "" : path}`,
     }));
 

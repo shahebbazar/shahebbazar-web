@@ -26,6 +26,7 @@ const eventsRouter = require('./routes/events');
 const vendorSettingsRouter = require('./routes/vendorSettings');
 const adminCategoriesRouter = require('./routes/adminCategories');
 const marketingRouter = require('./routes/marketing');
+const consentsRouter = require('./routes/consents');
 const { startNotificationWorker } = require('./lib/notify');
 const authRouter = require("./routes/auth");
 
@@ -79,6 +80,7 @@ app.use('/api', eventsRouter);
 app.use('/api', vendorSettingsRouter);
 app.use('/api', adminCategoriesRouter);
 app.use('/api', marketingRouter);
+app.use('/api', consentsRouter);
 
 app.get(
     "/api/auth/me",
