@@ -1,6 +1,6 @@
 import { createElement } from "react";
 import type { Metadata } from "next";
-import { pageMetadata } from "@/lib/seo";
+import { categoryOgImage, pageMetadata } from "@/lib/seo";
 import Link from "next/link";
 import { notFound } from "next/navigation";
 import { ChevronRight } from "lucide-react";
@@ -21,19 +21,27 @@ type Query = { page?: string; lang?: string };
 
 export async function generateMetadata({
     params,
+    searchParams,
 }: {
     params: Promise<Params>;
+    searchParams: Promise<Query>;
 }): Promise<Metadata> {
-    const { slug } = await params;
+    const [{ slug }, { lang }] = await Promise.all([params, searchParams]);
+    const locale = resolveLocale(lang);
     const categories = await getCategories();
     const category = categories.find((c) => c.category_slug === slug);
     if (!category) return { title: "Category not found" };
 
-    const name = category.category_name;
+    const name = pick(locale, category.category_name, category.category_name_bn);
     return pageMetadata({
-        title: `${name} in Rajshahi — businesses and services`,
-        description: `Find ${name.toLowerCase()} businesses in Rajshahi. Compare ratings, opening hours and contact details on Shahebbazar.`,
+        title: locale === "bn" ? `রাজশাহীতে ${name} — ব্যবসা ও সেবা` : `${name} in Rajshahi — businesses and services`,
+        description:
+            locale === "bn"
+                ? `রাজশাহীর ${name} খুঁজুন। রেটিং, খোলার সময় ও যোগাযোগের তথ্য তুলনা করুন সাহেববাজারে।`
+                : `Find ${name.toLowerCase()} businesses in Rajshahi. Compare ratings, opening hours and contact details on Shahebbazar.`,
+        locale,
         path: `/categories/${category.category_slug}`,
+        image: categoryOgImage(category.category_slug, category.category_name),
     });
 }
 

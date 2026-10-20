@@ -31,7 +31,7 @@ const authRouter = require("./routes/auth");
 const {
     resolveSession,
     requireAuthenticatedUser,
-    adminOnly
+    requireRole
 } = require("./lib/middleware/auth");
 
 const app = express();
@@ -58,7 +58,7 @@ app.use('/api/auth', authRouter);
 app.use('/uploads', express.static(UPLOAD_DIR));
 
 // Every admin route, in any router, needs a signed-in admin. Applied before the routers so new ones are covered too.
-app.use('/api/admin', ...adminOnly);
+app.use('/api/admin', requireRole("admin"));
 
 app.use('/api/vendors', vendorsRouter);
 app.use('/api', vendorListingsRouter);

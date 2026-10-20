@@ -29,19 +29,26 @@ export async function generateMetadata({
 }: {
     searchParams: Promise<Params>;
 }): Promise<Metadata> {
-    const { q } = await searchParams;
+    const { q, lang } = await searchParams;
+    const locale = resolveLocale(lang);
+    const bn = locale === "bn";
     const title = q
-        ? `${q} in Rajshahi — search results`
-        : "Browse businesses in Rajshahi";
+        ? bn ? `রাজশাহীতে "${q}" — অনুসন্ধানের ফল` : `${q} in Rajshahi — search results`
+        : bn ? "রাজশাহীর ব্যবসা দেখুন" : "Browse businesses in Rajshahi";
 
     // Result pages are excluded from the index because arbitrary queries produce unbounded near-duplicate pages.
     return pageMetadata({
         title,
         description: q
-            ? `Businesses and services matching "${q}" in Rajshahi. Compare ratings, opening hours and contact details on Shahebbazar.`
-            : "Browse trusted businesses and services across Rajshahi by category and area.",
+            ? bn
+                ? `রাজশাহীতে "${q}" সম্পর্কিত ব্যবসা ও সেবা। রেটিং, খোলার সময় ও যোগাযোগের তথ্য দেখুন সাহেববাজারে।`
+                : `Businesses and services matching "${q}" in Rajshahi. Compare ratings, opening hours and contact details on Shahebbazar.`
+            : bn
+              ? "বিভাগ ও এলাকা অনুযায়ী রাজশাহীর বিশ্বস্ত ব্যবসা ও সেবা খুঁজুন।"
+              : "Browse trusted businesses and services across Rajshahi by category and area.",
         path: q ? `/search?q=${encodeURIComponent(q)}` : "/search",
         noindex: true,
+        locale,
     });
 }
 

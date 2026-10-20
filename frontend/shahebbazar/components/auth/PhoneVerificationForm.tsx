@@ -138,8 +138,11 @@ export function PhoneVerificationForm({
             admin: "/admin",
         } as const;
 
+        // A vendor who used the customer login goes to their customer account.
         const destination =
-            destinationByRole[result.user.user_role];
+            audience === "customer"
+                ? "/account"
+                : destinationByRole[result.user.user_role];
 
         router.replace(
             localeHref(destination, locale)
