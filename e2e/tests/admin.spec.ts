@@ -25,6 +25,9 @@ test("approving a listing from the queue publishes it and records this admin", a
     await sql("DELETE FROM vendor_listings WHERE listing_id = $1", [listing_id]);
 });
 
+const approvalSetting = async () =>
+    (await sql<{ setting_value: boolean }>("SELECT setting_value FROM platform_settings WHERE setting_key = 'require_business_approval'"))[0].setting_value;
+
 test("turning business approval off asks first in the page, and Approvals then warns @phone", async ({ page }) => {
     await page.goto("/admin/settings");
     const toggle = page.getByRole("switch", { name: "Approve new businesses before they appear" });
@@ -43,7 +46,9 @@ test("turning business approval off asks first in the page, and Approvals then w
         await toggle.click();
         await dialog.getByRole("button", { name: "Turn off" }).click();
         await expect(toggle).not.toBeChecked();
-        await expect(page.getByText(/Last changed/).first()).toBeVisible();
+        // The switch flips before the save finishes; wait for the saved value before moving on.
+        await expect.poll(() => approvalSetting()).toBe(false);
+        await expect(toggle).toBeEnabled();
 
         await page.goto("/admin");
         await expect(page.getByText(/Approval is switched off for new businesses/)).toBeVisible();
@@ -51,6 +56,7 @@ test("turning business approval off asks first in the page, and Approvals then w
         await page.goto("/admin/settings");
         await page.getByRole("switch", { name: "Approve new businesses before they appear" }).click(); // back on: no question
         await expect(page.getByRole("switch", { name: "Approve new businesses before they appear" })).toBeChecked();
+        await expect.poll(() => approvalSetting()).toBe(true);
     } finally {
         await sql("UPDATE platform_settings SET setting_value = 'true' WHERE setting_key = 'require_business_approval'");
     }

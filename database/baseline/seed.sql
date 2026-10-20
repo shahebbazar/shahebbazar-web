@@ -264,8 +264,7 @@ FROM (VALUES
 JOIN vendors    v ON v.vendor_slug   = x.vendor_slug
 JOIN categories c ON c.category_slug = x.category_slug;
 
--- Listing photos: none until suitable development images are added to database/seed-assets/
--- (see database/README.md). Seeded listings show a placeholder instead of a broken image.
+-- Listing photos: see "Listing photos" at the end of this file (after every listing exists).
 
 -- Quote requests in three states (open, quoted, accepted) so every status is represented.
 INSERT INTO quote_requests (
@@ -486,8 +485,23 @@ FROM (VALUES
 JOIN vendors    v ON v.vendor_slug   = m.vendor_slug
 JOIN categories c ON c.category_slug = m.category_slug;
 
--- Business covers: none until suitable development images are added to database/seed-assets/
--- (see database/README.md). Cards show the built-in placeholder instead of a broken image.
+-- Business photos: development placeholders in database/seed-assets/, copied into the upload folder
+-- by db:load. Each is the business's first photo and therefore its cover (as syncCover does).
+-- Businesses without one show the built-in placeholder.
+INSERT INTO vendor_photos (vendor_id, vendor_photo_url, vendor_photo_alt, vendor_photo_sort)
+SELECT v.vendor_id, 'uploads/seed-business-' || v.vendor_slug || '.jpg', v.vendor_name, 0
+FROM vendors v
+WHERE v.vendor_slug IN (
+    'padma-diagnostic-centre', 'rajshahi-medical-centre', 'digitax-accounting', 'rajshahi-craft-outlet',
+    'padma-view-restaurant', 'grand-river-view-hotel', 'green-life-pharmacy', 'padma-garden-tours',
+    'rajshahi-mango-traders', 'shaheb-bazar-silk-house', 'padma-handicrafts', 'uttara-light-engineering',
+    'barind-agro-supplies'
+);
+
+UPDATE vendors v
+SET vendor_cover_url = p.vendor_photo_url
+FROM vendor_photos p
+WHERE p.vendor_id = v.vendor_id AND p.vendor_photo_url LIKE 'uploads/seed-business-%';
 
 -- Opening hours: defaults for approved vendors, then overrides for 24-hour and late-closing businesses.
 INSERT INTO vendor_opening_hours (vendor_id, hours_day_of_week, hours_open_time, hours_close_time)
@@ -924,3 +938,18 @@ INSERT INTO public.platform_settings (setting_key, setting_value) VALUES
     ('require_business_approval', 'true'),
     ('require_listing_approval', 'true')
 ON CONFLICT (setting_key) DO NOTHING;
+
+-- Listing photos: development placeholders in database/seed-assets/, copied into the upload folder
+-- by db:load. Each is the listing's main photo; one file may serve several listings. Listings
+-- without one show the built-in placeholder.
+INSERT INTO public.listing_photos (listing_id, photo_url, photo_alt_text, photo_sort_order, photo_is_primary)
+SELECT l.listing_id, 'uploads/' || x.file, l.listing_title, 0, TRUE
+FROM (VALUES
+    ('katan-silk-saree',       'seed-listing-katan-silk-saree.jpg'),
+    ('block-print-silk-saree', 'seed-listing-block-print-silk-saree.jpg'),
+    ('mulberry-raw-silk-yarn', 'seed-listing-mulberry-raw-silk-yarn.jpg'),
+    ('annual-return',          'seed-listing-digitax-services.jpg'),
+    ('monthly-bookkeeping',    'seed-listing-digitax-services.jpg'),
+    ('vat-registration',       'seed-listing-digitax-services.jpg')
+) AS x(listing_slug, file)
+JOIN public.vendor_listings l ON l.listing_slug = x.listing_slug;
