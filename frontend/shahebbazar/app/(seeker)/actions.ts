@@ -6,7 +6,7 @@ import {
     authenticatedApiSend,
     type AuthenticatedSendResult,
 } from "@/lib/auth-server";
-import type { Customer, ReportTargetType, ViewerState } from "@/lib/types";
+import type { Customer, OfferChannel, ReportTargetType, ViewerState } from "@/lib/types";
 
 
 
@@ -27,9 +27,26 @@ export async function setSaved(vendorId: number, saved: boolean): Promise<Authen
     return result;
 }
 
-// Saves the customer's name and email address (KAN-294). An empty email removes it.
+// Saves the customer's name and email address (KAN-294). An empty email removes it (and stops email offers).
 export async function saveMyDetails(name: string, email: string): Promise<AuthenticatedSendResult<Customer>> {
     const result = await authenticatedApiSend<Customer>("PUT", "/me/profile", { name, email });
+    revalidatePath("/account", "layout");
+    return result;
+}
+
+// Whether the customer can get offers by email (KAN-284).
+export async function getOfferContext(): Promise<{ hasEmail: boolean }> {
+    const me = await authenticatedApiGet<Customer>("/me").catch(() => null);
+    return { hasEmail: Boolean(me?.user_email) };
+}
+
+// Sets which channels a business may use to send the customer offers. An empty list stops them.
+export async function setOfferChannels(
+    vendorId: number,
+    channels: OfferChannel[],
+    source: "save_prompt" | "account"
+): Promise<AuthenticatedSendResult<{ channels: OfferChannel[] }>> {
+    const result = await authenticatedApiSend<{ channels: OfferChannel[] }>("PUT", `/me/consents/${vendorId}`, { channels, source });
     revalidatePath("/account", "layout");
     return result;
 }

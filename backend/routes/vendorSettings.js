@@ -4,6 +4,7 @@ const { parseId, cleanText } = require("../lib/currentUser");
 const { normalisePhone } = require("../lib/phone");
 const { requireVendorOwnership } = require("../lib/middleware/auth");
 const { requireFeature } = require("../lib/access");
+const { withdrawChannelEverywhere } = require("../services/marketing/consent");
 
 const router = express.Router();
 const EMAIL = /^[^\s@]+@[^\s@]+\.[^\s@]+$/;
@@ -77,16 +78,24 @@ router.put("/vendors/:vendorId/owner", ...memberAccess, async (req, res) => {
     if (name.length < 2 || name.length > 100) return res.status(400).json({ error: "Enter your name (2 to 100 characters)." });
     if (email && (email.length > 255 || !EMAIL.test(email))) return res.status(400).json({ error: "Enter a valid email address, or leave it empty." });
 
+    const client = await pool.connect();
     try {
-        await pool.query(
+        await client.query("BEGIN");
+        await client.query(
             "UPDATE users SET user_name = $2, user_email = $3, user_updated_at = NOW() WHERE user_id = $1",
             [req.user.user_id, name, email ? email.toLowerCase() : null]
         );
+        // Without an email address there is nowhere to send email offers (KAN-284).
+        if (!email) await withdrawChannelEverywhere(client, req.user.user_id, "email", "account");
+        await client.query("COMMIT");
         res.json(await memberDetails(req.vendor.vendor_id, req.user.user_id));
     } catch (err) {
+        await client.query("ROLLBACK").catch(() => { });
         if (err.code === "23505") return res.status(409).json({ error: "That email address is already used by another account." });
         console.error(`PUT /api/vendors/${req.vendor.vendor_id}/owner failed:`, err);
         res.status(500).json({ error: "Could not save your details. Try again." });
+    } finally {
+        client.release();
     }
 });
 

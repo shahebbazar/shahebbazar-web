@@ -314,9 +314,11 @@ Uploaded images are stored as `uploads/<file>` paths and served by the API at
 ## Marketing passes
 
 The vendor marketing package (KAN-242/243) is being built in six stages
-(KAN-283 to KAN-288); see the delivery plan. Stage 1 is in place:
+(KAN-283 to KAN-288); see the delivery plan. Stages 1 and 2 are in place.
 
-- Three passes (7, 30 and 90 days; proposed BDT 299, 999 and 2,499) in
+**Stage 1, passes (KAN-283)**
+
+- Three passes (7, 30 and 90 days; BDT 299, 999 and 2,499, agreed with the client) in
   `marketing_packages`, each with email-campaign, AI-draft and SMS allowances.
 - Admins give a business a pass on **Admin → Marketing** (`/admin/marketing`), and
   can extend, end, suspend, resume or cancel it. Payment is recorded outside the
@@ -327,6 +329,27 @@ The vendor marketing package (KAN-242/243) is being built in six stages
 - `backend/services/marketing/entitlements.js` is the only place that decides what a
   business may do with its pass (`checkEntitlement`, `useEntitlement`). Later stages
   call it before every paid action.
+
+**Stage 2, consent and unsubscribe (KAN-284)**
+
+- After a customer saves a business, an optional prompt asks whether they want its
+  offers by SMS or email. Both start unticked; **saving never gives consent by itself**.
+  Email needs an email address on the account, which customers add or change on
+  **My account → My details** (`/account/details`). Removing it stops email offers.
+- Choices are in `marketing_consents`, one row per business and channel. Withdrawing
+  keeps the row with when and how (account page, unsubscribe link, or removing the
+  saved business), so there is a full record.
+- Customers change their choices under each business on **My account → Saved
+  businesses**. Removing a saved business stops its offers.
+- Every offer will carry a signed unsubscribe link to `/unsubscribe/<token>`. Opening
+  it changes nothing (mail scanners open links); the **Stop offers** button stops that
+  channel at once, without signing in. The API also accepts one-click unsubscribe
+  (`POST /api/unsubscribe/:token`).
+- `backend/services/marketing/consent.js` is the only place that gives or withdraws
+  consent and builds a business's audience (`audienceFor`). Campaign sending (Stage 4)
+  must use only that list.
+- Existing databases: run `database/migrations/002_marketing_consents.sql`, or
+  `npm run db:reset`.
 
 ---
 
@@ -340,7 +363,7 @@ This creates a throwaway `<PGDATABASE>_test` database from the baseline, starts
 the real API against it, signs in through the normal code flow as each role,
 runs the tests, and drops the database. Your development data is not touched.
 
-About 415 tests across 13 suites. Every API route is called by at least one test.
+About 445 tests across 14 suites. Every API route is called by at least one test.
 
 | Suite | Covers |
 | --- | --- |
@@ -357,6 +380,7 @@ About 415 tests across 13 suites. Every API route is called by at least one test
 | `backend/test/analytics.test.js` | Search and view beacons: repeat visits and bots not counted, appearances for approved businesses only |
 | `backend/test/uploads.test.js` | `npm run uploads:check` |
 | `backend/test/marketing.test.js` | Marketing passes: activation and management, sponsored placement ending with the pass, allowances |
+| `backend/test/consent.test.js` | Offers consent: saving never consents, choices and their record, the audience a business may send to, My details (name and email), unsubscribe links |
 
 CI runs the same suite on every pull request, so a new feature should come with
 tests in the suite that matches it (or a new one). **How to write one:**

@@ -13,7 +13,7 @@ Business routes also check that the vendor runs that business (owner or manager,
 | Feature | Guest | Customer | Vendor | Admin | Rule |
 | --- | :---: | :---: | :---: | :---: | --- |
 | Browse businesses, categories, events and search (`directory.browse`) | Yes | Yes | Yes | Yes |  |
-| Account page, saved businesses, alerts and own reviews (`account.use`) | - | Yes | Yes | - |  |
+| Account page, saved businesses, offer choices, alerts and own reviews (`account.use`) | - | Yes | Yes | - |  |
 | Write a review (`reviews.write`) | - | Yes | Yes | - | not for a business they run |
 | Message a business (`messages.send`) | - | Yes | Yes | - | not a business they run |
 | Report a business, listing or review (`reports.submit`) | - | Yes | Yes | - |  |

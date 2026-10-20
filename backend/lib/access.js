@@ -9,7 +9,7 @@ const BUSINESS = ["vendor", "admin"];
 
 const FEATURES = {
     "directory.browse": { roles: ALL, label: "Browse businesses, categories, events and search" },
-    "account.use": { roles: SIGNED_IN, label: "Account page, saved businesses, alerts and own reviews" },
+    "account.use": { roles: SIGNED_IN, label: "Account page, saved businesses, offer choices, alerts and own reviews" },
     "reviews.write": { roles: SIGNED_IN, label: "Write a review", rule: "not for a business they run" },
     "messages.send": { roles: SIGNED_IN, label: "Message a business", rule: "not a business they run" },
     "reports.submit": { roles: SIGNED_IN, label: "Report a business, listing or review" },

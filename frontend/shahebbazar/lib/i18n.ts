@@ -99,9 +99,9 @@ const strings = {
         footerFaq: "FAQ",
         footerStayConnected: "Stay Connected",
         footerNewsletter:
-            "Subscribe to get updates on new businesses, offers and local events.",
-        footerEmailPlaceholder: "Your email address",
-        subscribe: "Subscribe",
+            "Save the businesses you like and choose to get their offers by SMS or email. You can stop at any time.",
+        footerJoin: "Create a free account",
+        footerHowOffers: "How offers work",
         footerTagline:
             "Shahebbazar is Rajshahi's local business directory helping you discover trusted businesses and services.",
         footerRights: "All rights reserved.",
@@ -195,6 +195,27 @@ const strings = {
         pastEvents: "Past events",
         backToEvents: "All events",
         organisedBy: "Organised by",
+
+        // --- offers from businesses (KAN-284) ---
+        offersTitle: "Get offers from {name}?",
+        offersBody: "Only this business will send you offers. You can stop at any time.",
+        offersSms: "By SMS to your phone",
+        offersEmail: "By email",
+        offersNoEmail: "Your account has no email address yet.",
+        offersAddEmail: "Add one in My details",
+        offersSave: "Get offers",
+        offersSkip: "No thanks",
+        offersDone: "Done. You can change this from your account.",
+        offersError: "Could not save your choice. Please try again.",
+        channelSms: "SMS",
+        channelEmail: "email",
+        unsubHeading: "Unsubscribe",
+        unsubAsk: "Stop offers from {name} by {channel}?",
+        unsubButton: "Stop offers",
+        unsubDone: "Done. {name} will not send you offers by {channel} any more.",
+        unsubAlready: "Offers from {name} by {channel} are already stopped.",
+        unsubInvalid: "This unsubscribe link is not valid. You can manage offers from your account.",
+        unsubManage: "Manage offers in your account",
     },
 
     bn: {
@@ -268,9 +289,9 @@ const strings = {
         footerCookies: "কুকি নীতি",
         footerFaq: "সাধারণ প্রশ্ন",
         footerStayConnected: "যুক্ত থাকুন",
-        footerNewsletter: "নতুন ব্যবসা, অফার ও ইভেন্টের খবর পেতে সাবস্ক্রাইব করুন।",
-        footerEmailPlaceholder: "আপনার ইমেইল",
-        subscribe: "সাবস্ক্রাইব",
+        footerNewsletter: "পছন্দের ব্যবসাগুলো সংরক্ষণ করুন এবং এসএমএস বা ইমেইলে তাদের অফার পেতে চান কি না বেছে নিন। যেকোনো সময় বন্ধ করতে পারবেন।",
+        footerJoin: "বিনামূল্যে অ্যাকাউন্ট খুলুন",
+        footerHowOffers: "অফার কীভাবে কাজ করে",
         footerTagline:
             "সাহেববাজার রাজশাহীর স্থানীয় ব্যবসা ডিরেক্টরি — নির্ভরযোগ্য ব্যবসা ও সেবা খুঁজে পেতে সাহায্য করে।",
         footerRights: "সর্বস্বত্ব সংরক্ষিত।",
@@ -364,10 +385,36 @@ const strings = {
         pastEvents: "বিগত ইভেন্ট",
         backToEvents: "সব ইভেন্ট",
         organisedBy: "আয়োজক",
+
+        // --- offers from businesses (KAN-284) ---
+        offersTitle: "{name} থেকে অফার পেতে চান?",
+        offersBody: "শুধু এই ব্যবসা আপনাকে অফার পাঠাবে। যেকোনো সময় বন্ধ করতে পারবেন।",
+        offersSms: "আপনার ফোনে এসএমএসে",
+        offersEmail: "ইমেইলে",
+        offersNoEmail: "আপনার অ্যাকাউন্টে এখনো ইমেইল ঠিকানা নেই।",
+        offersAddEmail: "আমার তথ্য পাতায় যোগ করুন",
+        offersSave: "অফার পেতে চাই",
+        offersSkip: "না, ধন্যবাদ",
+        offersDone: "হয়ে গেছে। অ্যাকাউন্ট থেকে যেকোনো সময় পরিবর্তন করতে পারবেন।",
+        offersError: "আপনার পছন্দ সংরক্ষণ করা যায়নি। আবার চেষ্টা করুন।",
+        channelSms: "এসএমএসে",
+        channelEmail: "ইমেইলে",
+        unsubHeading: "আনসাবস্ক্রাইব",
+        unsubAsk: "{name} থেকে {channel} অফার পাওয়া বন্ধ করবেন?",
+        unsubButton: "অফার বন্ধ করুন",
+        unsubDone: "হয়ে গেছে। {name} আর আপনাকে {channel} অফার পাঠাবে না।",
+        unsubAlready: "{name} থেকে {channel} অফার আগেই বন্ধ করা হয়েছে।",
+        unsubInvalid: "এই আনসাবস্ক্রাইব লিংকটি সঠিক নয়। অ্যাকাউন্ট থেকে অফার নিয়ন্ত্রণ করতে পারেন।",
+        unsubManage: "অ্যাকাউন্টে অফার নিয়ন্ত্রণ করুন",
     },
 } as const;
 
 export type Dictionary = (typeof strings)["en"];
+
+/** Fills {placeholders} in a dictionary string. */
+export function fill(text: string, values: Record<string, string>): string {
+    return text.replace(/\{(\w+)\}/g, (match, key: string) => values[key] ?? match);
+}
 
 export function t(locale: Locale): Dictionary {
     return strings[locale] as Dictionary;

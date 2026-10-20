@@ -136,5 +136,11 @@ export async function apiGet<T>(path: string): Promise<T | null> {
     return res.json() as Promise<T>;
 }
 
+// Posts to a public endpoint with no body; returns the status and JSON.
+export async function apiPostPublic<T>(path: string): Promise<{ status: number; data: T | null }> {
+    const res = await fetch(`${API_BASE}/api${path}`, { method: "POST", cache: "no-store", headers: { Accept: "application/json" } });
+    return { status: res.status, data: res.ok ? ((await res.json()) as T) : null };
+}
+
 // Result shape shared by server actions and the components that call them.
 export type SendResult<T = unknown> = { ok: true; data: T } | { ok: false; error: string };

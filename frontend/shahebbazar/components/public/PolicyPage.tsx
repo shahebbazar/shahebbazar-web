@@ -7,6 +7,8 @@ import { localeHref, t, type Locale } from "@/lib/i18n";
 
 export type PolicySection = {
     heading: string;
+    /** Anchor for links such as /privacy#cookies. */
+    id?: string;
     /** A string is a paragraph; a nested array becomes a bullet list. */
     body: (string | string[])[];
 };
@@ -57,7 +59,7 @@ export function PolicyPage({
                 <p className="mt-5 text-[0.9375rem] leading-relaxed">{intro}</p>
 
                 {sections.map((section) => (
-                    <section key={section.heading} className="mt-7">
+                    <section key={section.heading} id={section.id} className="mt-7 scroll-mt-20">
                         <h2 className="text-[1.0625rem] font-semibold tracking-tight">
                             {section.heading}
                         </h2>

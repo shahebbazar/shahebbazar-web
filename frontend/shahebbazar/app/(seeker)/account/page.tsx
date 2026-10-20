@@ -1,6 +1,6 @@
 import type { Metadata } from "next";
 import Link from "next/link";
-import { Bell, Bookmark, Building2, ChevronRight, MessagesSquare, Star, UserRound } from "lucide-react";
+import { Bell, Bookmark, Building2, ChevronRight, Megaphone, MessagesSquare, Star, UserRound } from "lucide-react";
 import { AccountShell } from "@/components/customer/AccountShell";
 import { authenticatedApiGet } from "@/lib/auth-server";
 import { formatDateTime } from "@/lib/format";
@@ -32,6 +32,7 @@ export default async function AccountPage() {
         { href: "/account/saved", label: "Saved businesses", value: me.saved_count, Icon: Bookmark },
         { href: "/account/messages", label: "Unread messages", value: me.unread_messages, Icon: MessagesSquare },
         { href: "/account/reviews", label: "Reviews written", value: me.review_count, Icon: Star },
+        { href: "/account/saved", label: "Offer subscriptions", value: me.offers_count, Icon: Megaphone },
     ];
 
     return (
@@ -45,12 +46,12 @@ export default async function AccountPage() {
                 </Link>
             </p>
 
-            <ul className="mt-4 grid gap-3 sm:grid-cols-3">
+            <ul className="mt-4 grid gap-3 sm:grid-cols-2 lg:grid-cols-4">
                 {cards.map(({ href, label, value, Icon }) => (
-                    <li key={href}>
+                    <li key={label}>
                         <Link
                             href={href}
-                            className="flex items-center gap-3 rounded-xl border border-line bg-surface p-4 shadow-card hover:border-brand-200"
+                            className="flex h-full items-center gap-3 rounded-xl border border-line bg-surface p-4 shadow-card hover:border-brand-200"
                         >
                             <span className="grid size-10 place-items-center rounded-lg bg-brand-50 text-brand-600">
                                 <Icon className="size-5" />
