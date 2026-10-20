@@ -101,6 +101,7 @@ covers the commands and how schema changes are made.
 | `REQUIREMENTS.md` | The client's requirements. |
 | `CODEBASE-GUIDE.html` | Full architectural walkthrough — open in a browser. |
 | `FILE-REFERENCE.md` | This file. |
+| `TESTING.md` | How to write and run the API tests: which file to use, the test helpers, what every new route needs, and the checks to run before a pull request. |
 | `openapi.yaml` | The API reference: OpenAPI 3.1, all 29 operations, request and response schemas, error shapes. Served at `/api/docs`; importable into Postman. Verified by a contract test that called every operation and validated each real response against it. |
 | `ER-DIAGRAM.md` | Generated ER diagrams (Mermaid, renders on GitHub): six areas plus the full schema. Do not edit by hand; run `npm run docs:erd`. |
 | `erd/` | The same diagrams as SVG files, plus `er-diagram-full.png` for the report. |

@@ -359,7 +359,8 @@ About 415 tests across 13 suites. Every API route is called by at least one test
 | `backend/test/marketing.test.js` | Marketing passes: activation and management, sponsored placement ending with the pass, allowances |
 
 CI runs the same suite on every pull request, so a new feature should come with
-tests in the suite that matches it (or a new one).
+tests in the suite that matches it (or a new one). **How to write one:**
+[docs/TESTING.md](docs/TESTING.md).
 
 Before opening a pull request, also run `npm run lint`, `npm run typecheck` and
 `npm run build`. Manual and browser test evidence goes in `docs/testing/`, one
