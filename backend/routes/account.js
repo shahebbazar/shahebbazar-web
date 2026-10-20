@@ -1,9 +1,10 @@
 const express = require("express");
 const pool = require("../db");
-const { parseId } = require("../lib/currentUser");
+const { parseId, cleanText } = require("../lib/currentUser");
 const { requireFeature } = require("../lib/access");
 
 const router = express.Router();
+const EMAIL = /^[^\s@]+@[^\s@]+\.[^\s@]+$/;
 
 router.use("/me", requireFeature("account.use"));
 
@@ -31,6 +32,32 @@ router.get("/me", async (req, res) => {
     } catch (err) {
         console.error("GET /api/me failed:", err);
         res.status(500).json({ error: "Could not load your account" });
+    }
+});
+
+// The customer's own details (KAN-294): { name, email }. Email is optional; an empty one removes it.
+// The phone number is the sign-in and is not changed here.
+router.put("/me/profile", async (req, res) => {
+    const name = cleanText(req.body?.name) ?? "";
+    const email = (cleanText(req.body?.email) || "").toLowerCase() || null;
+    const errors = {};
+    if (name.length < 2 || name.length > 120) errors.name = "Enter your name (2 to 120 characters).";
+    if (email && (email.length > 255 || !EMAIL.test(email))) errors.email = "Enter a valid email address, or leave it empty.";
+    if (Object.keys(errors).length) return res.status(400).json({ error: Object.values(errors)[0], errors });
+
+    try {
+        const result = await pool.query(
+            `UPDATE users SET user_name = $2, user_email = $3, user_updated_at = NOW() WHERE user_id = $1
+             RETURNING user_name, user_phone, user_email`,
+            [req.user.user_id, name, email]
+        );
+        res.json(result.rows[0]);
+    } catch (err) {
+        if (err.code === "23505") {
+            return res.status(409).json({ error: "That email address is already used by another account.", errors: { email: "Already used by another account." } });
+        }
+        console.error("PUT /api/me/profile failed:", err);
+        res.status(500).json({ error: "Could not save your details. Try again." });
     }
 });
 

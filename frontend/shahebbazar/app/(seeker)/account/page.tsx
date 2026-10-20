@@ -1,6 +1,6 @@
 import type { Metadata } from "next";
 import Link from "next/link";
-import { Bell, Bookmark, Building2, ChevronRight, MessagesSquare, Star } from "lucide-react";
+import { Bell, Bookmark, Building2, ChevronRight, MessagesSquare, Star, UserRound } from "lucide-react";
 import { AccountShell } from "@/components/customer/AccountShell";
 import { authenticatedApiGet } from "@/lib/auth-server";
 import { formatDateTime } from "@/lib/format";
@@ -39,6 +39,10 @@ export default async function AccountPage() {
             <p className="text-sm text-muted">
                 {me.user_phone}
                 {me.user_email ? ` · ${me.user_email}` : ""}
+                {" · "}
+                <Link href="/account/details" className="font-medium text-brand-600 hover:underline">
+                    Edit my details
+                </Link>
             </p>
 
             <ul className="mt-4 grid gap-3 sm:grid-cols-3">
@@ -59,6 +63,24 @@ export default async function AccountPage() {
                     </li>
                 ))}
             </ul>
+
+            {!me.user_email && (
+                <Link
+                    href="/account/details#email"
+                    className="mt-4 flex items-center gap-3 rounded-xl border border-brand-200 bg-brand-50 p-4 hover:border-brand-300"
+                >
+                    <span className="grid size-10 shrink-0 place-items-center rounded-lg bg-surface text-brand-600">
+                        <UserRound className="size-5" />
+                    </span>
+                    <span className="min-w-0 flex-1">
+                        <span className="block text-sm font-semibold">Add an email address</span>
+                        <span className="block text-[0.8125rem] text-muted">
+                            Optional. Lets businesses you choose send you offers by email.
+                        </span>
+                    </span>
+                    <ChevronRight className="size-4 shrink-0 text-soft" />
+                </Link>
+            )}
 
             {/* Customers can become providers from here (KAN-249). */}
             <Link

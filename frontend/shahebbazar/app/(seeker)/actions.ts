@@ -6,7 +6,7 @@ import {
     authenticatedApiSend,
     type AuthenticatedSendResult,
 } from "@/lib/auth-server";
-import type { ReportTargetType, ViewerState } from "@/lib/types";
+import type { Customer, ReportTargetType, ViewerState } from "@/lib/types";
 
 
 
@@ -23,6 +23,13 @@ export async function getSavedIds(): Promise<number[]> {
 // Saves or unsaves a business.
 export async function setSaved(vendorId: number, saved: boolean): Promise<AuthenticatedSendResult> {
     const result = await authenticatedApiSend(saved ? "PUT" : "DELETE", `/me/saved/${vendorId}`);
+    revalidatePath("/account", "layout");
+    return result;
+}
+
+// Saves the customer's name and email address (KAN-294). An empty email removes it.
+export async function saveMyDetails(name: string, email: string): Promise<AuthenticatedSendResult<Customer>> {
+    const result = await authenticatedApiSend<Customer>("PUT", "/me/profile", { name, email });
     revalidatePath("/account", "layout");
     return result;
 }
