@@ -24,7 +24,9 @@ Business routes also check that the vendor runs that business (owner or manager,
 | Manage products and services (`business.listings`) | - | - | Yes | Yes | vendors: own businesses only |
 | Set accepted payment methods (`business.payments`) | - | - | Yes | Yes | vendors: own businesses only |
 | Read and answer customer messages (`business.messages`) | - | - | Yes | - | own businesses only |
+| Read the business's reviews (`business.reviews.read`) | - | - | Yes | Yes | vendors: own businesses only |
 | Reply to reviews (`business.reviews`) | - | - | Yes | - | own businesses only |
+| See who runs the business and their contact details (`business.team.read`) | - | - | Yes | Yes | vendors: own businesses only |
 | Edit their own contact details (`business.settings`) | - | - | Yes | - | own businesses only |
 | Add or remove managers (`business.team`) | - | - | Yes | - | business owner only |
 | Approve or reject businesses and listings (`admin.approvals`) | - | - | - | Yes |  |

@@ -358,10 +358,22 @@ brand marks such as Facebook or WhatsApp.
 
 ### Branches and commits
 
-- `main` is protected. Work on a branch named `<name>/<type>-<task>`, for example
-  `ari/fix-listing-photo-upload`, and open a pull request into `main`.
-- Start commit messages with the Jira key, for example `KAN-260 Fix listing photo upload`.
-- Never commit `.env` files, sign-in codes, session tokens or files from `backend/uploads/`.
+`main` is protected: nobody pushes to it directly, and every change arrives through a
+pull request that has passed CI. CI is the gate, so no approval is needed to merge.
+
+1. Update your copy of `main` and branch from it: `git switch main`, `git pull`,
+   `git switch -c <name>/<type>-<task>` (for example `ari/fix-listing-photo-upload`).
+2. Start commit messages with the Jira key, for example `KAN-260 Fix listing photo upload`.
+3. Before pushing, run `npm test`, `npm run lint`, `npm run typecheck` and `npm run build`.
+4. Push and open a pull request into `main`. Fill in the template.
+5. **CI** (`.github/workflows/ci.yml`) runs the API tests against PostgreSQL, then lint,
+   typecheck and the production build. Both checks must pass before the PR can merge.
+6. If `main` has moved on, update the branch (`git pull origin main`) so the checks run
+   against the latest code. Turn on **auto-merge** and the PR merges itself when CI passes.
+7. Tag a teammate on the PR. They review after it merges, and any problem becomes a
+   follow-up PR. Because CI is the only gate, add tests with every change.
+
+Never commit `.env` files, sign-in codes, session tokens or files from `backend/uploads/`.
 
 ---
 

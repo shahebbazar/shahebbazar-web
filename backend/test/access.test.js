@@ -227,10 +227,15 @@ describe("allowed requests", () => {
         assert.equal(res.data.reply, "Thank you!");
     });
 
-    it("an admin can edit the owner's details", async () => {
-        const res = await call("PUT", `/vendors/${OWNED}/owner`, { as: "admin", json: { user_name: "Mango Trader Owner" } });
-        assert.equal(res.status, 200, JSON.stringify(res.data));
-        assert.equal(res.data.user_name, "Mango Trader Owner");
+    it("an admin can see the owner's details and team, but not edit them", async () => {
+        const read = await call("GET", `/vendors/${OWNED}/owner`, { as: "admin" });
+        assert.equal(read.status, 200, JSON.stringify(read.data));
+        assert.equal(read.data.user_phone, PHONES.owner);
+        assert.equal(read.data.member_role, "owner");
+        assert.equal((await call("GET", `/vendors/${OWNED}/members`, { as: "admin" })).status, 200);
+        assert.equal((await call("GET", "/vendors/999999/owner", { as: "admin" })).status, 404);
+        const edit = await call("PUT", `/vendors/${OWNED}/owner`, { as: "admin", json: { user_name: "Mango Trader Owner" } });
+        assert.equal(edit.status, 403);
     });
 });
 

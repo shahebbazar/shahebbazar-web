@@ -64,10 +64,16 @@ router.post(
 );
 
 const ownerAccess = [requireFeature("business.reviews"), requireVendorOwnership];
+const readAccess = [requireFeature("business.reviews.read"), requireVendorOwnership];
 
-router.get("/vendors/:vendorId/reviews", ...ownerAccess, async (req, res) => {
-    const vendorId = req.vendor.vendor_id;
+// Admins pass requireVendorOwnership without req.vendor, so they name the business in the URL.
+router.get("/vendors/:vendorId/reviews", ...readAccess, async (req, res) => {
+    const vendorId = req.vendor?.vendor_id ?? parseId(req.params.vendorId);
     try {
+        if (!req.vendor) {
+            const exists = await pool.query("SELECT 1 FROM vendors WHERE vendor_id = $1", [vendorId]);
+            if (exists.rowCount === 0) return res.status(404).json({ error: "Business not found" });
+        }
         const result = await pool.query(
             `SELECT r.review_id, r.review_rating AS rating, r.review_body AS body, r.review_status AS status,
                     r.review_created_at AS created_at, r.review_reply AS reply, r.review_replied_at AS replied_at,
