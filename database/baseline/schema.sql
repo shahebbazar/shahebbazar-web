@@ -2201,6 +2201,52 @@ ALTER TABLE ONLY public.vendors
 
 
 --
+-- Name: vendor_members; Type: TABLE; Schema: public; Owner: -
+-- Who can manage each business (KAN-250). vendors.user_id stays the primary owner.
+--
+
+CREATE TABLE public.vendor_members (
+    vendor_id integer NOT NULL,
+    user_id integer NOT NULL,
+    member_role character varying(20) DEFAULT 'manager'::character varying NOT NULL,
+    member_added_by integer,
+    member_added_at timestamp with time zone DEFAULT now() NOT NULL,
+    CONSTRAINT vendor_members_pkey PRIMARY KEY (vendor_id, user_id),
+    CONSTRAINT vendor_members_member_role_check CHECK (((member_role)::text = ANY ((ARRAY['owner'::character varying, 'manager'::character varying])::text[]))),
+    CONSTRAINT vendor_members_vendor_id_fkey FOREIGN KEY (vendor_id) REFERENCES public.vendors(vendor_id) ON DELETE CASCADE,
+    CONSTRAINT vendor_members_user_id_fkey FOREIGN KEY (user_id) REFERENCES public.users(user_id) ON DELETE CASCADE,
+    CONSTRAINT vendor_members_member_added_by_fkey FOREIGN KEY (member_added_by) REFERENCES public.users(user_id) ON DELETE SET NULL
+);
+
+CREATE INDEX idx_vendor_members_user ON public.vendor_members USING btree (user_id);
+
+
+--
+-- Name: sync_vendor_owner_member(); Type: FUNCTION; Schema: public; Owner: -
+-- Keeps the primary owner in vendor_members, so every business always has an owner row.
+--
+
+CREATE FUNCTION public.sync_vendor_owner_member() RETURNS trigger
+    LANGUAGE plpgsql
+    AS $$
+BEGIN
+    IF TG_OP = 'UPDATE' AND OLD.user_id <> NEW.user_id THEN
+        UPDATE public.vendor_members SET member_role = 'manager'
+        WHERE vendor_id = NEW.vendor_id AND user_id = OLD.user_id;
+    END IF;
+
+    INSERT INTO public.vendor_members (vendor_id, user_id, member_role)
+    VALUES (NEW.vendor_id, NEW.user_id, 'owner')
+    ON CONFLICT (vendor_id, user_id) DO UPDATE SET member_role = 'owner';
+
+    RETURN NEW;
+END;
+$$;
+
+CREATE TRIGGER trg_vendor_owner_member AFTER INSERT OR UPDATE OF user_id ON public.vendors FOR EACH ROW EXECUTE FUNCTION public.sync_vendor_owner_member();
+
+
+--
 -- Marketing passes (KAN-283). Also in database/migrations/001_marketing_passes.sql.
 --
 

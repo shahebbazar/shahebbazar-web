@@ -12,15 +12,16 @@ import {
     MessageSquareText,
     Navigation,
     Phone,
-    Share2,
     Star,
 } from "lucide-react";
 import { SiFacebook, SiInstagram, SiTiktok, SiYoutube } from "@icons-pack/react-simple-icons";
 import { assetUrl } from "@/lib/api";
-import { t, pick, type Locale } from "@/lib/i18n";
+import { t, pick, localeHref, type Locale } from "@/lib/i18n";
+import { SITE_URL } from "@/lib/seo";
 import { formatClockTime, formatRating, localiseDigits, toNumber } from "@/lib/format";
 import type { BusinessDetail, SocialPlatform } from "@/lib/types";
 import { SaveButton } from "@/components/customer/SaveButton";
+import { ShareMenu } from "@/components/shared/ShareMenu";
 import { ReviewForm } from "@/components/customer/ReviewForm";
 
 // Brand marks come from Simple Icons; lucide excludes logos.
@@ -539,10 +540,7 @@ function ActionButtons({ locale, detail }: { locale: Locale; detail: BusinessDet
                 `${business.vendor_name} ${business.vendor_address ?? "Rajshahi"}`
             )}`;
 
-    // A WhatsApp share link instead of the Web Share API, which needs JavaScript and is not in every browser.
-    const shareUrl = `https://wa.me/?text=${encodeURIComponent(
-        `${business.vendor_name} — ${process.env.NEXT_PUBLIC_SITE_URL ?? ""}/business/${business.vendor_slug}`
-    )}`;
+    const pageUrl = `${SITE_URL}${localeHref(`/business/${business.vendor_slug}`, locale)}`;
 
     return (
         <div className="grid shrink-0 grid-cols-2 gap-2 lg:w-[260px]">
@@ -574,15 +572,12 @@ function ActionButtons({ locale, detail }: { locale: Locale; detail: BusinessDet
 
             <SaveButton vendorId={business.vendor_id} label={copy.save} savedLabel={copy.saved} />
 
-            <a
-                href={shareUrl}
-                target="_blank"
-                rel="noopener noreferrer"
-                className="inline-flex items-center justify-center gap-2 rounded-[10px] border border-line-strong bg-surface px-3 py-2.5 text-sm font-medium text-ink transition-colors hover:border-brand-600 hover:text-brand-600"
-            >
-                <Share2 className="size-4" />
-                {copy.share}
-            </a>
+            <ShareMenu
+                url={pageUrl}
+                title={pick(locale, business.vendor_name, business.vendor_name_bn)}
+                label={copy.share}
+                locale={locale}
+            />
 
             <Link
                 href={`/report?type=vendor&id=${business.vendor_id}&back=${business.vendor_slug}`}

@@ -868,6 +868,16 @@ WHERE v.vendor_cover_url IS NOT NULL
         AND vp.vendor_photo_url = v.vendor_cover_url
   );
 
+-- A manager for Rajshahi Mango Traders, so one business is run by two people (KAN-250).
+INSERT INTO users (user_phone, user_name, user_role, user_phone_verified_at)
+VALUES ('+8801711000015', 'Rubel Ahmed', 'vendor', NOW());
+
+INSERT INTO vendor_members (vendor_id, user_id, member_role, member_added_by)
+SELECT v.vendor_id, u.user_id, 'manager', v.user_id
+FROM vendors v
+JOIN users u ON u.user_phone = '+8801711000015'
+WHERE v.vendor_slug = 'rajshahi-mango-traders';
+
 -- Marketing passes (KAN-283). Also in database/migrations/001_marketing_passes.sql.
 -- Reference data: the three passes proposed in the feasibility summary (prices can be changed here).
 INSERT INTO public.marketing_packages

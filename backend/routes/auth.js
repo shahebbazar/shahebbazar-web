@@ -34,6 +34,23 @@ const LOGIN_ROLES = new Set([
     "admin",
 ]);
 
+// Vendors can also use the customer login, since they keep every customer feature (KAN-253).
+const PORTAL_ROLES = {
+    customer: ["customer", "vendor"],
+    vendor: ["vendor"],
+    admin: ["admin"],
+};
+
+function portalError(expectedRole, actualRole) {
+    if (expectedRole === "vendor" && actualRole === "customer") {
+        return "This account has no business yet. Log in as a customer, then register your business.";
+    }
+    if (actualRole === "admin") return "This phone number belongs to an administrator. Use Administrator login.";
+    return expectedRole === "admin"
+        ? "This phone number is not an administrator account."
+        : "This phone number belongs to a business account. Use Business owner login.";
+}
+
 const OTP_EXPIRY_MINUTES = 5;
 const OTP_REQUEST_LIMIT = 3;
 const OTP_REQUEST_WINDOW_MINUTES = 10;
@@ -98,13 +115,10 @@ router.post("/request-verification", async (req, res) => {
             const actualRole =
                 userResult.rows[0].user_role;
 
-            if (actualRole !== expectedRole) {
+            if (!PORTAL_ROLES[expectedRole].includes(actualRole)) {
                 return res.status(403).json({
                     success: false,
-                    error:
-                        expectedRole === "customer"
-                            ? "This phone number belongs to a business account. Use Business owner login."
-                            : "This phone number belongs to a customer account. Use Customer login.",
+                    error: portalError(expectedRole, actualRole),
                 });
             }
         }
@@ -379,15 +393,12 @@ router.post("/verify", async (req, res) => {
                 error: "This account is not available.",
             });
         }
-        if (user.user_role !== expectedRole) {
+        if (!PORTAL_ROLES[expectedRole].includes(user.user_role)) {
             await client.query("ROLLBACK");
 
             return res.status(403).json({
                 success: false,
-                error:
-                    expectedRole === "customer"
-                        ? "This phone number belongs to a business account. Use Business owner login."
-                        : "This phone number belongs to a customer account. Use Customer login.",
+                error: portalError(expectedRole, user.user_role),
             });
         }
 
@@ -649,15 +660,169 @@ router.post("/register/customer", async (req, res) => {
 
 // Registers a business owner: the phone is verified with a "register" code first, then the
 // account and its pending business are created together and the owner is signed in.
+
+// Registers a business.
+//
+// Signed out:
+// The phone must first be verified with a "register" OTP. A new vendor
+// account and its first pending business are then created together.
+//
+// Signed in (KAN-249):
+// A customer or existing vendor can add a business to the same account.
+// No second account or registration OTP is required.
 router.post("/register/vendor", async (req, res) => {
     const fields = validateVendorRegistration(req.body);
+
     if (fields.error) {
-        return res.status(400).json({ success: false, error: fields.error });
+        return res.status(400).json({
+            success: false,
+            error: fields.error,
+        });
     }
 
-    const code = typeof req.body?.code === "string" ? req.body.code.trim() : "";
+    // KAN-249: add a business to the account that is already signed in.
+    if (req.user) {
+        if (req.user.user_role === "admin") {
+            return res.status(403).json({
+                success: false,
+                error:
+                    "Administrator accounts cannot register a business.",
+            });
+        }
+
+        if (
+            req.user.user_role !== "customer" &&
+            req.user.user_role !== "vendor"
+        ) {
+            return res.status(403).json({
+                success: false,
+                error:
+                    "This account cannot register a business.",
+            });
+        }
+
+        const client = await pool.connect();
+
+        try {
+            await client.query("BEGIN");
+
+            // Lock and re-read the account so the role cannot change
+            // underneath this registration transaction.
+            const userResult = await client.query(
+                `SELECT
+                    user_id,
+                    user_name,
+                    user_phone,
+                    user_email,
+                    user_role,
+                    user_status
+                 FROM users
+                 WHERE user_id = $1
+                 LIMIT 1
+                 FOR UPDATE`,
+                [req.user.user_id]
+            );
+
+            if (userResult.rowCount === 0) {
+                await client.query("ROLLBACK");
+
+                return res.status(401).json({
+                    success: false,
+                    error: "Authentication required.",
+                });
+            }
+
+            const currentUser = userResult.rows[0];
+
+            if (currentUser.user_status !== "active") {
+                await client.query("ROLLBACK");
+
+                return res.status(403).json({
+                    success: false,
+                    error: "This account is not available.",
+                });
+            }
+
+            if (currentUser.user_role === "admin") {
+                await client.query("ROLLBACK");
+
+                return res.status(403).json({
+                    success: false,
+                    error:
+                        "Administrator accounts cannot register a business.",
+                });
+            }
+
+            let user = currentUser;
+
+            // A customer becomes a vendor but keeps the same user_id,
+            // session and customer data.
+            if (currentUser.user_role === "customer") {
+                const upgradedUserResult =
+                    await client.query(
+                        `UPDATE users
+                         SET user_role = 'vendor'
+                         WHERE user_id = $1
+                         RETURNING
+                            user_id,
+                            user_name,
+                            user_phone,
+                            user_email,
+                            user_role`,
+                        [currentUser.user_id]
+                    );
+
+                user = upgradedUserResult.rows[0];
+            }
+
+            const vendor = await createVendor(
+                client,
+                currentUser.user_id,
+                fields
+            );
+
+            await client.query("COMMIT");
+
+            return res.status(201).json({
+                success: true,
+                message:
+                    "Business registered and submitted for NID verification.",
+                user,
+                vendor,
+            });
+        } catch (error) {
+            await client
+                .query("ROLLBACK")
+                .catch(() => {});
+
+            console.error(
+                "POST /api/auth/register/vendor for signed-in account failed:",
+                error
+            );
+
+            return res.status(500).json({
+                success: false,
+                error:
+                    "Unable to register the business.",
+            });
+        } finally {
+            client.release();
+        }
+    }
+
+    // Existing signed-out registration flow.
+    // Keep OTP verification before creating a new account.
+    const code =
+        typeof req.body?.code === "string"
+            ? req.body.code.trim()
+            : "";
+
     if (!/^\d{6}$/.test(code)) {
-        return res.status(400).json({ success: false, error: "Enter the six-digit verification code." });
+        return res.status(400).json({
+            success: false,
+            error:
+                "Enter the six-digit verification code.",
+        });
     }
 
     const client = await pool.connect();
@@ -666,60 +831,128 @@ router.post("/register/vendor", async (req, res) => {
         await client.query("BEGIN");
 
         const existing = await client.query(
-            `SELECT user_phone FROM users
-             WHERE user_phone = $1 OR ($2::text IS NOT NULL AND user_email = $2)
+            `SELECT user_phone
+             FROM users
+             WHERE user_phone = $1
+                OR (
+                    $2::text IS NOT NULL
+                    AND user_email = $2
+                )
              LIMIT 1`,
             [fields.phone, fields.email]
         );
+
         if (existing.rowCount > 0) {
             await client.query("ROLLBACK");
+
             return res.status(409).json({
                 success: false,
-                error: existing.rows[0].user_phone === fields.phone
-                    ? "That phone number is already registered. Sign in instead."
-                    : "That email address is already registered.",
+                error:
+                    existing.rows[0].user_phone ===
+                    fields.phone
+                        ? "That phone number is already registered. Sign in instead."
+                        : "That email address is already registered.",
             });
         }
 
-        if (!(await useVerificationCode(client, { phone: fields.phone, purpose: "register", code }))) {
-            // Commit so a wrong guess still counts towards the attempt limit.
+        if (
+            !(await useVerificationCode(client, {
+                phone: fields.phone,
+                purpose: "register",
+                code,
+            }))
+        ) {
+            // Commit so a wrong guess still counts towards
+            // the attempt limit.
             await client.query("COMMIT");
-            return res.status(401).json({ success: false, error: "The verification code is invalid or has expired." });
+
+            return res.status(401).json({
+                success: false,
+                error:
+                    "The verification code is invalid or has expired.",
+            });
         }
 
         const userResult = await client.query(
-            `INSERT INTO users (user_name, user_phone, user_email, user_role, user_phone_verified_at)
-             VALUES ($1, $2, $3, 'vendor', NOW())
-             RETURNING user_id, user_name, user_phone, user_email, user_role`,
-            [fields.name, fields.phone, fields.email]
+            `INSERT INTO users (
+                user_name,
+                user_phone,
+                user_email,
+                user_role,
+                user_phone_verified_at
+             )
+             VALUES (
+                $1,
+                $2,
+                $3,
+                'vendor',
+                NOW()
+             )
+             RETURNING
+                user_id,
+                user_name,
+                user_phone,
+                user_email,
+                user_role`,
+            [
+                fields.name,
+                fields.phone,
+                fields.email,
+            ]
         );
+
         const user = userResult.rows[0];
-        const vendor = await createVendor(client, user.user_id, fields);
-        const sessionToken = await createSession(client, user.user_id, req);
+
+        const vendor = await createVendor(
+            client,
+            user.user_id,
+            fields
+        );
+
+        const sessionToken = await createSession(
+            client,
+            user.user_id,
+            req
+        );
 
         await client.query("COMMIT");
 
-        res.cookie(SESSION_COOKIE_NAME, sessionToken, sessionCookieOptions());
+        res.cookie(
+            SESSION_COOKIE_NAME,
+            sessionToken,
+            sessionCookieOptions()
+        );
 
         return res.status(201).json({
             success: true,
-            message: "Business registered and submitted for NID verification.",
+            message:
+                "Business registered and submitted for NID verification.",
             user,
             vendor,
         });
     } catch (error) {
-        await client.query("ROLLBACK").catch(() => { });
+        await client
+            .query("ROLLBACK")
+            .catch(() => {});
 
         if (error.code === "23505") {
             return res.status(409).json({
                 success: false,
-                error: "That phone number or email address is already registered.",
+                error:
+                    "That phone number or email address is already registered.",
             });
         }
 
-        console.error("POST /api/auth/register/vendor failed:", error);
+        console.error(
+            "POST /api/auth/register/vendor failed:",
+            error
+        );
 
-        return res.status(500).json({ success: false, error: "Unable to register the business." });
+        return res.status(500).json({
+            success: false,
+            error:
+                "Unable to register the business.",
+        });
     } finally {
         client.release();
     }

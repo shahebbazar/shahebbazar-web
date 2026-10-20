@@ -14,7 +14,8 @@ KAN-283: [Sprint 2] Marketing Stage 1: Subscription foundation and sponsored-pla
 | Seeded featured businesses | Each one is given a running pass that ends when its placement does, so the admin page explains every sponsored business. |
 | Entitlement service | `backend/services/marketing/entitlements.js` is the only place that decides what a business may do: effective status (a running pass past its end date counts as expired), allowance used and left, plain-language reasons, and `useEntitlement`, which locks the pass so two requests cannot both spend the last allowance. After a pass ends, one free email a week remains (client decision 14, configurable). |
 | Admin | **Admin → Marketing** (`/admin/marketing`): the three passes, a form to give an approved business a pass, and for each pass Extend 7 or 30 days, Set end date, End now, Suspend, Resume and Cancel. Every change runs in a transaction, is written to `audit_logs` against the signed-in admin, and refreshes the cached home and search pages. |
-| Business owner | `GET /api/vendors/:vendorId/marketing` returns the pass, days and allowance left, for the owner or an admin. Hidden until `MARKETING_WORKSPACE_ENABLED=true`; the Marketing page itself is Stage 3. |
+| Access | Two features in the role matrix (`lib/access.js`, `docs/ACCESS-MATRIX.md`): `admin.marketing` (admins only) and `business.marketing` (the business's owners and managers, or an admin). |
+| Business owner | `GET /api/vendors/:vendorId/marketing` returns the pass, days and allowance left, for the business's owners and managers or an admin. Hidden until `MARKETING_WORKSPACE_ENABLED=true`; the Marketing page itself is Stage 3. |
 
 ## Acceptance criteria (delivery plan, Stage 1)
 
@@ -52,6 +53,15 @@ Every file was restored and the suite passed again.
 ## Migration on the development database
 
 `001_marketing_passes.sql` was applied twice to the development database: the second run changed nothing (3 passes, 7 running passes for the 7 featured businesses, no duplicates), and `npm run db:verify` passed.
+
+## After merging main (KAN-32 and KAN-281)
+
+`main` gained the role matrix, business managers and CI while this branch was open. After merging it in:
+
+- The pass routes now use the role matrix instead of the removed `vendorOwnerOrAdmin` guard, so a manager of the business can also read its pass.
+- `npm test`: **415 tests, 415 passed** (main's 376, plus the marketing suite and its access rows).
+- Upgrade path: `main`'s database loaded, then `001_marketing_passes.sql` applied twice. No errors, `verify-baseline.sql` clean, 3 passes and 7 running passes.
+- Lint, typecheck and `next build` passed.
 
 ## Static checks
 

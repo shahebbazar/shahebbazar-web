@@ -12,7 +12,7 @@ const REQUIRED_OBJECTS = Object.fromEntries(
         "users", "sessions", "otp_codes",
         // Taxonomy and businesses
         "locations", "categories", "vendors", "vendor_categories", "vendor_opening_hours",
-        "vendor_facts", "vendor_payment_methods", "vendor_photos", "vendor_social_links",
+        "vendor_facts", "vendor_payment_methods", "vendor_photos", "vendor_social_links", "vendor_members",
         // Products and services
         "vendor_listings", "listing_photos",
         // Quotations and messaging

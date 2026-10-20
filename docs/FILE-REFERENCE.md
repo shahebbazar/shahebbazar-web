@@ -15,7 +15,9 @@ Files marked **BROKEN** throw against the current schema.
 | `package.json` | No application code. Holds the `concurrently` scripts that run the API and the frontend together (`npm run dev`), plus the `db:load` / `db:reset` / `build` / `lint` / `typecheck` pass-throughs to the sub-projects. |
 | `package-lock.json` | Lockfile for that one dev dependency (`concurrently`). |
 | `.gitignore` | Applies to the whole tree recursively. Ignores `node_modules/` at any depth, `.env` and `.env.*` (but keeps `.env.example`), `.next`, `*.tsbuildinfo`. |
-| `README.md` | Setup, architecture, conventions, troubleshooting table, known gaps. The primary onboarding document. |
+| `README.md` | Setup, architecture, conventions, branch and pull request rules, troubleshooting table, known gaps. The primary onboarding document. |
+| `.github/workflows/ci.yml` | CI (KAN-281). On every pull request into `main` and every push to it: the API tests against a PostgreSQL 16 service (job **API tests**), and lint, typecheck and the production build (job **Frontend checks**). The `main` ruleset requires both to pass before a pull request can merge; no approval is needed (KAN-32). |
+| `.github/pull_request_template.md` | The checklist every pull request starts with: Jira key, tests, access matrix, migrations, docs, no secrets. |
 
 ---
 
@@ -50,6 +52,14 @@ Files marked **BROKEN** throw against the current schema.
 | `test/access.test.js` | `npm test`. Every signed-in route against every role (signed out, customer, another vendor, owner, admin), checks that refused requests change nothing, and that admin actions are recorded against the signed-in admin. |
 | `test/listings.test.js` | `npm test`. Listings and listing photos from upload to the public page, upload validation, and access to listing and business-image routes. |
 | `test/uploads.test.js` | `npm test`. `uploads:check` reporting and `--fix`. |
+| `test/unit.test.js` | `npm test`. Pure helpers with no database: phone, web-address and social-link rules, opening hours, ID parsing, search-text normalising, and checks that every `requireFeature` names a real feature and that `docs/ACCESS-MATRIX.md` matches `lib/access.js`. |
+| `test/public.test.js` | `npm test`. Home page, categories, search (filters, sorting, paging, the Sponsored slot, only approved businesses, every match reachable once), business pages, payment methods, events, sitemap, API docs and health. |
+| `test/auth.test.js` | `npm test`. Sign-in codes (portals, the 3-per-10-minutes limit, lockout after 5 wrong guesses, expiry, single use, only the latest code), sessions (cookie flags, hashed tokens, expiry, suspension, logout) and customer registration rules. |
+| `test/customer.test.js` | `npm test`. Account summary, saved businesses, reviews (one per business, moderated reviews locked), reports, messages and alerts. |
+| `test/vendor.test.js` | `npm test`. Business profile validation and tidying, payment-method rules, business photos and logo (files removed when nothing uses them), dashboard and summary. |
+| `test/admin.test.js` | `npm test`. Approvals, categories, resolving each kind of report, review moderation and search trends, with audit entries. |
+| `test/analytics.test.js` | `npm test`. Search and view beacons: repeat visits and bots (including Node's own fetch) not counted; appearances for approved businesses only. |
+| `test/members.test.js` | `npm test`. Businesses run by several people (KAN-250 to 252): managers, team changes, shared messages, separate alerts. |
 | `test/marketing.test.js` | `npm test`. Marketing passes: seeded passes, admin activation and every change, sponsored placement starting and ending with the pass (including on its own when the date passes), allowances, the free weekly email after expiry, and validation. |
 | `routes/marketing.js` | Marketing passes (KAN-283). `GET /api/admin/marketing` (packages, passes, eligible businesses), `POST /api/admin/marketing/subscriptions` (activate) and `POST …/subscriptions/:id/:action` (extend, end-date, end-now, suspend, resume, cancel), each in a transaction and audited; `GET /api/vendors/:id/marketing` for the owner, hidden unless `MARKETING_WORKSPACE_ENABLED=true`. |
 | `services/marketing/entitlements.js` | The only place that decides what a business may do with its Marketing pass: current pass and effective status (a running pass past its end date counts as expired), allowance used and left, `checkEntitlement` / `useEntitlement` with plain-language reasons, and `syncSponsoredPlacement`, which keeps `vendors.vendor_featured_until` in step with the passes. |

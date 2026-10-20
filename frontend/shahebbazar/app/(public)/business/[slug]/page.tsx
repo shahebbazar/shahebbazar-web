@@ -9,7 +9,7 @@ import { BusinessSidebar } from "@/components/public/BusinessSidebar";
 import { PaymentMethodsCard } from "@/components/payments/PaymentMethodsCard";
 import { ProfileViewBeacon } from "@/components/analytics/ProfileViewBeacon";
 import { assetUrl, getBusiness, getPaymentMethods } from "@/lib/api";
-import { resolveLocale, t, localeHref } from "@/lib/i18n";
+import { resolveLocale, t, localeHref, pick } from "@/lib/i18n";
 import { toNumber } from "@/lib/format";
 import { paymentMethodOption } from "@/lib/paymentMethods";
 import type { BusinessDetail, PaymentMethod } from "@/lib/types";
@@ -21,20 +21,32 @@ type Query = { lang?: string };
 
 export async function generateMetadata({
     params,
+    searchParams,
 }: {
     params: Promise<Params>;
+    searchParams: Promise<Query>;
 }): Promise<Metadata> {
-    const { slug } = await params;
+    const [{ slug }, { lang }] = await Promise.all([params, searchParams]);
+    const locale = resolveLocale(lang);
     const detail = await getBusiness(slug);
 
     if (!detail) return { title: "Business not found" };
 
     const { business } = detail;
-    const area = business.area_name ? `${business.area_name}, Rajshahi` : "Rajshahi";
-    const title = `${business.vendor_name} — ${business.primary_category ?? "Business"} in ${area}`;
+    const name = pick(locale, business.vendor_name, business.vendor_name_bn);
+    const category = pick(locale, business.primary_category, business.primary_category_bn);
+    const areaName = pick(locale, business.area_name, business.area_name_bn);
+
+    // The preview text follows the page language (KAN-244).
+    const title =
+        locale === "bn"
+            ? `${name} — ${category || "ব্যবসা"}, ${areaName ? `${areaName}, ` : ""}রাজশাহী`
+            : `${name} — ${category || "Business"} in ${areaName ? `${areaName}, ` : ""}Rajshahi`;
     const description =
-        business.vendor_description?.slice(0, 155) ??
-        `${business.vendor_name} in ${area}. Contact details, opening hours and reviews on Shahebbazar.`;
+        locale === "bn"
+            ? `${name}, ${areaName || "রাজশাহী"}। ঠিকানা, খোলার সময় ও রিভিউ দেখুন সাহেববাজারে।`
+            : business.vendor_description?.slice(0, 155) ??
+              `${name} in ${areaName ? `${areaName}, ` : ""}Rajshahi. Contact details, opening hours and reviews on Shahebbazar.`;
 
     const cover = assetUrl(business.vendor_cover_url);
 
@@ -42,6 +54,7 @@ export async function generateMetadata({
     return pageMetadata({
         title,
         description,
+        locale,
         path: `/business/${business.vendor_slug}`,
         image: cover
             ? { url: cover, alt: business.vendor_name }

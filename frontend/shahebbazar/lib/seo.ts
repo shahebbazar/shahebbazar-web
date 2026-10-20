@@ -1,4 +1,5 @@
 import type { Metadata } from "next";
+import { localeHref, type Locale } from "./i18n";
 
 // Page metadata for the public site: title, description, canonical URL and OpenGraph tags.
 
@@ -18,6 +19,17 @@ export function businessOgImage(slug: string, name: string) {
     return { url: `/og/business/${encodeURIComponent(slug)}`, width: 1200, height: 630, alt: name };
 }
 
+/** Share cards for events and categories (app/og/event and app/og/category). */
+export function eventOgImage(slug: string, title: string) {
+    return { url: `/og/event/${encodeURIComponent(slug)}`, width: 1200, height: 630, alt: title };
+}
+
+export function categoryOgImage(slug: string, name: string) {
+    return { url: `/og/category/${encodeURIComponent(slug)}`, width: 1200, height: 630, alt: name };
+}
+
+const OG_LOCALE: Record<Locale, string> = { en: "en_GB", bn: "bn_BD" };
+
 type OgImage = { url: string; width?: number; height?: number; alt?: string };
 
 export function pageMetadata({
@@ -26,6 +38,7 @@ export function pageMetadata({
     path,
     image = DEFAULT_OG_IMAGE,
     noindex = false,
+    locale = "en",
 }: {
     /** Page title; the root layout's template appends " | Shahebbazar". */
     title: string;
@@ -35,20 +48,26 @@ export function pageMetadata({
     image?: OgImage;
     /** Keep out of search results but still follow its links. */
     noindex?: boolean;
+    /** The Bangla version lives at the same path with ?lang=bn. */
+    locale?: Locale;
 }): Metadata {
+    const url = localeHref(path, locale);
     return {
         title,
         description,
-        alternates: { canonical: path },
+        alternates: {
+            canonical: url,
+            languages: { en: path, bn: localeHref(path, "bn"), "x-default": path },
+        },
         ...(noindex ? { robots: { index: false, follow: true } } : {}),
         openGraph: {
             type: "website",
             siteName: SITE_NAME,
-            locale: "en_GB",
-            alternateLocale: "bn_BD",
+            locale: OG_LOCALE[locale],
+            alternateLocale: OG_LOCALE[locale === "bn" ? "en" : "bn"],
             title,
             description,
-            url: path,
+            url,
             images: [image],
         },
         twitter: {

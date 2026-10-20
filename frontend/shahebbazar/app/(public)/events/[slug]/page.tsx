@@ -4,20 +4,38 @@ import { notFound } from "next/navigation";
 import { CalendarDays, ChevronLeft, MapPin, Store } from "lucide-react";
 import { AppShell } from "@/components/public/AppShell";
 import { apiGet, assetUrl } from "@/lib/api";
-import { pageMetadata } from "@/lib/seo";
+import { eventOgImage, pageMetadata, SITE_URL } from "@/lib/seo";
+import { ShareMenu } from "@/components/shared/ShareMenu";
 import { resolveLocale, t, localeHref, pick } from "@/lib/i18n";
 import { formatEventRange } from "@/lib/format";
 import type { EventDetail } from "@/lib/types";
 
 type Params = { slug: string };
 
-export async function generateMetadata({ params }: { params: Promise<Params> }): Promise<Metadata> {
-    const event = await apiGet<EventDetail>(`/events/${encodeURIComponent((await params).slug)}`).catch(() => null);
+export async function generateMetadata({
+    params,
+    searchParams,
+}: {
+    params: Promise<Params>;
+    searchParams: Promise<{ lang?: string }>;
+}): Promise<Metadata> {
+    const [{ slug }, { lang }] = await Promise.all([params, searchParams]);
+    const locale = resolveLocale(lang);
+    const event = await apiGet<EventDetail>(`/events/${encodeURIComponent(slug)}`).catch(() => null);
     if (!event) return { title: "Event not found" };
+
+    const title = pick(locale, event.event_title, event.event_title_bn);
+    const place = event.event_venue ?? "Rajshahi";
     return pageMetadata({
-        title: event.event_title,
-        description: event.event_description?.slice(0, 155) ?? `${event.event_title} in Rajshahi.`,
+        title,
+        description:
+            locale === "bn"
+                ? `${title}, ${formatEventRange(event.event_starts_at, event.event_ends_at)}। বিস্তারিত দেখুন সাহেববাজারে।`
+                : event.event_description?.slice(0, 155) ??
+                  `${title}, ${formatEventRange(event.event_starts_at, event.event_ends_at)} at ${place}.`,
+        locale,
         path: `/events/${event.event_slug}`,
+        image: eventOgImage(event.event_slug, event.event_title),
     });
 }
 
@@ -69,6 +87,14 @@ export default async function EventPage({
                     )}
                 </div>
             </article>
+            <ShareMenu
+                url={`${SITE_URL}${localeHref(`/events/${event.event_slug}`, locale)}`}
+                title={pick(locale, event.event_title, event.event_title_bn)}
+                label={copy.share}
+                locale={locale}
+                align="left"
+                className="mt-4 w-40"
+            />
         </AppShell>
     );
 }

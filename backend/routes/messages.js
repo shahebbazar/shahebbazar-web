@@ -1,15 +1,9 @@
 const express = require("express");
 const pool = require("../db");
-const {
-    parseId,
-    cleanText,
-} = require("../lib/currentUser");
-
-const {
-    requireAuthenticatedUser,
-    requireRole,
-    vendorOwnerOnly,
-} = require("../lib/middleware/auth");
+const { parseId, cleanText } = require("../lib/currentUser");
+const { requireVendorOwnership } = require("../lib/middleware/auth");
+const { requireFeature } = require("../lib/access");
+const { memberRole, businessMemberIds } = require("../lib/membership");
 const { notifyNewMessage, listAlerts, markAlertsRead } = require("../lib/notify");
 
 const router = express.Router();
@@ -26,7 +20,8 @@ function parseBody(raw) {
 // Lists conversations for one side: the customer (by user) or the business (by vendor).
 async function listConversations({ userId, vendorId, inquiriesOnly }) {
     const where = vendorId ? "c.vendor_id = $1" : "c.user_id = $1";
-    const viewer = vendorId ? "v.user_id" : "c.user_id";
+    // The business side can be several people, so "the other side" is measured against the customer.
+    const fromOtherSide = vendorId ? "m.sender_user_id = c.user_id" : "m.sender_user_id <> c.user_id";
     const result = await pool.query(
         `SELECT c.conversation_id, c.conversation_status AS status,
                 c.conversation_last_message_at AS last_message_at,
@@ -36,7 +31,7 @@ async function listConversations({ userId, vendorId, inquiriesOnly }) {
                 (SELECT m.message_body FROM messages m WHERE m.conversation_id = c.conversation_id
                  ORDER BY m.message_created_at DESC, m.message_id DESC LIMIT 1) AS last_message,
                 (SELECT COUNT(*)::int FROM messages m WHERE m.conversation_id = c.conversation_id
-                   AND m.sender_user_id <> ${viewer} AND m.message_read_at IS NULL) AS unread
+                   AND ${fromOtherSide} AND m.message_read_at IS NULL) AS unread
          FROM conversations c
          JOIN vendors v ON v.vendor_id = c.vendor_id
          JOIN users u ON u.user_id = c.user_id
@@ -49,10 +44,10 @@ async function listConversations({ userId, vendorId, inquiriesOnly }) {
 }
 
 // Loads one conversation with its messages and marks the other side's messages as read.
-async function openConversation(conversationId, viewerUserId) {
+async function openConversation(conversationId, viewerUserId, asBusiness = false) {
     const head = await pool.query(
         `SELECT c.conversation_id, c.conversation_status AS status, c.user_id, c.vendor_id,
-                v.vendor_name, v.vendor_slug, v.user_id AS owner_user_id,
+                v.vendor_name, v.vendor_slug,
                 u.user_name AS customer_name, l.listing_id, l.listing_title
          FROM conversations c
          JOIN vendors v ON v.vendor_id = c.vendor_id
@@ -62,11 +57,13 @@ async function openConversation(conversationId, viewerUserId) {
         [conversationId]
     );
     if (head.rowCount === 0) return null;
+    const customerId = head.rows[0].user_id;
+    const otherSide = asBusiness ? "sender_user_id = $2" : "sender_user_id <> $2";
 
     await pool.query(
         `UPDATE messages SET message_read_at = NOW()
-         WHERE conversation_id = $1 AND sender_user_id <> $2 AND message_read_at IS NULL`,
-        [conversationId, viewerUserId]
+         WHERE conversation_id = $1 AND ${otherSide} AND message_read_at IS NULL`,
+        [conversationId, customerId]
     );
     await pool.query(
         `UPDATE notifications SET notification_read_at = NOW()
@@ -77,17 +74,19 @@ async function openConversation(conversationId, viewerUserId) {
 
     const messages = await pool.query(
         `SELECT message_id, message_body AS body, message_created_at AS created_at,
-                message_read_at AS read_at, sender_user_id = $2 AS mine
+                message_read_at AS read_at, (sender_user_id = $2) <> $3 AS mine
          FROM messages WHERE conversation_id = $1
          ORDER BY message_created_at, message_id`,
-        [conversationId, viewerUserId]
+        [conversationId, customerId, asBusiness]
     );
     return { conversation: head.rows[0], messages: messages.rows };
 }
 
-// Adds a message to a conversation and alerts the other side.
+// Adds a message and alerts the other side: the customer, or everyone who runs the business.
 async function addMessage(conversation, senderUserId, body, senderName) {
-    const recipient = senderUserId === conversation.user_id ? conversation.owner_user_id : conversation.user_id;
+    const recipients = senderUserId === conversation.user_id
+        ? await businessMemberIds(conversation.vendor_id)
+        : [conversation.user_id];
     const client = await pool.connect();
     try {
         await client.query("BEGIN");
@@ -100,13 +99,15 @@ async function addMessage(conversation, senderUserId, body, senderName) {
             "UPDATE conversations SET conversation_last_message_at = NOW() WHERE conversation_id = $1",
             [conversation.conversation_id]
         );
-        await notifyNewMessage(client, {
-            userId: recipient,
-            conversationId: conversation.conversation_id,
-            messageId: inserted.rows[0].message_id,
-            from: senderName,
-            preview: body.slice(0, 120),
-        });
+        for (const userId of recipients) {
+            await notifyNewMessage(client, {
+                userId,
+                conversationId: conversation.conversation_id,
+                messageId: inserted.rows[0].message_id,
+                from: senderName,
+                preview: body.slice(0, 120),
+            });
+        }
         await client.query("COMMIT");
         return inserted.rows[0];
     } catch (err) {
@@ -120,7 +121,7 @@ async function addMessage(conversation, senderUserId, body, senderName) {
 // Loads the conversation head used by addMessage.
 async function conversationHead(conversationId) {
     const result = await pool.query(
-        `SELECT c.conversation_id, c.user_id, c.vendor_id, c.conversation_status, v.user_id AS owner_user_id,
+        `SELECT c.conversation_id, c.user_id, c.vendor_id, c.conversation_status,
                 v.vendor_name, u.user_name AS customer_name
          FROM conversations c
          JOIN vendors v ON v.vendor_id = c.vendor_id
@@ -131,11 +132,7 @@ async function conversationHead(conversationId) {
     return result.rows[0] ?? null;
 }
 
-router.use(
-    "/me",
-    requireAuthenticatedUser,
-    requireRole("customer")
-);
+router.use("/me", requireFeature("account.use"));
 
 // Customer side --------------------------------------------------------
 
@@ -156,6 +153,7 @@ router.post("/me/conversations", async (req, res) => {
             [vendorId]
         );
         if (vendor.rowCount === 0) return res.status(404).json({ error: "Business not found" });
+        if (await memberRole(userId, vendorId)) return res.status(403).json({ error: "You cannot message a business you run." });
         if (listingId) {
             const listing = await pool.query(
                 `SELECT 1 FROM vendor_listings
@@ -236,7 +234,7 @@ router.get("/me/alerts", async (req, res) => {
     try {
         const userId = req.user.user_id;
         res.json(
-            await listAlerts(userId)
+            await listAlerts(userId, { asCustomer: true })
         );
     } catch (err) {
         console.error("GET /api/me/alerts failed:", err);
@@ -247,7 +245,7 @@ router.get("/me/alerts", async (req, res) => {
 router.post("/me/alerts/read", async (req, res) => {
     try {
         const userId = req.user.user_id;
-        await markAlertsRead(userId);
+        await markAlertsRead(userId, { asCustomer: true });
         res.json({ ok: true });
     } catch (err) {
         console.error("POST /api/me/alerts/read failed:", err);
@@ -255,10 +253,11 @@ router.post("/me/alerts/read", async (req, res) => {
     }
 });
 
-// Business side --------------------------------------------------------
-// Only the signed-in owner of :vendorId; admins cannot read or send a business's messages.
+// Business side: any owner or manager of the business ------------------
 
-router.get("/vendors/:vendorId/conversations", ...vendorOwnerOnly, async (req, res) => {
+const businessAccess = [requireFeature("business.messages"), requireVendorOwnership];
+
+router.get("/vendors/:vendorId/conversations", ...businessAccess, async (req, res) => {
     const vendorId = req.vendor.vendor_id;
     try {
         res.json(await listConversations({ vendorId, inquiriesOnly: req.query.type === "inquiries" }));
@@ -268,16 +267,16 @@ router.get("/vendors/:vendorId/conversations", ...vendorOwnerOnly, async (req, r
     }
 });
 
-router.get("/vendors/:vendorId/conversations/:id", ...vendorOwnerOnly, async (req, res) => {
+router.get("/vendors/:vendorId/conversations/:id", ...businessAccess, async (req, res) => {
     const vendorId = req.vendor.vendor_id;
     const id = parseId(req.params.id);
     if (!id) return res.status(400).json({ error: "Invalid id" });
     try {
-        // Check the conversation belongs to this business before opening it, which marks messages read.
+        // Check first: opening a conversation marks its messages read.
         const head = await conversationHead(id);
         if (!head || head.vendor_id !== vendorId) return res.status(404).json({ error: "Conversation not found" });
-        const thread = await openConversation(id, req.user.user_id);
-        if (!thread || thread.conversation.vendor_id !== vendorId) return res.status(404).json({ error: "Conversation not found" });
+        const thread = await openConversation(id, req.user.user_id, true);
+        if (!thread) return res.status(404).json({ error: "Conversation not found" });
         res.json(thread);
     } catch (err) {
         console.error(`GET /api/vendors/${vendorId}/conversations/${id} failed:`, err);
@@ -285,7 +284,7 @@ router.get("/vendors/:vendorId/conversations/:id", ...vendorOwnerOnly, async (re
     }
 });
 
-router.post("/vendors/:vendorId/conversations/:id/messages", ...vendorOwnerOnly, async (req, res) => {
+router.post("/vendors/:vendorId/conversations/:id/messages", ...businessAccess, async (req, res) => {
     const vendorId = req.vendor.vendor_id;
     const id = parseId(req.params.id);
     if (!id) return res.status(400).json({ error: "Invalid id" });
@@ -302,23 +301,22 @@ router.post("/vendors/:vendorId/conversations/:id/messages", ...vendorOwnerOnly,
     }
 });
 
-router.get("/vendors/:vendorId/alerts", ...vendorOwnerOnly, async (req, res) => {
-    const vendorId = req.vendor.vendor_id;
+// Alerts belong to the person signed in, so each manager clears their own, for this business only.
+router.get("/vendors/:vendorId/alerts", ...businessAccess, async (req, res) => {
     try {
-        res.json(await listAlerts(req.user.user_id));
+        res.json(await listAlerts(req.user.user_id, { vendorId: req.vendor.vendor_id }));
     } catch (err) {
-        console.error(`GET /api/vendors/${vendorId}/alerts failed:`, err);
+        console.error(`GET /api/vendors/${req.vendor.vendor_id}/alerts failed:`, err);
         res.status(500).json({ error: "Could not load alerts" });
     }
 });
 
-router.post("/vendors/:vendorId/alerts/read", ...vendorOwnerOnly, async (req, res) => {
-    const vendorId = req.vendor.vendor_id;
+router.post("/vendors/:vendorId/alerts/read", ...businessAccess, async (req, res) => {
     try {
-        await markAlertsRead(req.user.user_id);
+        await markAlertsRead(req.user.user_id, { vendorId: req.vendor.vendor_id });
         res.json({ ok: true });
     } catch (err) {
-        console.error(`POST /api/vendors/${vendorId}/alerts/read failed:`, err);
+        console.error(`POST /api/vendors/${req.vendor.vendor_id}/alerts/read failed:`, err);
         res.status(500).json({ error: "Could not update alerts" });
     }
 });

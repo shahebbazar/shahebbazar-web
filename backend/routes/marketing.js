@@ -6,7 +6,8 @@
 const express = require("express");
 const pool = require("../db");
 const { parseId, cleanText } = require("../lib/currentUser");
-const { vendorOwnerOrAdmin } = require("../lib/middleware/auth");
+const { requireVendorOwnership } = require("../lib/middleware/auth");
+const { requireFeature } = require("../lib/access");
 const { PASS_SQL, passSummary, syncSponsoredPlacement } = require("../services/marketing/entitlements");
 
 const router = express.Router();
@@ -50,7 +51,7 @@ async function inTransaction(res, label, fn) {
 // ---------- admin ----------
 
 // Packages, every pass (newest first) and the approved businesses that can be given one.
-router.get("/admin/marketing", async (req, res) => {
+router.get("/admin/marketing", requireFeature("admin.marketing"), async (req, res) => {
     try {
         const [packages, passes, businesses] = await Promise.all([
             pool.query(
@@ -82,7 +83,7 @@ router.get("/admin/marketing", async (req, res) => {
 });
 
 // Activates a pass for an approved business, starting now.
-router.post("/admin/marketing/subscriptions", (req, res) => {
+router.post("/admin/marketing/subscriptions", requireFeature("admin.marketing"), (req, res) => {
     const vendorId = parseId(req.body?.vendor_id);
     const packageId = parseId(req.body?.package_id);
     if (!vendorId || !packageId) return res.status(400).json({ error: "Choose a business and a pass." });
@@ -131,7 +132,7 @@ router.post("/admin/marketing/subscriptions", (req, res) => {
 });
 
 // Changes one pass: extend, end-date, end-now, suspend, resume or cancel.
-router.post("/admin/marketing/subscriptions/:id/:action", (req, res) => {
+router.post("/admin/marketing/subscriptions/:id/:action", requireFeature("admin.marketing"), (req, res) => {
     const id = parseId(req.params.id);
     const action = req.params.action;
     if (!id) return res.status(400).json({ error: "Invalid id" });
@@ -202,7 +203,7 @@ router.post("/admin/marketing/subscriptions/:id/:action", (req, res) => {
 // ---------- business owner ----------
 
 // The business's pass, days and allowance left. Hidden while MARKETING_WORKSPACE_ENABLED is off.
-router.get("/vendors/:vendorId/marketing", ...vendorOwnerOrAdmin, async (req, res) => {
+router.get("/vendors/:vendorId/marketing", requireFeature("business.marketing"), requireVendorOwnership, async (req, res) => {
     if (!workspaceEnabled()) return res.status(404).json({ error: "Not found" });
     const vendorId = parseId(req.params.vendorId);
     try {

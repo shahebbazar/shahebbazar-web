@@ -15,9 +15,9 @@ const MAX_IMPRESSIONS = 25;
 
 const VIEW_SOURCES = new Set(["search", "category", "direct", "share", "sponsored"]);
 
-// Crawlers, link-preview fetchers and scripted clients.
+// Crawlers, link-preview fetchers and scripted clients. "^node" is Node's built-in fetch, which sends "node".
 const NON_HUMAN_AGENT =
-    /bot|crawl|spider|slurp|facebookexternalhit|whatsapp|telegram|preview|headless|lighthouse|curl|wget|python|node-fetch|undici|axios|postman/i;
+    /bot|crawl|spider|slurp|facebookexternalhit|whatsapp|telegram|preview|headless|lighthouse|curl|wget|python|node-fetch|undici|axios|postman|^node\b/i;
 
 // Accepts text/plain, a CORS-safelisted type, so the browser's keepalive beacon needs no preflight.
 const textBody = express.text({ type: "text/plain", limit: "4kb" });

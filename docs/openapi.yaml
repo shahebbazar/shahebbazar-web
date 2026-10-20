@@ -11,13 +11,13 @@ info:
     **Browse it:** run the API and open `http://localhost:4000/api/docs`.
     **Postman:** File → Import → this file (`docs/openapi.yaml`).
 
-    **Authentication.** Sign in with `/api/auth/request-verification` and
-    `/api/auth/verify`; the API sets an HTTP-only `shaheb_session` cookie.
-    Customer endpoints need a customer session. Provider and Listings
-    endpoints need the business's owner or an admin; messages, alerts and
-    review replies need the owner. Admin endpoints need an admin. Without
-    a session the API answers 401, with the wrong role or business 403.
-    The access table is in the repository README.
+    **Authentication is not built yet.** Every provider and admin
+    endpoint is marked `TODO(auth)` in the code and is currently open.
+    The customer (`/api/me/...`) endpoints act as the first active
+    customer account until sign-in exists.
+    They must not be deployed publicly until sessions and role checks
+    exist. The provider endpoints take the business id in the path for
+    now; with sign-in, it will come from the session.
 
     **Conventions**
     - All public responses contain approved records only.
@@ -30,7 +30,8 @@ info:
       field.
   contact:
     name: COS40005 Group 23
-# Protected operations use the session cookie; see the description above.
+# Public operations need nothing. The rest need the session cookie set by
+# /api/auth/verify; docs/ACCESS-MATRIX.md lists which role each feature needs.
 security: []
 servers:
   - url: http://localhost:4000
@@ -43,17 +44,17 @@ tags:
   - name: Analytics
     description: Beacons the browser sends once a page is on screen.
   - name: Registration
-    description: Business sign-up, verified by a phone code.
+    description: Vendor sign-up. Signed in, the business is added to that account and a customer becomes a vendor.
   - name: Provider
-    description: A business owner's own data. Owner or admin; messages and replies owner only.
+    description: A business's own data, for its owners and managers. Needs the session cookie.
   - name: Listings
-    description: A business's products and services. Owner or admin.
+    description: A business's products and services. Needs the session cookie.
   - name: Admin
-    description: Approvals, reports, review moderation and search trends. Admin only.
+    description: Approvals, reports, review moderation and search trends. Admins only.
   - name: Customer
-    description: The customer's saved businesses, reviews, reports and alerts. Customer only.
+    description: Saved businesses, reviews, reports and alerts. Customers and vendors.
   - name: Messaging
-    description: Buyer-seller conversations and alerts. The customer, or the business's owner.
+    description: Buyer-seller conversations and alerts, for both sides. Needs the session cookie.
   - name: Reviews
     description: Writing reviews and owner replies.
   - name: Events
@@ -289,12 +290,16 @@ paths:
   /api/vendors:
     get:
       operationId: getVendors
-      tags: [Public]
-      summary: Approved businesses
-      description: Public contact details of every approved business, by name.
+      tags: [Registration]
+      summary: Every vendor, every column (development only)
+      deprecated: true
+      description: |
+        Used by the development business picker on `/vendors/dashboard`
+        until sign-in exists. Returns unapproved businesses and moderation
+        fields: **remove before deployment**.
       responses:
         "200":
-          description: Approved `vendors` rows.
+          description: Raw `vendors` rows.
           content:
             application/json:
               schema:
@@ -306,35 +311,27 @@ paths:
                     vendor_id: { type: integer }
                     vendor_name: { type: string }
                     vendor_status: { $ref: "#/components/schemas/VendorStatus" }
-
-  /api/auth/register/vendor:
     post:
-      operationId: postAuthRegisterVendor
+      operationId: postVendors
       tags: [Registration]
       summary: Register a business and its owner account
-      description: |
-        First request a code with `POST /api/auth/request-verification`
-        (`purpose: "register"`) for `vendor_phone`. With the right code this
-        creates a verified `vendor` user and a pending business in one
-        transaction, and signs the owner in (sets `shaheb_session`).
+      description: Creates a `vendor` user (phone is the identifier) and a pending business in one transaction.
       requestBody:
         required: true
         content:
           application/json:
             schema:
               type: object
-              required: [vendor_name, vendor_phone, vendor_nid_reference, code]
+              required: [vendor_name, vendor_phone]
               properties:
-                vendor_name: { type: string, maxLength: 255 }
+                vendor_name: { type: string }
                 vendor_phone: { type: string }
                 vendor_email: { type: string, format: email }
                 vendor_address: { type: string }
                 vendor_city: { type: string, description: "Area or city name, matched to a location." }
-                vendor_nid_reference: { type: string, maxLength: 50 }
-                code: { type: string, pattern: "^[0-9]{6}$" }
       responses:
         "201":
-          description: Created, awaiting approval; the owner is signed in.
+          description: Created, awaiting approval.
           content:
             application/json:
               schema:
@@ -348,7 +345,6 @@ paths:
                       vendor_slug: { type: string }
                       vendor_status: { const: pending }
         "400": { $ref: "#/components/responses/LegacyError" }
-        "401": { $ref: "#/components/responses/LegacyError" }
         "409": { $ref: "#/components/responses/LegacyError" }
 
   # ------------------------------------------------------------ provider
@@ -356,6 +352,7 @@ paths:
     get:
       operationId: getVendorsByVendorIdDashboard
       tags: [Provider]
+      security: [{ sessionCookie: [] }]
       summary: Everything the provider dashboard shows
       description: Works for a business in any status. Periods are whole days in Asia/Dhaka; the current period includes today.
       parameters:
@@ -374,6 +371,7 @@ paths:
     get:
       operationId: getVendorsByVendorIdSummary
       tags: [Provider]
+      security: [{ sessionCookie: [] }]
       summary: Name, slug and status of one business
       parameters:
         - $ref: "#/components/parameters/VendorId"
@@ -390,6 +388,7 @@ paths:
     get:
       operationId: getVendorsByVendorIdProfile
       tags: [Provider]
+      security: [{ sessionCookie: [] }]
       summary: What the Edit Business form edits, with its option lists
       parameters:
         - $ref: "#/components/parameters/VendorId"
@@ -427,6 +426,7 @@ paths:
     put:
       operationId: putVendorsByVendorIdProfile
       tags: [Provider]
+      security: [{ sessionCookie: [] }]
       summary: Save the whole Edit Business form
       description: |
         One transaction. Categories, hours, facts and social links are
@@ -458,6 +458,7 @@ paths:
     post:
       operationId: postVendorsByVendorIdLogo
       tags: [Provider]
+      security: [{ sessionCookie: [] }]
       summary: Upload or replace the logo
       parameters:
         - $ref: "#/components/parameters/VendorId"
@@ -481,6 +482,7 @@ paths:
     delete:
       operationId: deleteVendorsByVendorIdLogo
       tags: [Provider]
+      security: [{ sessionCookie: [] }]
       summary: Remove the logo
       parameters:
         - $ref: "#/components/parameters/VendorId"
@@ -492,6 +494,7 @@ paths:
     post:
       operationId: postVendorsByVendorIdPhotos
       tags: [Provider]
+      security: [{ sessionCookie: [] }]
       summary: Add business photos
       description: Up to 6 photos in total. The first photo is the cover (`vendor_cover_url`).
       parameters:
@@ -521,6 +524,7 @@ paths:
     delete:
       operationId: deleteVendorsByVendorIdPhotosByPhotoId
       tags: [Provider]
+      security: [{ sessionCookie: [] }]
       summary: Remove a photo
       description: If it was the cover, the next photo becomes the cover.
       parameters:
@@ -534,6 +538,7 @@ paths:
     get:
       operationId: getVendorsByVendorIdPaymentMethods
       tags: [Provider]
+      security: [{ sessionCookie: [] }]
       summary: The business's payment methods, for editing
       parameters:
         - $ref: "#/components/parameters/VendorId"
@@ -553,6 +558,7 @@ paths:
     put:
       operationId: putVendorsByVendorIdPaymentMethods
       tags: [Provider]
+      security: [{ sessionCookie: [] }]
       summary: Replace the whole set of payment methods
       description: Notes may not contain an 8+ digit run, so account or wallet numbers cannot be published.
       parameters:
@@ -580,6 +586,7 @@ paths:
     get:
       operationId: getVendorsByVendorIdListings
       tags: [Listings]
+      security: [{ sessionCookie: [] }]
       summary: All of a business's listings, any status
       parameters:
         - $ref: "#/components/parameters/VendorId"
@@ -592,6 +599,7 @@ paths:
     post:
       operationId: postVendorsByVendorIdListings
       tags: [Listings]
+      security: [{ sessionCookie: [] }]
       summary: Create a listing (awaits admin approval)
       parameters:
         - $ref: "#/components/parameters/VendorId"
@@ -612,6 +620,7 @@ paths:
     put:
       operationId: putListingsByListingId
       tags: [Listings]
+      security: [{ sessionCookie: [] }]
       summary: Update a listing
       parameters:
         - $ref: "#/components/parameters/ListingId"
@@ -631,6 +640,7 @@ paths:
     delete:
       operationId: deleteListingsByListingId
       tags: [Listings]
+      security: [{ sessionCookie: [] }]
       summary: Delete a listing and its photos
       parameters:
         - $ref: "#/components/parameters/ListingId"
@@ -646,6 +656,7 @@ paths:
     post:
       operationId: postListingsByListingIdPhotos
       tags: [Listings]
+      security: [{ sessionCookie: [] }]
       summary: Upload photos for a listing
       parameters:
         - $ref: "#/components/parameters/ListingId"
@@ -670,6 +681,7 @@ paths:
     get:
       operationId: getAdminQueue
       tags: [Admin]
+      security: [{ sessionCookie: [] }]
       summary: Pending businesses and listings, and recent decisions
       responses:
         "200":
@@ -689,6 +701,7 @@ paths:
     post:
       operationId: postAdminVendorsByIdDecision
       tags: [Admin]
+      security: [{ sessionCookie: [] }]
       summary: Approve (and verify) or reject a pending business
       description: Only a pending business can be decided; a second decision gets 409. Written to `audit_logs`.
       parameters:
@@ -704,6 +717,7 @@ paths:
     post:
       operationId: postAdminListingsByIdDecision
       tags: [Admin]
+      security: [{ sessionCookie: [] }]
       summary: Approve or reject a pending listing
       parameters:
         - { name: id, in: path, required: true, schema: { type: integer, minimum: 1 } }
@@ -719,6 +733,7 @@ paths:
     get:
       operationId: getMe
       tags: [Customer]
+      security: [{ sessionCookie: [] }]
       summary: The customer's account and counts
       responses:
         "200":
@@ -741,6 +756,7 @@ paths:
     get:
       operationId: getMySaved
       tags: [Customer]
+      security: [{ sessionCookie: [] }]
       summary: Saved businesses, newest first
       responses:
         "200":
@@ -753,6 +769,7 @@ paths:
     get:
       operationId: getMySavedIds
       tags: [Customer]
+      security: [{ sessionCookie: [] }]
       summary: Ids of saved businesses, for bookmark buttons
       responses:
         "200":
@@ -765,6 +782,7 @@ paths:
     put:
       operationId: putMySaved
       tags: [Customer]
+      security: [{ sessionCookie: [] }]
       summary: Save an approved business (idempotent)
       responses:
         "200": { $ref: "#/components/responses/Saved" }
@@ -772,6 +790,7 @@ paths:
     delete:
       operationId: deleteMySaved
       tags: [Customer]
+      security: [{ sessionCookie: [] }]
       summary: Remove a saved business
       responses:
         "200": { $ref: "#/components/responses/Saved" }
@@ -780,6 +799,7 @@ paths:
     get:
       operationId: getMyReviews
       tags: [Customer]
+      security: [{ sessionCookie: [] }]
       summary: Reviews the customer wrote, with status and owner reply
       responses:
         "200":
@@ -790,6 +810,7 @@ paths:
     get:
       operationId: getMyBusinessState
       tags: [Customer]
+      security: [{ sessionCookie: [] }]
       summary: Whether the customer saved this business, and their review of it
       parameters:
         - $ref: "#/components/parameters/Slug"
@@ -815,6 +836,7 @@ paths:
     get:
       operationId: getMyAlerts
       tags: [Customer]
+      security: [{ sessionCookie: [] }]
       summary: In-app alerts and unread count
       responses:
         "200": { $ref: "#/components/responses/AlertList" }
@@ -823,6 +845,7 @@ paths:
     post:
       operationId: postMyAlertsRead
       tags: [Customer]
+      security: [{ sessionCookie: [] }]
       summary: Mark all alerts read
       responses:
         "200": { description: Done. }
@@ -831,6 +854,7 @@ paths:
     post:
       operationId: postReport
       tags: [Customer]
+      security: [{ sessionCookie: [] }]
       summary: Report a business, product, review or message
       requestBody:
         required: true
@@ -855,6 +879,7 @@ paths:
     get:
       operationId: getMyConversations
       tags: [Messaging]
+      security: [{ sessionCookie: [] }]
       summary: The customer's conversations, most recent first
       responses:
         "200":
@@ -863,6 +888,7 @@ paths:
     post:
       operationId: postMyConversation
       tags: [Messaging]
+      security: [{ sessionCookie: [] }]
       summary: Message a business, optionally about one product
       description: |
         Reuses the existing conversation for the same business and product.
@@ -892,6 +918,7 @@ paths:
     get:
       operationId: getMyConversation
       tags: [Messaging]
+      security: [{ sessionCookie: [] }]
       summary: One conversation with its messages; marks the business's messages read
       parameters:
         - { name: id, in: path, required: true, schema: { type: integer, minimum: 1 } }
@@ -903,6 +930,7 @@ paths:
     post:
       operationId: postMyMessage
       tags: [Messaging]
+      security: [{ sessionCookie: [] }]
       summary: Reply in a conversation
       parameters:
         - { name: id, in: path, required: true, schema: { type: integer, minimum: 1 } }
@@ -917,6 +945,7 @@ paths:
     get:
       operationId: getVendorConversations
       tags: [Messaging]
+      security: [{ sessionCookie: [] }]
       summary: A business's inbox; `type=inquiries` limits it to product questions
       parameters:
         - $ref: "#/components/parameters/VendorId"
@@ -931,6 +960,7 @@ paths:
     get:
       operationId: getVendorConversation
       tags: [Messaging]
+      security: [{ sessionCookie: [] }]
       summary: One conversation; marks the customer's messages read
       parameters:
         - $ref: "#/components/parameters/VendorId"
@@ -943,6 +973,7 @@ paths:
     post:
       operationId: postVendorMessage
       tags: [Messaging]
+      security: [{ sessionCookie: [] }]
       summary: The owner replies
       parameters:
         - $ref: "#/components/parameters/VendorId"
@@ -958,6 +989,7 @@ paths:
     get:
       operationId: getVendorAlerts
       tags: [Messaging]
+      security: [{ sessionCookie: [] }]
       summary: The owner's in-app alerts and unread count
       parameters:
         - $ref: "#/components/parameters/VendorId"
@@ -969,6 +1001,7 @@ paths:
     post:
       operationId: postVendorAlertsRead
       tags: [Messaging]
+      security: [{ sessionCookie: [] }]
       summary: Mark all the owner's alerts read
       parameters:
         - $ref: "#/components/parameters/VendorId"
@@ -981,6 +1014,7 @@ paths:
     post:
       operationId: postReview
       tags: [Reviews]
+      security: [{ sessionCookie: [] }]
       summary: Write or update the customer's review (one per business)
       parameters:
         - $ref: "#/components/parameters/Slug"
@@ -1006,6 +1040,7 @@ paths:
     get:
       operationId: getVendorReviews
       tags: [Reviews]
+      security: [{ sessionCookie: [] }]
       summary: A business's reviews for the owner, unanswered first
       parameters:
         - $ref: "#/components/parameters/VendorId"
@@ -1019,6 +1054,7 @@ paths:
     put:
       operationId: putReviewReply
       tags: [Reviews]
+      security: [{ sessionCookie: [] }]
       summary: Set the owner's public reply; an empty reply removes it
       parameters:
         - $ref: "#/components/parameters/VendorId"
@@ -1037,14 +1073,16 @@ paths:
     get:
       operationId: getVendorOwner
       tags: [Provider]
-      summary: The owner's name, phone and email
+      security: [{ sessionCookie: [] }]
+      summary: The signed-in owner's or manager's name, phone and email
       responses:
         "200": { $ref: "#/components/responses/Owner" }
         "404": { $ref: "#/components/responses/NotFound" }
     put:
       operationId: putVendorOwner
       tags: [Provider]
-      summary: Update the owner's name and email (the phone is the sign-in and cannot change here)
+      security: [{ sessionCookie: [] }]
+      summary: Update your own name and email (the phone is the sign-in and cannot change here)
       requestBody:
         required: true
         content:
@@ -1061,11 +1099,52 @@ paths:
         "404": { $ref: "#/components/responses/NotFound" }
         "409": { description: The email is used by another account. }
 
+  /api/vendors/{vendorId}/members:
+    parameters:
+      - $ref: "#/components/parameters/VendorId"
+    get:
+      operationId: getVendorMembers
+      tags: [Provider]
+      security: [{ sessionCookie: [] }]
+      summary: Who runs the business (owner and managers)
+      responses:
+        "200": { $ref: "#/components/responses/Members" }
+    post:
+      operationId: postVendorMember
+      tags: [Provider]
+      security: [{ sessionCookie: [] }]
+      summary: Add a manager by the phone number of their account (owner only)
+      description: A customer added this way becomes a vendor, so they can use the business login.
+      requestBody:
+        required: true
+        content: { application/json: { schema: { type: object, required: [phone], properties: { phone: { type: string } } } } }
+      responses:
+        "201": { $ref: "#/components/responses/Members" }
+        "400": { $ref: "#/components/responses/BadRequest" }
+        "403": { description: Only the owner can change the team. }
+        "404": { description: No account uses that phone number. }
+        "409": { description: That person already helps run the business. }
+
+  /api/vendors/{vendorId}/members/{userId}:
+    parameters:
+      - $ref: "#/components/parameters/VendorId"
+      - { name: userId, in: path, required: true, schema: { type: integer, minimum: 1 } }
+    delete:
+      operationId: deleteVendorMember
+      tags: [Provider]
+      security: [{ sessionCookie: [] }]
+      summary: Remove a manager (owner only; the owner cannot be removed)
+      responses:
+        "200": { $ref: "#/components/responses/Members" }
+        "403": { description: Only the owner can change the team. }
+        "404": { description: Not a manager of this business. }
+
   # ------------------------------------------------------ admin moderation
   /api/admin/reports:
     get:
       operationId: getAdminReports
       tags: [Admin]
+      security: [{ sessionCookie: [] }]
       summary: Open reports, and those resolved in the last 30 days
       responses:
         "200":
@@ -1076,6 +1155,7 @@ paths:
     post:
       operationId: postAdminReportResolve
       tags: [Admin]
+      security: [{ sessionCookie: [] }]
       summary: Dismiss a report, or take the item down
       description: |
         Taking down suspends a business, archives a listing, hides a review
@@ -1098,6 +1178,7 @@ paths:
     get:
       operationId: getAdminReviews
       tags: [Admin]
+      security: [{ sessionCookie: [] }]
       summary: Latest 50 published or hidden reviews, reported ones first
       parameters:
         - { name: status, in: query, schema: { type: string, enum: [published, hidden], default: published } }
@@ -1108,6 +1189,7 @@ paths:
     post:
       operationId: postAdminReviewStatus
       tags: [Admin]
+      security: [{ sessionCookie: [] }]
       summary: Hide or restore a review; written to `audit_logs`
       parameters:
         - { name: id, in: path, required: true, schema: { type: integer, minimum: 1 } }
@@ -1125,6 +1207,7 @@ paths:
     get:
       operationId: getAdminTrends
       tags: [Admin]
+      security: [{ sessionCookie: [] }]
       summary: Daily active users, top searches and searches with no results
       description: Built on `v_search_trends_daily`, which drops any query searched fewer than 5 times a day.
       parameters:
@@ -1169,6 +1252,7 @@ paths:
     get:
       operationId: getAdminCategories
       tags: [Admin]
+      security: [{ sessionCookie: [] }]
       summary: Every category, including hidden ones, with business counts
       responses:
         "200":
@@ -1177,6 +1261,7 @@ paths:
     post:
       operationId: postAdminCategory
       tags: [Admin]
+      security: [{ sessionCookie: [] }]
       summary: Add a main category, or a subcategory with `parent_id`
       description: The slug is made from the English name and never changes. Only two levels are allowed. Written to `audit_logs`.
       requestBody:
@@ -1201,6 +1286,7 @@ paths:
     put:
       operationId: putAdminCategory
       tags: [Admin]
+      security: [{ sessionCookie: [] }]
       summary: Rename, reorder, change the icon, or hide/show a category
       description: Hiding a main category also hides its subcategories on the public site. Written to `audit_logs`.
       parameters:
@@ -1255,6 +1341,12 @@ paths:
         "404": { $ref: "#/components/responses/NotFound" }
 
 components:
+  securitySchemes:
+    sessionCookie:
+      type: apiKey
+      in: cookie
+      name: shaheb_session
+      description: Set by POST /api/auth/verify. Missing gives 401; the wrong role or business gives 403.
   parameters:
     Slug:
       name: slug
@@ -1266,7 +1358,7 @@ components:
       name: vendorId
       in: path
       required: true
-      description: A business the signed-in user owns (any business for an admin).
+      description: TODO(auth) — will come from the session.
       schema: { type: integer, minimum: 1 }
       example: 13
     ListingId:
@@ -1355,6 +1447,21 @@ components:
               user_name: { type: string }
               user_phone: { type: string }
               user_email: { $ref: "#/components/schemas/NullableString" }
+              member_role: { type: string, enum: [owner, manager] }
+    Members:
+      description: Everyone who runs the business, owner first.
+      content:
+        application/json:
+          schema:
+            type: array
+            items:
+              type: object
+              properties:
+                user_id: { type: integer }
+                user_name: { type: string }
+                user_phone: { type: string }
+                member_role: { type: string, enum: [owner, manager] }
+                added_at: { type: string, format: date-time }
     BadRequest:
       description: Invalid input.
       content: { application/json: { schema: { $ref: "#/components/schemas/Error" } } }

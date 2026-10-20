@@ -1,5 +1,6 @@
 const express = require("express");
 const pool = require("../db");
+const { requireFeature } = require("../lib/access");
 
 const router = express.Router();
 
@@ -33,7 +34,7 @@ function parseDecision(body) {
 
 // Queue
 
-router.get("/admin/queue", async (req, res) => {
+router.get("/admin/queue", requireFeature("admin.approvals"), async (req, res) => {
     try {
         const [vendors, listings, recent] = await Promise.all([
             // Oldest first: whoever has waited longest is reviewed first.
@@ -181,7 +182,7 @@ async function decide(res, { kind, id, actor, decision, reason }) {
 }
 
 for (const kind of ["vendor", "listing"]) {
-    router.post(`/admin/${kind}s/:id/decision`, async (req, res) => {
+    router.post(`/admin/${kind}s/:id/decision`, requireFeature("admin.approvals"), async (req, res) => {
         const id = parseId(req.params.id);
         if (id === null) return res.status(400).json({ error: "Invalid id" });
 

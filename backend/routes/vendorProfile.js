@@ -1,12 +1,9 @@
 const express = require("express");
 const pool = require("../db");
 const { LIMITS, validateProfile } = require("../lib/businessProfile");
-const { imageUpload, receive, discard, storedPath, checkUploads } = require("../lib/uploads");
-const {
-    requireAuthenticatedUser,
-    requireRole,
-    requireVendorOwnership,
-} = require("../lib/middleware/auth");
+const { imageUpload, receive, discard, storedPath, checkUploads, removeUnreferencedFiles } = require("../lib/uploads");
+const { requireVendorOwnership } = require("../lib/middleware/auth");
+const { requireFeature } = require("../lib/access");
 const router = express.Router();
 
 // Add / Edit Business: the provider's own profile.
@@ -114,9 +111,7 @@ async function loadOptions() {
 
 router.get(
     "/vendors/:vendorId/profile",
-    requireAuthenticatedUser,
-    requireRole("vendor", "admin"),
-    requireVendorOwnership,
+    requireFeature("business.profile"), requireVendorOwnership,
     async (req, res) => {
         const vendorId =
             req.user.user_role === "admin"
@@ -152,9 +147,7 @@ async function syncCover(db, vendorId) {
 // PUT /api/vendors/:id/profile: saves the form; 400 carries field errors, 409 means the business is suspended.
 router.put(
     "/vendors/:vendorId/profile",
-    requireAuthenticatedUser,
-    requireRole("vendor", "admin"),
-    requireVendorOwnership,
+    requireFeature("business.profile"), requireVendorOwnership,
     async (req, res) => {
         const vendorId =
             req.user.user_role === "admin"
@@ -298,7 +291,7 @@ router.put(
 // Upload handling (limits, generated names, image checks, cleanup) lives in lib/uploads.js.
 const vendorFilePrefix = (req) => `vendor-${req.params.vendorId}`;
 // Ownership is checked before multer runs, so a refused request never writes a file.
-const ownerAccess = [requireAuthenticatedUser, requireRole("vendor", "admin"), requireVendorOwnership];
+const ownerAccess = [requireFeature("business.profile"), requireVendorOwnership];
 
 router.post("/vendors/:vendorId/logo", ...ownerAccess, receive(imageUpload("logo", LOGO_MAX_BYTES, 1, vendorFilePrefix), "2 MB"), async (req, res) => {
     const vendorId = parseId(req.params.vendorId);
@@ -306,13 +299,17 @@ router.post("/vendors/:vendorId/logo", ...ownerAccess, receive(imageUpload("logo
 
     try {
         const result = await pool.query(
-            "UPDATE vendors SET vendor_logo_url = $2, vendor_updated_at = NOW() WHERE vendor_id = $1 RETURNING vendor_logo_url",
+            `UPDATE vendors v SET vendor_logo_url = $2, vendor_updated_at = NOW()
+             FROM (SELECT vendor_logo_url AS old_url FROM vendors WHERE vendor_id = $1) before
+             WHERE v.vendor_id = $1
+             RETURNING v.vendor_logo_url, before.old_url`,
             [vendorId, storedPath(req.files[0])]
         );
         if (result.rowCount === 0) {
             await discard(req.files);
             return res.status(404).json({ error: "Vendor not found" });
         }
+        await removeUnreferencedFiles(pool, [result.rows[0].old_url]);
         res.status(201).json({ logo_url: result.rows[0].vendor_logo_url });
     } catch (err) {
         await discard(req.files);
@@ -321,16 +318,21 @@ router.post("/vendors/:vendorId/logo", ...ownerAccess, receive(imageUpload("logo
     }
 });
 
-// Removed files stay on disk, since seed data may reference the same path.
+// A removed or replaced file is deleted only when no listing photo, business photo, logo or cover
+// still uses it (seed data can share paths); see removeUnreferencedFiles.
 router.delete("/vendors/:vendorId/logo", ...ownerAccess, async (req, res) => {
     const vendorId = parseId(req.params.vendorId);
     if (vendorId === null) return res.status(400).json({ error: "Invalid vendor id" });
     try {
         const result = await pool.query(
-            "UPDATE vendors SET vendor_logo_url = NULL, vendor_updated_at = NOW() WHERE vendor_id = $1",
+            `UPDATE vendors v SET vendor_logo_url = NULL, vendor_updated_at = NOW()
+             FROM (SELECT vendor_logo_url AS old_url FROM vendors WHERE vendor_id = $1) before
+             WHERE v.vendor_id = $1
+             RETURNING before.old_url`,
             [vendorId]
         );
         if (result.rowCount === 0) return res.status(404).json({ error: "Vendor not found" });
+        await removeUnreferencedFiles(pool, [result.rows[0].old_url]);
         res.status(204).end();
     } catch (err) {
         console.error(`DELETE /api/vendors/${vendorId}/logo failed:`, err);
@@ -411,7 +413,7 @@ router.delete("/vendors/:vendorId/photos/:photoId", ...ownerAccess, async (req, 
     try {
         await client.query("BEGIN");
         const removed = await client.query(
-            "DELETE FROM vendor_photos WHERE vendor_photo_id = $1 AND vendor_id = $2",
+            "DELETE FROM vendor_photos WHERE vendor_photo_id = $1 AND vendor_id = $2 RETURNING vendor_photo_url",
             [photoId, vendorId]
         );
         if (removed.rowCount === 0) {
@@ -420,6 +422,7 @@ router.delete("/vendors/:vendorId/photos/:photoId", ...ownerAccess, async (req, 
         }
         await syncCover(client, vendorId);
         await client.query("COMMIT");
+        await removeUnreferencedFiles(pool, [removed.rows[0].vendor_photo_url]);
         res.status(204).end();
     } catch (err) {
         await client.query("ROLLBACK").catch(() => { });

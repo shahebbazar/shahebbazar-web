@@ -1,18 +1,11 @@
 const express = require("express");
 const pool = require("../db");
 const { parseId } = require("../lib/currentUser");
-const {
-    requireAuthenticatedUser,
-    requireRole,
-} = require("../lib/middleware/auth");
+const { requireFeature } = require("../lib/access");
 
 const router = express.Router();
 
-router.use(
-    "/me",
-    requireAuthenticatedUser,
-    requireRole("customer")
-);
+router.use("/me", requireFeature("account.use"));
 
 const CARD_COLUMNS = `
     c.vendor_id, c.vendor_slug, c.vendor_name, c.vendor_name_bn,
