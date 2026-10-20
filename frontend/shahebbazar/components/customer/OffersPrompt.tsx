@@ -74,9 +74,15 @@ export function OffersPrompt({
             </button>
 
             {status === "done" ? (
-                <p role="status" className="pr-6 text-sm">
-                    {copy.offersDone}
-                </p>
+                <>
+                    {/* Keeps the dialog's name for screen readers once the question is answered. */}
+                    <h2 id={titleId} className="sr-only">
+                        {fill(copy.offersTitle, { name: businessName })}
+                    </h2>
+                    <p role="status" className="pr-6 text-sm">
+                        {copy.offersDone}
+                    </p>
+                </>
             ) : (
                 <>
                     <h2 id={titleId} className="pr-6 text-[0.9375rem] font-semibold">

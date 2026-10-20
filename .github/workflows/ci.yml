@@ -1,5 +1,6 @@
 # Checks every pull request into main, and main itself after a merge (KAN-281).
-# Branch protection on main requires both jobs to pass before a pull request can be merged.
+# Branch protection on main requires these jobs to pass before a pull request can be merged:
+# API tests, Frontend checks and Browser tests.
 
 name: CI
 
@@ -86,3 +87,68 @@ jobs:
       - name: Build
         run: npx next build
         working-directory: frontend/shahebbazar
+
+  e2e:
+    name: Browser tests
+    runs-on: ubuntu-latest
+    timeout-minutes: 20
+
+    services:
+      postgres:
+        image: postgres:16-alpine
+        env:
+          POSTGRES_USER: postgres
+          POSTGRES_PASSWORD: postgres
+          POSTGRES_DB: shahebbazar
+          TZ: Asia/Dhaka
+          PGTZ: Asia/Dhaka
+        ports:
+          - 5432:5432
+        options: >-
+          --health-cmd "pg_isready -U postgres -d shahebbazar"
+          --health-interval 5s
+          --health-timeout 5s
+          --health-retries 10
+
+    env:
+      PGHOST: localhost
+      PGPORT: 5432
+      PGUSER: postgres
+      PGPASSWORD: postgres
+      PGDATABASE: shahebbazar
+      OTP_HASH_SECRET: ci-only-otp-secret
+      ANALYTICS_SALT: ci-only-salt
+
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-node@v4
+        with:
+          node-version: 24
+          cache: npm
+          cache-dependency-path: |
+            backend/package-lock.json
+            frontend/shahebbazar/package-lock.json
+            e2e/package-lock.json
+      - name: Install
+        run: |
+          npm ci --prefix backend
+          npm ci --prefix frontend/shahebbazar
+          npm ci --prefix e2e
+      - name: Install the browser
+        run: npx playwright install --with-deps chromium
+        working-directory: e2e
+      # Loads a throwaway database, builds the site, starts the API and the site, and runs every
+      # browser test on a desktop and a phone-sized screen (e2e/README.md).
+      - name: Test
+        run: npx playwright test
+        working-directory: e2e
+      # Screenshots, step-by-step traces and the API log, for working out why a test failed.
+      - name: Keep the report
+        if: ${{ failure() }}
+        uses: actions/upload-artifact@v4
+        with:
+          name: browser-test-report
+          path: |
+            e2e/playwright-report/
+            e2e/test-results/
+          retention-days: 7

@@ -16,7 +16,8 @@ Files marked **BROKEN** throw against the current schema.
 | `package-lock.json` | Lockfile for that one dev dependency (`concurrently`). |
 | `.gitignore` | Applies to the whole tree recursively. Ignores `node_modules/` at any depth, `.env` and `.env.*` (but keeps `.env.example`), `.next`, `*.tsbuildinfo`. |
 | `README.md` | Setup, architecture, conventions, branch and pull request rules, troubleshooting table, known gaps. The primary onboarding document. |
-| `.github/workflows/ci.yml` | CI (KAN-281). On every pull request into `main` and every push to it: the API tests against a PostgreSQL 16 service (job **API tests**), and lint, typecheck and the production build (job **Frontend checks**). The `main` ruleset requires both to pass before a pull request can merge; no approval is needed (KAN-32). |
+| `.github/workflows/ci.yml` | CI (KAN-281). On every pull request into `main` and every push to it, three jobs: **API tests** (the backend suite against a PostgreSQL 16 service), **Browser tests** (builds the site and runs the Playwright tests in `e2e/` on desktop and phone sizes; keeps screenshots, traces and the API log when a test fails) and **Frontend checks** (lint, typecheck, production build). The `main` ruleset requires them to pass before a pull request can merge; no approval is needed (KAN-32). |
+| `e2e/` | Browser tests (Playwright). `global-setup.ts` loads the `shahebbazar_e2e` database, builds the site into `.next-e2e`, and starts the API (port 4200) and the site (port 3200); `fixtures.ts` has `signIn`, `sql`, the sign-in code reader and a check that fails any test with browser console errors; `tests/` covers visitors, sign-in, customers, business owners and admins. See `e2e/README.md`. |
 | `.github/pull_request_template.md` | The checklist every pull request starts with: Jira key, tests, access matrix, migrations, docs, no secrets. |
 
 ---

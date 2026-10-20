@@ -20,6 +20,8 @@
     "db:verify": "npm --prefix backend run db:verify",
     "uploads:check": "npm --prefix backend run uploads:check --",
     "test": "npm --prefix backend test",
+    "test:browser": "npm --prefix e2e test",
+    "test:browser:setup": "npm --prefix e2e install && npm --prefix e2e exec playwright install chromium",
     "docs:erd": "npm --prefix backend run docs:erd",
     "docs:access": "npm --prefix backend run docs:access",
 
