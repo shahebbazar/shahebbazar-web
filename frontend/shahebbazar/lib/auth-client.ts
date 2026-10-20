@@ -285,10 +285,9 @@ export type VendorRegistrationInput = {
     vendor_phone: string;
     vendor_address: string;
     vendor_city: string;
-    vendor_nid_reference: string;
 };
 
-/** Creates the business owner's account and pending business, and signs them in. */
+/** Creates the business owner's account and business, and signs them in. */
 export async function registerVendor(
     input: VendorRegistrationInput & { code: string }
 ): Promise<RegisterCustomerResult> {

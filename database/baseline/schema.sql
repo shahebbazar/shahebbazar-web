@@ -2349,5 +2349,18 @@ CREATE INDEX idx_marketing_consents_audience
 
 
 --
+-- Platform settings (KAN-293). Also in database/migrations/003_platform_settings.sql.
+-- Settings an admin can change without a code release; see backend/lib/settings.js.
+--
+
+CREATE TABLE public.platform_settings (
+    setting_key character varying(50) PRIMARY KEY,
+    setting_value jsonb NOT NULL,
+    setting_updated_at timestamp with time zone DEFAULT now() NOT NULL,
+    setting_updated_by integer REFERENCES public.users(user_id) ON DELETE SET NULL
+);
+
+
+--
 -- PostgreSQL database dump complete
 --

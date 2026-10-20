@@ -14,7 +14,6 @@ const business = (phone, overrides = {}) => ({
     vendor_phone: phone,
     vendor_address: "12 Station Road",
     vendor_city: "Kazla",
-    vendor_nid_reference: "NID-TEST-001",
     ...overrides,
 });
 
@@ -83,7 +82,6 @@ describe("business registration", () => {
             assert.equal(user.user_email, "owner@example.com");
             assert.ok(user.user_phone_verified_at, "the phone is marked verified");
             assert.equal(res.data.vendor.vendor_status, "pending");
-            assert.equal(res.data.vendor.vendor_nid_status, "pending");
             assert.equal(res.data.vendor.vendor_slug, "padma-test-sweets");
         });
 
@@ -123,8 +121,6 @@ describe("business registration", () => {
         const cases = [
             [{ vendor_name: "" }, /Business name is required/],
             [{ vendor_phone: "not a phone" }, /valid phone/],
-            [{ vendor_nid_reference: "" }, /NID reference is required/],
-            [{ vendor_nid_reference: "x".repeat(51) }, /NID reference is too long/],
             [{ vendor_email: "not-an-email" }, /valid email/],
         ];
         for (const [override, message] of cases) {

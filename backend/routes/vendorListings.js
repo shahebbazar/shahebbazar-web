@@ -5,6 +5,7 @@ const { imageUpload, receive, discard, storedPath, checkUploads, removeUnreferen
 const { parseId } = require("../lib/currentUser");
 const { requireVendorOwnership, requireListingOwnership } = require("../lib/middleware/auth");
 const { requireFeature } = require("../lib/access");
+const { getSetting } = require("../lib/settings");
 
 // Every route here is for the business's owners and managers (or an admin). Ownership is checked before any
 // request body or upload is read, so a refused request never writes a file to disk.
@@ -130,15 +131,16 @@ router.post("/vendors/:vendorId/listings", ...vendorAccess, async (req, res) => 
     try {
         const slug = await uniqueSlug(vendorId, fields.title);
 
-        // listing_status defaults to 'pending', so a new listing waits for
-        // admin approval before the public directory picks it up.
+        // A new listing waits for admin approval before the public directory picks it up,
+        // unless listing approval is switched off (KAN-293).
+        const needsApproval = await getSetting(pool, "require_listing_approval");
         const result = await pool.query(
             `INSERT INTO vendor_listings
                  (vendor_id, category_id, listing_title, listing_title_bn,
                   listing_slug, listing_description, listing_price,
                   listing_price_max, listing_price_unit,
-                  listing_min_order_qty, listing_is_negotiable)
-             VALUES ($1, $2, $3, $4, $5, $6, $7, $8, $9, $10, $11)
+                  listing_min_order_qty, listing_is_negotiable, listing_status)
+             VALUES ($1, $2, $3, $4, $5, $6, $7, $8, $9, $10, $11, $12)
              RETURNING listing_id, listing_slug, listing_status`,
             [
                 vendorId,
@@ -152,10 +154,18 @@ router.post("/vendors/:vendorId/listings", ...vendorAccess, async (req, res) => 
                 fields.priceUnit,
                 fields.minOrderQty,
                 fields.isNegotiable,
+                needsApproval ? "pending" : "approved",
             ]
         );
 
         const row = result.rows[0];
+        if (!needsApproval) {
+            await pool.query(
+                `INSERT INTO audit_logs (audit_actor_user_id, audit_action, audit_target_type, audit_target_id, audit_before, audit_after)
+                 VALUES ($1, 'listing.auto_approve', 'listing', $2, NULL, $3)`,
+                [req.user.user_id, row.listing_id, JSON.stringify({ status: "approved", reason: "Listing approval is switched off" })]
+            );
+        }
         res.status(201).json({
             success: true,
             listing_id: row.listing_id,

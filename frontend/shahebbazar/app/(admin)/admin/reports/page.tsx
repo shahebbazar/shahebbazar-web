@@ -72,7 +72,7 @@ export default async function AdminReportsPage() {
                                     action={resolveReport.bind(null, report.report_id, "take_down")}
                                     label={TAKE_DOWN[report.target_type]}
                                     tone="danger"
-                                    confirm={`${TAKE_DOWN[report.target_type]}? This takes it off the public site.`}
+                                    confirm="This takes it off the public site."
                                 />
                                 <ActionButton action={resolveReport.bind(null, report.report_id, "dismiss")} label="Dismiss" />
                             </div>

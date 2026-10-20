@@ -8,7 +8,6 @@ import {
     type FormEvent,
 } from "react";
 import {
-    IdCard,
     MapPin,
     UserRound,
 } from "lucide-react";
@@ -23,7 +22,6 @@ const EMPTY_FORM = {
     vendor_phone: "",
     vendor_address: "",
     vendor_city: "",
-    vendor_nid_reference: "",
 };
 
 type VendorForm = typeof EMPTY_FORM;
@@ -36,8 +34,8 @@ type FormStatus =
     | null;
 
 // Step 1 collects the business details and sends a code to the phone.
-// Step 2 verifies the code, creates the account and pending business,
-// and signs the owner in.
+// Step 2 verifies the code, creates the account and business (pending, unless an admin
+// has switched business approval off), and signs the owner in.
 //
 // When `account` is supplied, the user is already signed in.
 // KAN-249 adds the new business to that existing account without
@@ -412,30 +410,6 @@ export function VendorRegistrationForm({
                         onChange={handleChange}
                     />
                 </div>
-            </section>
-
-            <section className="rounded-xl border border-line bg-surface p-5 shadow-raised sm:p-6">
-                <SectionHeading
-                    icon={<IdCard className="size-5" />}
-                    title="Identity verification"
-                    description="Provide the development NID reference for review."
-                />
-
-                <div className="mt-5">
-                    <Field
-                        id="vendor_nid_reference"
-                        label="National ID reference"
-                        value={form.vendor_nid_reference}
-                        placeholder="National ID reference"
-                        onChange={handleChange}
-                    />
-                </div>
-
-                <p className="mt-3 rounded-lg border border-line bg-surface-2 p-3 text-xs leading-5 text-muted">
-                    New business registrations remain
-                    pending until the NID reference and
-                    business are reviewed.
-                </p>
             </section>
 
             <div className="rounded-xl border border-line bg-surface p-5 shadow-raised sm:p-6">

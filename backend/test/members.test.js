@@ -77,7 +77,7 @@ describe("businesses run by more than one person (KAN-250 to 252)", () => {
         // A signed-in vendor adds a second business (KAN-249), no new code needed.
         const res = await call("POST", "/auth/register/vendor", {
             as: "otherVendor",
-            json: { vendor_name: "Uttara Spare Parts", vendor_phone: "01711000066", vendor_city: "Rajshahi", vendor_nid_reference: "NID-250" },
+            json: { vendor_name: "Uttara Spare Parts", vendor_phone: "01711000066", vendor_city: "Rajshahi" },
         });
         assert.equal(res.status, 201, JSON.stringify(res.data));
         const [member] = await query("SELECT member_role FROM vendor_members WHERE vendor_id = $1", [res.data.vendor.vendor_id]);

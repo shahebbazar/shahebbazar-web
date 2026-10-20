@@ -311,6 +311,21 @@ Uploaded images are stored as `uploads/<file>` paths and served by the API at
 
 ---
 
+## Approval settings
+
+Admins choose on **Admin → Settings** (`/admin/settings`) whether new businesses and new
+products or services need approval before they appear (KAN-293, client feedback of
+20 October 2026). Both start **on**, which is how the site has always worked.
+
+- With approval off, a new business (or a business resubmitted after rejection) or a new
+  listing is public at once. The automatic approval is recorded in the audit log
+  (`vendor.auto_approve`, `listing.auto_approve`), as is every change to a setting.
+- Switching approval off doesn't approve anything already waiting; Approvals shows it.
+- Settings live in `platform_settings` and are declared in `backend/lib/settings.js`.
+  Existing databases: run `database/migrations/003_platform_settings.sql`, or `npm run db:reset`.
+- Business registration no longer asks for an NID reference (client decision). The
+  `vendor_nid_*` columns stay in the schema in case verification returns.
+
 ## Marketing passes
 
 The vendor marketing package (KAN-242/243) is being built in six stages
@@ -363,7 +378,7 @@ This creates a throwaway `<PGDATABASE>_test` database from the baseline, starts
 the real API against it, signs in through the normal code flow as each role,
 runs the tests, and drops the database. Your development data is not touched.
 
-About 445 tests across 14 suites. Every API route is called by at least one test.
+About 470 tests across 15 suites. Every API route is called by at least one test.
 
 | Suite | Covers |
 | --- | --- |
@@ -380,6 +395,7 @@ About 445 tests across 14 suites. Every API route is called by at least one test
 | `backend/test/analytics.test.js` | Search and view beacons: repeat visits and bots not counted, appearances for approved businesses only |
 | `backend/test/uploads.test.js` | `npm run uploads:check` |
 | `backend/test/marketing.test.js` | Marketing passes: activation and management, sponsored placement ending with the pass, allowances |
+| `backend/test/settings.test.js` | Approval settings: admin-only, audited, businesses and listings public at once when approval is off; registration without an NID |
 | `backend/test/consent.test.js` | Offers consent: saving never consents, choices and their record, the audience a business may send to, My details (name and email), unsubscribe links |
 
 CI runs the same suite on every pull request, so a new feature should come with

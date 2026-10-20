@@ -16,7 +16,7 @@ const {
     useVerificationCode,
     createSession,
 } = require("../lib/verification");
-const { validateVendorRegistration, createVendor } = require("../lib/vendorRegistration");
+const { validateVendorRegistration, createVendor, registeredMessage } = require("../lib/vendorRegistration");
 
 const router = express.Router();
 
@@ -785,8 +785,7 @@ router.post("/register/vendor", async (req, res) => {
 
             return res.status(201).json({
                 success: true,
-                message:
-                    "Business registered and submitted for NID verification.",
+                message: registeredMessage(vendor),
                 user,
                 vendor,
             });
@@ -925,8 +924,7 @@ router.post("/register/vendor", async (req, res) => {
 
         return res.status(201).json({
             success: true,
-            message:
-                "Business registered and submitted for NID verification.",
+            message: registeredMessage(vendor),
             user,
             vendor,
         });

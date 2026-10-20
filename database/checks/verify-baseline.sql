@@ -33,6 +33,7 @@ WITH required_relations(object_name, object_type) AS (
         ('vendor_marketing_subscriptions', 'table'),
         ('marketing_usage_events', 'table'),
         ('marketing_consents', 'table'),
+        ('platform_settings', 'table'),
         ('v_business_cards', 'view'),
         ('v_search_trends_daily', 'view'),
         ('v_moderation_queue', 'view'),

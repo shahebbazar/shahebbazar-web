@@ -23,7 +23,6 @@ const BUSINESS = {
     vendor_name: "Farhana's Tailoring",
     vendor_phone: "01722000099",
     vendor_city: "Rajshahi",
-    vendor_nid_reference: "NID-TEST-249",
 };
 
 // Filled in before the tests run.
@@ -104,6 +103,8 @@ const ADMIN_ONLY = [
     ["marketing passes", "GET", () => "/admin/marketing"],
     ["activate a marketing pass", "POST", () => "/admin/marketing/subscriptions", { vendor_id: OWNED, package_id: 1 }],
     ["change a marketing pass", "POST", () => "/admin/marketing/subscriptions/1/extend", { days: 7 }],
+    ["approval settings", "GET", () => "/admin/settings"],
+    ["change an approval setting", "PUT", () => "/admin/settings/require_listing_approval", { value: true }],
     ["an admin route that does not exist", "GET", () => "/admin/anything-new"],
 ];
 

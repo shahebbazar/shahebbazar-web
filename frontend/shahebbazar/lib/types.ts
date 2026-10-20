@@ -450,6 +450,26 @@ export interface Customer {
     offers_count: number;
 }
 
+// Admin settings (KAN-293).
+export interface AdminSetting {
+    key: string;
+    label: string;
+    help: string;
+    value: boolean;
+    updated_at: string | null;
+    updated_by: string | null;
+}
+
+export interface AdminSettings {
+    settings: AdminSetting[];
+    waiting: { businesses: number; listings: number };
+}
+
+export interface PublicSettings {
+    require_business_approval: boolean;
+    require_listing_approval: boolean;
+}
+
 export type OfferChannel = "email" | "sms";
 
 export interface SavedBusiness extends BusinessCard {
