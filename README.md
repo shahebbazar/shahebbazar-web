@@ -398,7 +398,12 @@ About 470 tests across 15 suites. Every API route is called by at least one test
 | `backend/test/settings.test.js` | Approval settings: admin-only, audited, businesses and listings public at once when approval is off; registration without an NID |
 | `backend/test/consent.test.js` | Offers consent: saving never consents, choices and their record, the audience a business may send to, My details (name and email), unsubscribe links |
 
-CI runs the same suite on every pull request, so a new feature should come with
+**Browser tests** (`e2e/`, Playwright) click through the built site as visitors, customers,
+business owners and admins, on desktop and phone-sized screens, and fail on any browser console
+error. Set up once with `npm run test:browser:setup`, then `npm run test:browser`. See
+[e2e/README.md](e2e/README.md).
+
+CI runs the API tests, the browser tests and the frontend checks on every pull request, so a new feature should come with
 tests in the suite that matches it (or a new one). **How to write one:**
 [docs/TESTING.md](docs/TESTING.md).
 

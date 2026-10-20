@@ -110,14 +110,26 @@ A test fails if the feature doesn't exist or the document is out of date.
 Write a test that fails because of the bug **first**, then fix the bug and watch the
 test pass. That test stops the bug coming back.
 
+## Browser tests
+
+API tests check the server. **Browser tests** (`e2e/`, Playwright) check what people actually see:
+pages load, buttons work, nothing is covered up on a phone, and the browser logs no errors. Add
+one when you change a page or a flow; see [e2e/README.md](../e2e/README.md) for how.
+
+```bash
+npm run test:browser:setup   # once
+npm run test:browser
+```
+
 ## Before opening a pull request
 
 ```bash
 npm test
+npm run test:browser
 npm run lint
 npm run typecheck
 npm run build
 ```
 
-CI runs the same four checks. Evidence from manual and browser testing goes in
+CI runs the same checks. Evidence from manual and browser testing goes in
 `docs/testing/`, one report per Jira task.
