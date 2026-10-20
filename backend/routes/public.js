@@ -213,24 +213,30 @@ router.get("/businesses", async (req, res) => {
     };
     const sort = SORTS[req.query.sort] ? req.query.sort : "relevance";
 
+    // Paid placement: the two best-rated featured matches. They are shown in the Sponsored slot on the first
+    // page and left out of the ordinary results on every page, so each business appears exactly once. Other
+    // featured businesses stay in the ordinary results (sorted first by relevance).
+    const SPONSORED_SQL = `
+        SELECT vendor_id FROM v_business_cards
+        WHERE vendor_is_featured ${andSql}
+        ORDER BY rating DESC, review_count DESC, vendor_id
+        LIMIT 2`;
+
     try {
         const [organic, sponsored, total, areas, categories] = await Promise.all([
-            // Promoted records are excluded here and returned separately, so no vendor appears twice.
             pool.query(
                 `${BUSINESS_CARD_SQL}
-                 WHERE NOT vendor_is_featured ${andSql}
+                 WHERE vendor_id NOT IN (${SPONSORED_SQL}) ${andSql}
                  ORDER BY ${SORTS[sort]}
                  LIMIT ${limit} OFFSET ${offset}`,
                 params
             ),
 
-            // Paid placement: first page only, limited to two records.
             offset === 0
                 ? pool.query(
                     `${BUSINESS_CARD_SQL}
-                       WHERE vendor_is_featured ${andSql}
-                       ORDER BY rating DESC
-                       LIMIT 2`,
+                       WHERE vendor_id IN (${SPONSORED_SQL})
+                       ORDER BY rating DESC, review_count DESC, vendor_id`,
                     params
                 )
                 : Promise.resolve({ rows: [] }),
