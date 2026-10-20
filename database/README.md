@@ -39,18 +39,16 @@ exists. Runtime uploads in `backend/uploads/` are not tracked in Git.
 Seed images are for development and demonstrations only, so licensing is not a
 concern, but each one must suit the business or listing it illustrates.
 
-> **Known gap (to revisit):** the seed has no photos yet. The earlier sample
-> photos were personal test uploads and were removed, and the seed rows that
-> pointed at them were taken out so pages show placeholders rather than broken
-> images. To add development photos: choose images that suit each record, put
-> them in `seed-assets/` with descriptive names, and add `listing_photos` rows
-> (and `vendor_cover_url` values) back to `baseline/seed.sql`. Records that
-> previously had photos: listings `katan-silk-saree`, `jute-shopping-bag`,
-> `khirsapat-mango`, `ms-grill-fabrication`, `puthia-temple-day-tour`,
-> `general-medicine`, `radiology`, `kacchi-biryani`, `deluxe-room`,
-> `handloom-kurta`; covers for `rajshahi-medical-centre`,
-> `padma-view-restaurant`, `grand-river-view-hotel`, `rajshahi-craft-outlet`
-> and `digitax-accounting`.
+> **Seed photos (development placeholders).** `seed-assets/` holds stock photos that
+> `db:load` copies into the upload folder; quality and licensing don't matter.
+> - **Businesses** (`seed-business-<slug>.jpg`) are each business's first photo and cover. To add
+>   one, save the file and add the slug to the "Business photos" list in `baseline/seed.sql`.
+>   Still without one: `shaheb-bazar-cloth-store` (pending).
+> - **Listings** (`seed-listing-*.jpg`) are each listing's main photo, mapped in the "Listing
+>   photos" block at the end of `baseline/seed.sql`; one file can serve several listings. Six
+>   listings have one so far.
+>
+> Run `npm run db:reset` after adding photos.
 
 ## Changing the schema
 
