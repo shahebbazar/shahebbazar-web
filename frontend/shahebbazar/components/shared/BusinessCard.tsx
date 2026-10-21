@@ -21,7 +21,8 @@ export function BusinessCard({
     const name = pick(locale, business.vendor_name, business.vendor_name_bn);
     const cover = assetUrl(business.vendor_cover_url);
     const reviews = toNumber(business.review_count);
-    const href = localeHref(`/business/${business.vendor_slug}`, locale);
+    // A visit from a Sponsored card is counted as a sponsored view (ProfileViewBeacon).
+    const href = localeHref(`/business/${business.vendor_slug}${showSponsoredBadge ? "?from=sponsored" : ""}`, locale);
 
     return (
         <article className="group relative flex h-full flex-col overflow-hidden rounded-xl border border-line bg-surface transition-shadow hover:shadow-float">

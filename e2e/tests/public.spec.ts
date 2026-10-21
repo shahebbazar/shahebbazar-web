@@ -16,6 +16,14 @@ test("search finds a business and labels paid placement as Sponsored", async ({ 
     await expect(page.getByText("Sponsored").first()).toBeVisible();
 });
 
+test("a visit from the Sponsored results is marked as sponsored, and the mark leaves the address", async ({ page }) => {
+    await page.goto("/search");
+    const sponsored = page.locator("article").filter({ hasText: "Sponsored" }).first().getByRole("heading").getByRole("link");
+    await expect(sponsored).toHaveAttribute("href", /^\/business\/[\w-]+\?from=sponsored$/);
+    await sponsored.click();
+    await expect(page).toHaveURL(/\/business\/[\w-]+$/);
+});
+
 test("search filters apply as soon as they change, with no Search button @phone", async ({ page }) => {
     await page.goto("/search");
     // The header has its own search box; the filters themselves have no Search button.
@@ -41,6 +49,14 @@ test("a business page shows its details and payment methods @phone", async ({ pa
     await expect(page.getByRole("heading", { level: 1, name: "Rajshahi Mango Traders" })).toBeVisible();
     await expect(page.getByRole("button", { name: /Save/ }).first()).toBeVisible();
     await expect(page.getByText(/Opening Hours/i).first()).toBeVisible();
+    // The phone number is shown: a Call link on a phone, plain text to read or copy on a computer.
+    const call = page.getByRole("link", { name: "Call 01711-000005" });
+    if ((page.viewportSize()?.width ?? 1280) >= 1024) {
+        await expect(page.getByText("01711-000005", { exact: true }).filter({ visible: true })).toHaveCount(1);
+        await expect(call).toBeHidden();
+    } else {
+        await expect(call).toHaveAttribute("href", "tel:+8801711000005");
+    }
     await expectNoSideScroll(page);
 });
 

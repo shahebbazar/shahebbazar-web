@@ -429,6 +429,31 @@ The vendor marketing package (KAN-242/243) is being built in six stages
 - Existing databases: run `database/migrations/005_marketing_sends.sql`, or
   `npm run db:reset` (which also adds the demo subscribers).
 
+**Stage 5, Facebook and WhatsApp posting kit and results (KAN-287)**
+
+- Shaheb Bazar isn't connected to Facebook or WhatsApp; the owner posts these themselves
+  (labelled **You post this**). Under each one: **Copy text**, **Open in WhatsApp**
+  (WhatsApp's `wa.me` link with the message filled in) or **Open Facebook** (Facebook's share
+  box with the business page and its preview card), and **Open the photo**. No social account
+  is needed. The tools appear once the wording is saved with nothing left to fill in.
+- **Mark as posted**, with an optional link to the post (Facebook or WhatsApp addresses only),
+  records the channel and the version posted in `marketing_campaign_posts`, audited as
+  `campaign.post`. It can be undone (`campaign.unpost`). A posted campaign, like a sent one,
+  can't be deleted.
+- **Results** on the Marketing page, for 7, 30 or 90 days against the period before:
+  sponsored views, search appearances, visits from shared links, emails sent, new
+  subscribers and unsubscribes, posts, and the latest campaigns. Shown on every plan, so they
+  stay after a pass ends. Email opens and clicks aren't tracked.
+- Sponsored views are now recorded: Sponsored cards and rows link with `?from=sponsored`,
+  which the profile beacon reports and then removes from the address. The API counts it only
+  while the business is featured.
+- Campaign links (email, and the Facebook and WhatsApp posting tools) carry
+  `?from=<channel>&c=<campaign>`, so the results show visits from each campaign and
+  channel. Existing databases: run `database/migrations/007_campaign_visits.sql`.
+- A banner asks the owner to renew when the pass has ended or ends within 7 days.
+- Existing databases: run `database/migrations/006_marketing_posts.sql`, or
+  `npm run db:reset` (which also gives the featured demo businesses some sponsored views).
+
 ---
 
 ## Testing

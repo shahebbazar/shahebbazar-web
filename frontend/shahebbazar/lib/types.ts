@@ -730,6 +730,34 @@ export interface CampaignListRow {
     campaign_updated_at: string;
     versions: number;
     coupon: CampaignCoupon | null;
+    posted_on: PostChannel[];
+}
+
+// Facebook and WhatsApp aren't connected: the owner posts the text and marks it as posted (KAN-287).
+export type PostChannel = "facebook" | "whatsapp";
+export type CampaignPost = { url: string | null; posted_at: string; marked_by: string | null; version_number: number | null };
+
+// What the business's marketing did over the last `days`, against the period before (KAN-287).
+export type MarketingSource = "sponsored" | "email" | "facebook" | "whatsapp" | "share";
+export interface MarketingResults {
+    days: number;
+    // Every visit marketing brought to the page, and where each came from.
+    marketing_visits: { current: number; previous: number };
+    visits_by_source: Record<MarketingSource, { current: number; previous: number }>;
+    sponsored_views: { current: number; previous: number };
+    shared_link_views: { current: number; previous: number };
+    search_appearances: { current: number; previous: number };
+    email: { campaigns_sent: number; emails_sent: number; emails_failed: number; subscribed: number; unsubscribed: number };
+    posts: Record<PostChannel, number>;
+    recent: {
+        campaign_id: number;
+        campaign_title: string;
+        campaign_sent_at: string | null;
+        emails_sent: number;
+        visits: number;
+        posted_on: PostChannel[];
+        last_activity: string;
+    }[];
 }
 
 export interface MarketingWorkspace {
@@ -793,7 +821,15 @@ export interface CampaignSnapshot {
         cover_url: string | null;
         page_url: string;
     };
-    listings: { listing_id: number; title: string; title_bn: string | null; price: number | null; photo_url: string | null }[];
+    listings: {
+        listing_id: number;
+        title: string;
+        title_bn: string | null;
+        price: number | null;
+        price_max?: number | null;
+        price_unit?: string | null;
+        photo_url: string | null;
+    }[];
 }
 
 export interface CampaignDetail {
@@ -821,4 +857,7 @@ export interface CampaignDetail {
     placeholders: string[];
     send: CampaignSendInfo;
     coupon: CampaignCoupon | null;
+    posts: Record<PostChannel, CampaignPost | null>;
+    // Visits to the business page from this campaign's links, by channel.
+    visits: { email: number; facebook: number; whatsapp: number };
 }

@@ -172,9 +172,9 @@ test("a campaign is previewed and sent by email to the customers who chose email
     await newCampaign(page, { goal: "Reminder", products: ["Khirsapat Mango"] });
     const id = Number(new URL(page.url()).pathname.split("/").pop());
 
-    // Facebook and WhatsApp are previews for now.
-    await expect(page.getByText("Preview only")).toHaveCount(2);
-    await expect(page.getByText(/Posting to WhatsApp from Shaheb Bazar comes in a later release/)).toBeVisible();
+    // Facebook and WhatsApp are posted by the owner, with the tools under each.
+    await expect(page.getByText("You post this")).toHaveCount(2);
+    await expect(page.getByRole("link", { name: "Open in WhatsApp" })).toBeVisible();
 
     // No approval step: the draft can be sent straight away.
     const panel = page.getByRole("region", { name: "Send by email" });
@@ -184,6 +184,8 @@ test("a campaign is previewed and sent by email to the customers who chose email
 
     // Switching a photo off doesn't block sending: the change is saved as part of the send.
     await page.getByRole("switch", { name: "Include a photo in the WhatsApp message" }).uncheck({ force: true });
+    // Unsaved wording can't be posted: the posting tools wait for it to be saved.
+    await expect(page.getByText("Save your changes first, so what you post is the saved version.")).toHaveCount(2);
     const sendButton = page.getByRole("button", { name: "Save and send to 3 customers" });
     await expect(sendButton).toBeEnabled();
 
@@ -211,7 +213,59 @@ test("a campaign is previewed and sent by email to the customers who chose email
     expect(sends.map((r) => r.send_address)).toEqual(["rumana.akter@example.com", "sajid.rahman@example.com", "tania.sultana@example.com"]);
 
     await page.goto(WORKSPACE);
-    await expect(page.getByRole("link", { name: /Reminder: Khirsapat Mango/ }).first()).toContainText("Sent");
+    await expect(page.getByRole("region", { name: "Campaigns" }).getByRole("link", { name: /Reminder: Khirsapat Mango/ }).first()).toContainText("Sent");
+    await expect(page.getByRole("region", { name: "Results" })).toContainText(/\d+ emails? sent in \d+ campaigns?/);
+});
+
+test("the owner posts on Facebook and WhatsApp themselves and marks it as posted; it shows in the results @phone", async ({ page }) => {
+    await newCampaign(page, { goal: "New stock", products: ["Fazli Mango"] });
+    const title = (await page.getByRole("heading", { level: 1 }).textContent()) ?? "";
+
+    // WhatsApp opens with the message filled in; Facebook shares the business page and its preview card.
+    const whatsapp = page.getByRole("group", { name: "Post on WhatsApp" });
+    const facebook = page.getByRole("group", { name: "Post on Facebook" });
+    // The page link in each carries the channel and campaign, so visits from it count for the campaign.
+    const id = Number(new URL(page.url()).pathname.split("/").pop());
+    await expect(whatsapp.getByRole("link", { name: "Open in WhatsApp" })).toHaveAttribute("href", /^https:\/\/wa\.me\/\?text=.*Rajshahi%20Mango%20Traders/);
+    await expect(whatsapp.getByRole("link", { name: "Open in WhatsApp" })).toHaveAttribute("href", new RegExp(`rajshahi-mango-traders%3Ffrom%3Dwhatsapp%26c%3D${id}`));
+    await expect(facebook.getByRole("link", { name: "Open Facebook" })).toHaveAttribute("href", new RegExp(`facebook\\.com/sharer/sharer\\.php\\?u=.*rajshahi-mango-traders%3Ffrom%3Dfacebook%26c%3D${id}$`));
+    await expect(whatsapp.getByRole("link", { name: "Open the photo" })).toBeVisible();
+
+    // WhatsApp: marked as posted without a link.
+    await whatsapp.getByRole("button", { name: "Mark as posted" }).click();
+    await expect(whatsapp).toContainText("Posted on WhatsApp");
+
+    // Facebook: a link to another site is refused; the post's own link is kept.
+    const link = facebook.getByLabel(/Posted it\?/);
+    await link.fill("example.com/not-facebook");
+    await facebook.getByRole("button", { name: "Mark as posted" }).click();
+    await expect(facebook.getByRole("alert")).toContainText("isn't a Facebook link");
+    await link.fill("facebook.com/rajshahimango/posts/e2e");
+    await facebook.getByRole("button", { name: "Mark as posted" }).click();
+    await expect(facebook).toContainText("Posted on Facebook");
+    await expect(facebook.getByRole("link", { name: "View post" })).toHaveAttribute("href", "https://facebook.com/rajshahimango/posts/e2e");
+
+    // A posted campaign is kept as a record; a mistaken mark can be undone.
+    await expect(page.getByRole("button", { name: "Delete campaign" })).toHaveCount(0);
+    await whatsapp.getByRole("button", { name: "Not posted yet? Undo" }).click();
+    await expect(whatsapp.getByRole("button", { name: "Mark as posted" })).toBeVisible();
+    await expectNoSideScroll(page);
+
+    await page.goto(WORKSPACE);
+    await expect(page.getByRole("region", { name: "Campaigns" }).getByRole("link", { name: title.trim() }).first()).toContainText("posted on Facebook");
+    const results = page.getByRole("region", { name: "Results" });
+    await expect(results).toContainText("Visits from your marketing");
+    for (const source of ["Sponsored results", "Email", "Facebook", "WhatsApp", "Other sites"]) {
+        await expect(results.getByRole("listitem", { name: new RegExp(`^${source}: \\d+$`) })).toBeVisible();
+    }
+    await expect(results.getByRole("link", { name: new RegExp(title.trim()) }).first()).toContainText(/\d+ visits? · posted on Facebook/);
+    await results.getByRole("link", { name: "7 days" }).click();
+    await expect(results.getByRole("link", { name: "7 days" })).toHaveAttribute("aria-current", "true");
+    await expectNoSideScroll(page);
+
+    // Following a campaign link opens the business page; the marks are taken out of the address.
+    await page.goto(`/business/rajshahi-mango-traders?from=whatsapp&c=${id}`);
+    await expect(page).toHaveURL(/\/business\/rajshahi-mango-traders$/);
 });
 
 test("the account switcher shows which side you're on and moves between the customer account and the business @phone", async ({ page }) => {

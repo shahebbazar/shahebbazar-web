@@ -13,7 +13,9 @@ const MAX_SLUG_LENGTH = 200;
 // Two sponsored rows plus a first page of twenty.
 const MAX_IMPRESSIONS = 25;
 
-const VIEW_SOURCES = new Set(["search", "category", "direct", "share", "sponsored"]);
+const VIEW_SOURCES = new Set(["search", "category", "direct", "share", "sponsored", "email", "facebook", "whatsapp"]);
+// Visits from a marketing campaign's links (KAN-287), which carry the campaign's id.
+const CAMPAIGN_SOURCES = new Set(["email", "facebook", "whatsapp"]);
 
 // Crawlers, link-preview fetchers and scripted clients. "^node" is Node's built-in fetch, which sends "node".
 const NON_HUMAN_AGENT =
@@ -170,13 +172,19 @@ router.post("/track/view", textBody, async (req, res) => {
     }
 
     const source = VIEW_SOURCES.has(body.source) ? body.source : "direct";
+    // A campaign link's id; used only for a campaign source, and only if it is this business's campaign.
+    const campaignId = CAMPAIGN_SOURCES.has(source) && Number.isSafeInteger(body.campaign) && body.campaign > 0 && body.campaign <= 2147483647
+        ? body.campaign
+        : null;
 
     if (isNonHuman(req)) return res.status(204).end();
 
     try {
         await pool.query(
-            `INSERT INTO vendor_profile_views (vendor_id, view_source, view_session_hash)
-             SELECT v.vendor_id, $2, $3
+            // A view counts as sponsored only while the business is in the Sponsored results.
+            `INSERT INTO vendor_profile_views (vendor_id, view_source, view_session_hash, view_campaign_id)
+             SELECT v.vendor_id, CASE WHEN $2 = 'sponsored' AND NOT v.vendor_is_featured THEN 'direct' ELSE $2 END, $3,
+                    (SELECT c.campaign_id FROM marketing_campaigns c WHERE c.campaign_id = $5 AND c.vendor_id = v.vendor_id)
              FROM vendors v
              WHERE v.vendor_slug = $1 AND v.vendor_status = 'approved'
                AND NOT EXISTS (
@@ -185,7 +193,7 @@ router.post("/track/view", textBody, async (req, res) => {
                      AND pv.view_session_hash = $3
                      AND pv.view_created_at > NOW() - $4::interval
                )`,
-            [slug, source, sessionHash(req), DEDUPE_WINDOW]
+            [slug, source, sessionHash(req), DEDUPE_WINDOW, campaignId]
         );
         res.status(204).end();
     } catch (err) {

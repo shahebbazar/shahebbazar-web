@@ -175,8 +175,11 @@ describe("the email itself", () => {
         vendor_id: 1,
         campaign_language: "en",
         campaign_source_snapshot: {
-            business: { name: "Rajshahi Mango Traders", name_bn: "রাজশাহী আম ব্যবসায়ী" },
-            listings: [{ photo_url: "uploads/mango.jpg" }, { photo_url: null }],
+            business: { name: "Rajshahi Mango Traders", name_bn: "রাজশাহী আম ব্যবসায়ী", slug: "rajshahi-mango-traders" },
+            listings: [
+                { title: "Khirsapat Mango", title_bn: "খিরসাপাত আম", price: 2800, price_max: 4200, price_unit: "maund", photo_url: "uploads/mango.jpg" },
+                { title: "Mango pickle", price: null, photo_url: null },
+            ],
         },
     };
     const recipient = { user_id: 42, user_name: "Rumana", address: "rumana@example.com" };
@@ -186,7 +189,7 @@ describe("the email itself", () => {
         const email = buildCampaignEmail({ campaign, content: content(), recipient, replyTo: "shop@example.com" });
         assert.deepEqual(email.from, { name: "Rajshahi Mango Traders via Shaheb Bazar", address: "offers@shahebbazar.com" });
         assert.equal(email.replyTo, "shop@example.com");
-        assert.match(email.html, /<strong>Rajshahi Mango Traders<\/strong> <span[^>]*>via Shaheb Bazar<\/span>/, "shown at the top of the email too");
+        assert.match(email.html, />Rajshahi Mango Traders<\/div><div[^>]*>via Shaheb Bazar<\/div>/, "shown at the top of the email too");
         assert.match(email.headers["List-Unsubscribe"], /^<https?:\/\/[^>]+\/api\/unsubscribe\/42\.1\.email\.[\w-]{32}>$/);
         assert.equal(email.headers["List-Unsubscribe-Post"], "List-Unsubscribe=One-Click");
         assert.match(email.text, /Unsubscribe: \S+\/unsubscribe\/42\.1\.email\./);
@@ -202,6 +205,55 @@ describe("the email itself", () => {
         assert.equal(email.subject, "Fresh <mangoes>", "the subject is plain text");
         const without = buildCampaignEmail({ campaign, content: content({ photos: false }), recipient });
         assert.doesNotMatch(without.html, /<img /);
+    });
+
+    it("shows the business's logo beside its name, or its first letter when it has none", () => {
+        const withLogo = { ...campaign, campaign_source_snapshot: { ...campaign.campaign_source_snapshot, business: { ...campaign.campaign_source_snapshot.business, logo_url: "uploads/logo.png" } } };
+        const email = buildCampaignEmail({ campaign: withLogo, content: content({ photos: false }), recipient });
+        assert.match(email.html, /<img src="https?:\/\/[^"]+\/uploads\/logo\.png" alt="" width="44" height="44"/);
+        const without = buildCampaignEmail({ campaign, content: content({ photos: false }), recipient });
+        assert.doesNotMatch(without.html, /<img /);
+        assert.match(without.html, />R<\/td>/);
+    });
+
+    it("has a button for replying on Shaheb Bazar, which opens a message to the business", () => {
+        const email = buildCampaignEmail({ campaign, content: content(), recipient });
+        assert.match(email.html, /<a href="https?:\/\/[^"]+\/message\/rajshahi-mango-traders"[^>]*>Reply on Shaheb Bazar<\/a>/);
+        assert.match(email.text, /Reply on Shaheb Bazar: \S+\/message\/rajshahi-mango-traders\n/);
+        const bangla = buildCampaignEmail({ campaign: { ...campaign, campaign_language: "bn" }, content: content(), recipient });
+        assert.match(bangla.html, />সাহেব বাজারে উত্তর দিন<\/a>/);
+    });
+
+    it("shows a card for each product with its price and a link to the business page, unless photos are off", () => {
+        const email = buildCampaignEmail({ campaign, content: content(), recipient });
+        assert.match(email.html, />Khirsapat Mango<\/div><div[^>]*>৳2,800–৳4,200 per maund<\/div>/);
+        assert.match(email.html, />Mango pickle<\/div><div style="margin-top:10px">/, "no price shown when there is none");
+        assert.equal((email.html.match(/\/business\/rajshahi-mango-traders#services"/g) || []).length, 2);
+        const bangla = buildCampaignEmail({ campaign: { ...campaign, campaign_language: "bn" }, content: content(), recipient });
+        assert.match(bangla.html, />খিরসাপাত আম<\/div>/);
+        const without = buildCampaignEmail({ campaign, content: content({ photos: false }), recipient });
+        assert.doesNotMatch(without.html, /#services"/);
+    });
+
+    it("shows the offer's coupon while it works, and buttons to see the page, call and get directions", () => {
+        const offer = (endsOn) => ({
+            ...campaign, campaign_coupon_code: "MANGO10", campaign_ends_on: endsOn,
+            campaign_source_snapshot: { ...campaign.campaign_source_snapshot, business: { ...campaign.campaign_source_snapshot.business, phone: "+8801711000005", address: "Shaheb Bazar Road, Rajshahi" } },
+        });
+        const email = buildCampaignEmail({ campaign: offer("2099-11-30"), content: content(), recipient });
+        assert.match(email.html, />MANGO10<\/div>/);
+        assert.match(email.html, /Valid until 30 November 2099\./);
+        assert.match(email.html, /<a href="tel:\+8801711000005"[^>]*>Call 01711-000005<\/a>/);
+        assert.match(email.html, /<a href="https:\/\/www\.google\.com\/maps\/search\/\?api=1&amp;query=Rajshahi%20Mango%20Traders%2C%20Shaheb%20Bazar%20Road%2C%20Rajshahi"[^>]*>Get directions<\/a>/);
+        assert.match(email.html, />View our page<\/a>/);
+        assert.doesNotMatch(buildCampaignEmail({ campaign: offer("2020-01-01"), content: content(), recipient }).html, /MANGO10/, "not once it has expired");
+        // Without a phone or address, those buttons are left out.
+        assert.doesNotMatch(buildCampaignEmail({ campaign, content: content(), recipient }).html, /tel:|Get directions/);
+    });
+
+    it("starts with a hidden preview line, which inboxes show after the subject", () => {
+        const email = buildCampaignEmail({ campaign, content: content(), recipient });
+        assert.match(email.html, /<div style="display:none[^"]*">Hello &amp; welcome<\/div>/);
     });
 
     it("writes the footer in Bangla for a Bangla campaign", () => {

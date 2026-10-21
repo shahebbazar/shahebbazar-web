@@ -1,23 +1,58 @@
-// Builds one campaign email for one customer (KAN-286): the approved wording, the product photos
-// if the owner kept them, and the customer's own unsubscribe link, both in the email and as the
+// Builds one campaign email for one customer (KAN-286, KAN-287): the approved wording, product cards
+// if the owner kept the photos, the offer's coupon, buttons to reply on Shaheb Bazar, see the page,
+// call and get directions, and the customer's own unsubscribe link, both in the email and as the
 // one-click List-Unsubscribe header (RFC 8058) that mail apps show as an "Unsubscribe" button.
+//
+// Email-safe and phone-first: tables for layout, inline styles and colour attributes (many mail apps
+// drop <style> and <body> styles), a card that fills a phone screen and stops at 600px elsewhere,
+// and buttons that wrap onto new lines on a narrow screen.
 
-const { apiUrl, assetUrl } = require("../../lib/site");
+const { apiUrl, assetUrl, siteUrl } = require("../../lib/site");
 const { senderAddress } = require("../../integrations/email");
 const { unsubscribeToken, unsubscribeUrl } = require("./consent");
+const { listingPrice } = require("./templates");
 
-const FOOTER = {
+const COPY = {
     en: {
+        // Replies belong in the business's Shaheb Bazar inbox, not an email inbox.
+        reply: "Reply on Shaheb Bazar",
+        replyText: (url) => `Reply on Shaheb Bazar: ${url}`,
+        page: "View our page",
+        pageText: (url) => `Our page: ${url}`,
+        call: (phone) => `Call ${phone}`,
+        directions: "Get directions",
+        view: "View",
+        couponLabel: "Your code",
+        couponUntil: (day) => `Show this code when you visit or order. Valid until ${day}.`,
+        sentWith: "Sent with Shaheb Bazar, Rajshahi's local business directory.",
         why: (name) => `You get this because you chose to get offers from ${name} on Shaheb Bazar.`,
         stop: "Unsubscribe",
         stopText: (url) => `Unsubscribe: ${url}`,
+        day: (d) => new Intl.DateTimeFormat("en-GB", { day: "numeric", month: "long", year: "numeric", timeZone: "Asia/Dhaka" }).format(d),
     },
     bn: {
+        reply: "সাহেব বাজারে উত্তর দিন",
+        replyText: (url) => `সাহেব বাজারে উত্তর দিন: ${url}`,
+        page: "আমাদের পেজ দেখুন",
+        pageText: (url) => `আমাদের পেজ: ${url}`,
+        call: (phone) => `কল করুন ${phone}`,
+        directions: "পথ দেখুন",
+        view: "দেখুন",
+        couponLabel: "আপনার কোড",
+        couponUntil: (day) => `দোকানে এসে বা অর্ডারের সময় কোডটি দেখান। ${day} পর্যন্ত চলবে।`,
+        sentWith: "সাহেব বাজার থেকে পাঠানো, রাজশাহীর স্থানীয় ব্যবসার তালিকা।",
         why: (name) => `আপনি সাহেব বাজারে ${name}-এর অফার পেতে চেয়েছেন বলে এই ইমেইল পেয়েছেন।`,
         stop: "আর অফার চাই না",
         stopText: (url) => `আর অফার চাই না: ${url}`,
+        day: (d) => new Intl.DateTimeFormat("bn-BD", { day: "numeric", month: "long", year: "numeric", timeZone: "Asia/Dhaka" }).format(d),
     },
 };
+
+const BRAND = "#2563eb";
+const INK = "#1e293b";
+const MUTED = "#64748b";
+const LINE = "#e2e8f0";
+const FONT = "font-family:Arial,Helvetica,sans-serif";
 
 const escapeHtml = (s) => String(s).replace(/[&<>"']/g, (c) => ({ "&": "&amp;", "<": "&lt;", ">": "&gt;", '"': "&quot;", "'": "&#39;" })[c]);
 
@@ -31,20 +66,88 @@ function bodyHtml(text) {
         .replace(/\n/g, "<br>\n");
 }
 
-// The card is 600px wide with 24px each side, so photos share 552px.
-const CONTENT_WIDTH = 552;
-const PHOTO_GAP = 8;
+/**
+ * The business page's address with the channel and campaign added (?from=email&c=12), so a visit from
+ * the link counts for the campaign (frontend ProfileViewBeacon, which then removes them).
+ */
+function campaignLink(pageUrl, channel, campaignId) {
+    if (!campaignId) return pageUrl;
+    const [base, hash] = pageUrl.split("#");
+    const tracked = `${base}${base.includes("?") ? "&" : "?"}from=${channel}&c=${campaignId}`;
+    return hash === undefined ? tracked : `${tracked}#${hash}`;
+}
+
+/** Text with the bare business page address (not a longer address starting with it) swapped for `to`. */
+const swapPageUrl = (text, pageUrl, to) =>
+    text.replace(new RegExp(`${pageUrl.replace(/[.*+?^${}()|[\]\\]/g, "\\$&")}(?![\\w/?#-])`, "g"), () => to);
+
+/** A stored Bangladeshi number ("+8801712345678") as people write it ("01712-345678"). */
+const displayPhone = (phone) => {
+    const m = /^\+880(1\d{3})(\d{6})$/.exec(String(phone).replace(/[\s-]/g, ""));
+    return m ? `0${m[1]}-${m[2]}` : phone;
+};
+
+// Dates from PostgreSQL are Date objects at local midnight; the brief keeps YYYY-MM-DD.
+const pad = (n) => String(n).padStart(2, "0");
+const isoDay = (d) => (d instanceof Date ? `${d.getFullYear()}-${pad(d.getMonth() + 1)}-${pad(d.getDate())}` : d || null);
+const todayInDhaka = () => new Intl.DateTimeFormat("en-CA", { timeZone: "Asia/Dhaka" }).format(new Date());
+
+/** A solid button (the main action), drawn with a table cell so Outlook shows the colour too. */
+const primaryButton = (href, label) =>
+    `<table role="presentation" cellpadding="0" cellspacing="0" border="0"><tr><td bgcolor="${BRAND}" style="border-radius:8px">`
+    + `<a href="${escapeHtml(href)}" style="display:inline-block;padding:13px 22px;${FONT};font-size:15px;font-weight:bold;color:#ffffff;text-decoration:none;border-radius:8px">${escapeHtml(label)}</a>`
+    + `</td></tr></table>`;
+
+/** An outlined button. Several sit in one cell so they wrap onto a new line on a phone. */
+const secondaryButton = (href, label) =>
+    `<a href="${escapeHtml(href)}" style="display:inline-block;margin:0 8px 8px 0;padding:9px 14px;border:1px solid #cbd5e1;border-radius:8px;${FONT};font-size:13px;font-weight:bold;color:${INK};text-decoration:none;white-space:nowrap">${escapeHtml(label)}</a>`;
 
 /**
- * The product photos side by side, each in an equal share of a full-width row, shrinking with the
- * screen. The pixel width attribute is for Outlook on Windows, which ignores the CSS width.
+ * The header: the business's logo (or its first letter on a coloured circle, as in the editor's
+ * preview) beside its name. Width and height attributes keep Outlook from showing it full size;
+ * apps that ignore border-radius show a square logo.
  */
-function photosHtml(photos) {
-    const width = Math.floor((CONTENT_WIDTH - PHOTO_GAP * (photos.length - 1)) / photos.length);
-    const share = Math.floor(100 / photos.length);
-    const cells = photos.map((src, i) =>
-        `<td valign="top" width="${share}%" style="padding-left:${i ? PHOTO_GAP : 0}px"><img src="${escapeHtml(src)}" alt="" width="${width}" border="0" style="width:100%;max-width:${width}px;height:auto"></td>`);
-    return `<table role="presentation" width="100%" cellpadding="0" cellspacing="0" border="0"><tr>${cells.join("")}</tr></table>`;
+function headerHtml(name, logo) {
+    const size = 44;
+    const badge = logo
+        ? `<img src="${escapeHtml(logo)}" alt="" width="${size}" height="${size}" border="0" style="display:block;width:${size}px;height:${size}px;border-radius:50%;object-fit:cover">`
+        : `<table role="presentation" width="${size}" cellpadding="0" cellspacing="0" border="0"><tr><td width="${size}" height="${size}" align="center" valign="middle" bgcolor="#dbeafe" style="border-radius:50%;${FONT};font-size:18px;font-weight:bold;color:#1d4ed8">${escapeHtml(name.trim().charAt(0).toUpperCase() || "?")}</td></tr></table>`;
+    return `<table role="presentation" cellpadding="0" cellspacing="0" border="0"><tr>`
+        + `<td valign="middle" width="${size}" style="padding-right:12px">${badge}</td>`
+        + `<td valign="middle" style="${FONT};color:${INK}"><div style="font-size:17px;font-weight:bold;line-height:1.3">${escapeHtml(name)}</div>`
+        + `<div style="font-size:12px;color:${MUTED};line-height:1.4">via Shaheb Bazar</div></td>`
+        + `</tr></table>`;
+}
+
+/**
+ * One card per product: photo, name, price and a View button to the business page. Photo beside the
+ * text keeps each card one row, which fits a 320px screen and every mail app.
+ */
+function productCardsHtml(listings, lang, pageUrl, c) {
+    const thumb = 96;
+    const cards = listings.map((l) => {
+        const title = lang === "bn" && l.title_bn ? l.title_bn : l.title;
+        const price = listingPrice(lang, l);
+        const photo = assetUrl(l.photo_url);
+        return `<tr><td style="padding:0 0 12px"><table role="presentation" width="100%" cellpadding="0" cellspacing="0" border="0" style="border:1px solid ${LINE};border-radius:10px"><tr>`
+            + (photo ? `<td width="${thumb}" valign="top" style="padding:10px 0 10px 10px"><img src="${escapeHtml(photo)}" alt="" width="${thumb}" height="${thumb}" border="0" style="display:block;width:${thumb}px;height:${thumb}px;border-radius:8px;object-fit:cover"></td>` : "")
+            + `<td valign="middle" style="padding:12px 14px;${FONT};color:${INK}">`
+            + `<div style="font-size:15px;font-weight:bold;line-height:1.35">${escapeHtml(title)}</div>`
+            + (price ? `<div style="margin-top:4px;font-size:15px;font-weight:bold;color:#15803d">${escapeHtml(price)}</div>` : "")
+            + `<div style="margin-top:10px"><a href="${escapeHtml(`${pageUrl}#services`)}" style="${FONT};font-size:13px;font-weight:bold;color:${BRAND};text-decoration:none">${escapeHtml(c.view)} &rarr;</a></div>`
+            + `</td></tr></table></td></tr>`;
+    });
+    return `<table role="presentation" width="100%" cellpadding="0" cellspacing="0" border="0">${cards.join("")}</table>`;
+}
+
+/** The offer's coupon in a dashed box, while it still works. */
+function couponHtml(code, endsOn, c) {
+    return `<table role="presentation" width="100%" cellpadding="0" cellspacing="0" border="0"><tr>`
+        + `<td align="center" bgcolor="#eff6ff" style="padding:16px;border:2px dashed #93c5fd;border-radius:10px;${FONT}">`
+        + `<div style="font-size:12px;font-weight:bold;letter-spacing:1px;text-transform:uppercase;color:${MUTED}">${escapeHtml(c.couponLabel)}</div>`
+        + `<div style="margin-top:6px;font-size:24px;font-weight:bold;letter-spacing:3px;color:#1d4ed8">${escapeHtml(code)}</div>`
+        + `<div style="margin-top:6px;font-size:13px;color:${MUTED}">${escapeHtml(c.couponUntil(c.day(new Date(`${endsOn}T00:00:00+06:00`))))}</div>`
+        + `</td></tr></table>`;
 }
 
 /**
@@ -53,32 +156,56 @@ function photosHtml(photos) {
  */
 function buildCampaignEmail({ campaign, content, recipient, replyTo }) {
     const snapshot = campaign.campaign_source_snapshot;
+    const { business } = snapshot;
     const lang = campaign.campaign_language === "bn" ? "bn" : "en";
-    const name = lang === "bn" && snapshot.business.name_bn ? snapshot.business.name_bn : snapshot.business.name;
-    const footer = FOOTER[lang];
+    const c = COPY[lang];
+    const name = lang === "bn" && business.name_bn ? business.name_bn : business.name;
     const unsubscribe = unsubscribeUrl(recipient.user_id, campaign.vendor_id, "email");
     const oneClick = `${apiUrl()}/api/unsubscribe/${unsubscribeToken(recipient.user_id, campaign.vendor_id, "email")}`;
-    const photos = content.email.photos === false ? [] : snapshot.listings.map((l) => assetUrl(l.photo_url)).filter(Boolean);
+    const plainPageUrl = business.page_url || `${siteUrl()}/business/${encodeURIComponent(business.slug)}`;
+    // Every link to the business page counts its visits for this campaign's email.
+    const pageUrl = campaignLink(plainPageUrl, "email", campaign.campaign_id);
+    const body = swapPageUrl(content.email.body, plainPageUrl, pageUrl);
+    // Opens a message to the business, after logging in if needed (frontend /message/<slug>).
+    const reply = `${siteUrl()}/message/${encodeURIComponent(business.slug)}`;
+    const directions = business.address
+        ? `https://www.google.com/maps/search/?api=1&query=${encodeURIComponent(`${business.name}, ${business.address}`)}`
+        : null;
+    // Product cards replace the photo strip; switching the email's photos off leaves the text alone.
+    const cards = content.email.photos === false ? [] : snapshot.listings;
+    const endsOn = isoDay(campaign.campaign_ends_on);
+    const coupon = campaign.campaign_coupon_code && endsOn && todayInDhaka() <= endsOn ? campaign.campaign_coupon_code : null;
+    // The line inboxes show after the subject: the start of the message.
+    const preheader = content.email.body.split("\n").find((line) => line.trim())?.trim().slice(0, 140) ?? "";
 
-    // Email-safe and phone-first: a full-width table for the background, and a card that fills a
-    // phone screen and stops at 600px elsewhere. Colours are attributes, because many mail apps drop
-    // <body> styles. Outlook on Windows ignores max-width, so a table only it reads holds it at 600px.
-    const font = "font-family:Arial,Helvetica,sans-serif";
+    const secondary = [
+        secondaryButton(pageUrl, c.page),
+        business.phone ? secondaryButton(`tel:${business.phone}`, c.call(displayPhone(business.phone))) : "",
+        directions ? secondaryButton(directions, c.directions) : "",
+    ].join("");
+
     const html = `<!doctype html>
 <html lang="${lang}">
-<head><meta charset="utf-8"><meta name="viewport" content="width=device-width"><title>${escapeHtml(content.email.subject)}</title></head>
-<body style="margin:0">
+<head><meta charset="utf-8"><meta name="viewport" content="width=device-width"><meta name="color-scheme" content="light"><title>${escapeHtml(content.email.subject)}</title></head>
+<body style="margin:0;padding:0">
+<div style="display:none;max-height:0;overflow:hidden;opacity:0;color:transparent">${escapeHtml(preheader)}</div>
 <table role="presentation" width="100%" cellpadding="0" cellspacing="0" border="0" bgcolor="#f1f5f9">
 <tr><td align="center" style="padding:24px 12px">
 <!--[if mso]><table role="presentation" width="600" cellpadding="0" cellspacing="0" border="0"><tr><td><![endif]-->
-<table role="presentation" width="100%" cellpadding="0" cellspacing="0" border="0" bgcolor="#ffffff" style="max-width:600px">
-<tr><td style="padding:20px 24px;border-bottom:1px solid #e2e8f0;${font};font-size:16px;color:#1e293b"><strong>${escapeHtml(name)}</strong> <span style="font-size:13px;color:#64748b">via Shaheb Bazar</span></td></tr>
-${photos.length ? `<tr><td style="padding:16px 24px 0">${photosHtml(photos)}</td></tr>` : ""}
-<tr><td style="padding:20px 24px;${font};font-size:15px;color:#1e293b;word-wrap:break-word;word-break:break-word">
-${bodyHtml(content.email.body)}
+<table role="presentation" width="100%" cellpadding="0" cellspacing="0" border="0" style="max-width:600px">
+<tr><td height="4" bgcolor="${BRAND}" style="font-size:0;line-height:0;border-radius:12px 12px 0 0">&nbsp;</td></tr>
+<tr><td bgcolor="#ffffff" style="padding:20px 24px;border-bottom:1px solid ${LINE}">${headerHtml(name, assetUrl(business.logo_url))}</td></tr>
+<tr><td bgcolor="#ffffff" style="padding:24px 24px 8px;${FONT};font-size:15px;line-height:1.6;color:${INK};word-wrap:break-word;word-break:break-word">
+${bodyHtml(body)}
 </td></tr>
-<tr><td style="padding:16px 24px;border-top:1px solid #e2e8f0;${font};font-size:12px;color:#64748b">
-${escapeHtml(footer.why(name))} <a href="${escapeHtml(unsubscribe)}" style="color:#64748b">${footer.stop}</a>
+${cards.length ? `<tr><td bgcolor="#ffffff" style="padding:16px 24px 4px">${productCardsHtml(cards, lang, pageUrl, c)}</td></tr>` : ""}
+${coupon ? `<tr><td bgcolor="#ffffff" style="padding:12px 24px 4px">${couponHtml(coupon, endsOn, c)}</td></tr>` : ""}
+<tr><td bgcolor="#ffffff" style="padding:20px 24px 4px">${primaryButton(reply, c.reply)}</td></tr>
+<tr><td bgcolor="#ffffff" style="padding:12px 24px 16px">${secondary}</td></tr>
+<tr><td bgcolor="#f8fafc" style="padding:18px 24px;border-top:1px solid ${LINE};border-radius:0 0 12px 12px;${FONT};font-size:12px;line-height:1.6;color:${MUTED}">
+<strong style="color:${INK}">${escapeHtml(name)}</strong>${business.address ? ` &middot; ${escapeHtml(business.address)}` : ""}<br>
+${escapeHtml(c.sentWith)}<br>
+${escapeHtml(c.why(name))} <a href="${escapeHtml(unsubscribe)}" style="color:${MUTED}">${escapeHtml(c.stop)}</a>
 </td></tr>
 </table>
 <!--[if mso]></td></tr></table><![endif]-->
@@ -87,7 +214,17 @@ ${escapeHtml(footer.why(name))} <a href="${escapeHtml(unsubscribe)}" style="colo
 </body>
 </html>`;
 
-    const text = `${content.email.body}\n\n--\n${footer.why(name)}\n${footer.stopText(unsubscribe)}\n`;
+    const text = [
+        body,
+        "",
+        c.replyText(reply),
+        c.pageText(pageUrl),
+        "",
+        "--",
+        c.why(name),
+        c.stopText(unsubscribe),
+        "",
+    ].join("\n");
 
     return {
         from: { name: `${name} via Shaheb Bazar`, address: senderAddress() },
@@ -104,4 +241,4 @@ ${escapeHtml(footer.why(name))} <a href="${escapeHtml(unsubscribe)}" style="colo
     };
 }
 
-module.exports = { buildCampaignEmail, bodyHtml, escapeHtml };
+module.exports = { buildCampaignEmail, bodyHtml, escapeHtml, campaignLink };

@@ -7,7 +7,8 @@ import { PhoneVerificationForm } from "@/components/auth/PhoneVerificationForm";
 
 type AccountType = "customer" | "vendor";
 
-export function LoginPanel() {
+/** next: where to go after logging in, if the visitor was on their way somewhere (e.g. messaging a business). */
+export function LoginPanel({ next = null }: { next?: string | null }) {
     const [accountType, setAccountType] = useState<AccountType>("customer");
     const [copied, setCopied] = useState(false);
 
@@ -86,7 +87,7 @@ export function LoginPanel() {
                     </p>
                 </div>
 
-                <PhoneVerificationForm locale="en" audience={accountType} />
+                <PhoneVerificationForm locale="en" audience={accountType} next={next} />
             </div>
 
             {/* Dev Disclaimer Section */}
