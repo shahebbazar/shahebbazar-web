@@ -3,6 +3,13 @@
 // Every function takes `db` (the pool, or a client inside a transaction) so callers control
 // transactions. A pass's stored status can say "active" after its end date has passed; the
 // effective status below treats that as "expired", so nothing depends on a scheduled job.
+//
+// Email campaigns have two free allowances: a business with no running pass (none, waiting or
+// cancelled) gets the free plan's monthly email (the admin setting free_marketing_emails_per_month),
+// and one whose pass ended gets EXPIRED_EMAILS_PER_WEEK. Usage is recorded against the business,
+// and against the pass when there is one.
+
+const { getSetting } = require("../../lib/settings");
 
 const ACTIONS = {
     email_campaign: { limit: "package_email_campaign_limit", label: "email campaign" },
@@ -53,14 +60,34 @@ async function usedAllowance(db, subscriptionId) {
 /** Free emails sent by a business in the last seven days (the post-expiry allowance). */
 async function freeEmailsThisWeek(db, vendorId) {
     const result = await db.query(
-        `SELECT COALESCE(SUM(u.usage_quantity), 0)::int AS n
-         FROM marketing_usage_events u
-         JOIN vendor_marketing_subscriptions s ON s.subscription_id = u.subscription_id
-         WHERE s.vendor_id = $1 AND u.usage_is_free AND u.usage_type = 'email_campaign'
-           AND u.usage_created_at > now() - INTERVAL '7 days'`,
+        `SELECT COALESCE(SUM(usage_quantity), 0)::int AS n
+         FROM marketing_usage_events
+         WHERE vendor_id = $1 AND usage_is_free AND usage_type = 'email_campaign'
+           AND usage_created_at > now() - INTERVAL '7 days'`,
         [vendorId]
     );
     return result.rows[0].n;
+}
+
+/** Free emails sent by a business this calendar month in Bangladesh (the free plan's allowance). */
+async function freeEmailsThisMonth(db, vendorId) {
+    const result = await db.query(
+        `SELECT COALESCE(SUM(usage_quantity), 0)::int AS n
+         FROM marketing_usage_events
+         WHERE vendor_id = $1 AND usage_is_free AND usage_type = 'email_campaign'
+           AND usage_created_at >= date_trunc('month', now() AT TIME ZONE 'Asia/Dhaka') AT TIME ZONE 'Asia/Dhaka'`,
+        [vendorId]
+    );
+    return result.rows[0].n;
+}
+
+const monthName = () => new Date().toLocaleDateString("en-GB", { month: "long", timeZone: "Asia/Dhaka" });
+
+/** The free plan's email allowance this month: { limit, used, left }. */
+async function freePlanEmails(db, vendorId) {
+    const limit = Number(await getSetting(db, "free_marketing_emails_per_month"));
+    const used = await freeEmailsThisMonth(db, vendorId);
+    return { limit, used, left: Math.max(0, limit - used) };
 }
 
 /** What the business's pass looks like right now, for the dashboard and the admin page. Null if it never had one. */
@@ -96,16 +123,29 @@ async function checkEntitlement(db, vendorId, action, quantity = 1, { lock = fal
     if (!ACTIONS[action]) throw new Error(`Unknown marketing action: ${action}`);
     const pass = await currentPass(db, vendorId, { lock });
     const deny = (status, reason) => ({ allowed: false, status, reason });
+    const status = pass ? pass.effective_status : "none";
 
-    if (!pass) return deny("none", "This business has no Marketing pass. An administrator can activate one.");
+    // No running pass: email campaigns use the free plan's monthly allowance; nothing else is free.
+    if (["none", "pending", "cancelled"].includes(status)) {
+        if (action !== "email_campaign") {
+            if (status === "pending") return deny("pending", "The Marketing pass is waiting to be activated.");
+            if (status === "cancelled") return deny("cancelled", "The Marketing pass was cancelled.");
+            return deny("none", "This business has no Marketing pass. An administrator can activate one.");
+        }
+        // Lock the business row so two sends cannot both take the last free email.
+        if (lock) await db.query("SELECT 1 FROM vendors WHERE vendor_id = $1 FOR UPDATE", [vendorId]);
+        const free = await freePlanEmails(db, vendorId);
+        if (free.left < quantity) {
+            return deny(status, free.limit === 0
+                ? "Free email campaigns are switched off. A Marketing pass includes email campaigns."
+                : `The free plan's ${free.limit === 1 ? "email" : `${free.limit} emails`} for ${monthName()} ${free.limit === 1 ? "is" : "are"} used. A Marketing pass includes more.`);
+        }
+        return { allowed: true, status: "free", subscriptionId: null, free: true, left: free.left - quantity };
+    }
 
-    switch (pass.effective_status) {
-        case "pending":
-            return deny("pending", "The Marketing pass is waiting to be activated.");
+    switch (status) {
         case "suspended":
             return deny("suspended", "The Marketing pass is suspended. Contact Shaheb Bazar for help.");
-        case "cancelled":
-            return deny("cancelled", "The Marketing pass was cancelled.");
         case "expired": {
             const ended = `Your Marketing pass ended on ${day(pass.subscription_ends_at)}. Renew it to continue.`;
             if (action !== "email_campaign") return deny("expired", ended);
@@ -134,9 +174,9 @@ async function useEntitlement(db, vendorId, action, { quantity = 1, reference = 
     const check = await checkEntitlement(db, vendorId, action, quantity, { lock: true });
     if (!check.allowed) return check;
     await db.query(
-        `INSERT INTO marketing_usage_events (subscription_id, usage_type, usage_quantity, usage_is_free, usage_reference)
-         VALUES ($1, $2, $3, $4, $5)`,
-        [check.subscriptionId, action, quantity, check.free, reference]
+        `INSERT INTO marketing_usage_events (vendor_id, subscription_id, usage_type, usage_quantity, usage_is_free, usage_reference)
+         VALUES ($1, $2, $3, $4, $5, $6)`,
+        [vendorId, check.subscriptionId, action, quantity, check.free, reference]
     );
     return check;
 }
@@ -163,6 +203,8 @@ module.exports = {
     PASS_SQL,
     currentPass,
     passSummary,
+    freePlanEmails,
+    freeEmailsThisWeek,
     checkEntitlement,
     useEntitlement,
     syncSponsoredPlacement,

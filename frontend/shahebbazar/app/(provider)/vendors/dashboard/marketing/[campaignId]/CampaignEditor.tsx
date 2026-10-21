@@ -2,11 +2,11 @@
 
 import { Fragment, useState, useTransition } from "react";
 import { useRouter } from "next/navigation";
-import { AlertTriangle, CheckCircle2, Info, Loader2, Lock, Ticket } from "lucide-react";
+import { AlertTriangle, CheckCircle2, Info, Loader2, Mail, Send, Ticket } from "lucide-react";
 import { browserAssetUrl } from "@/lib/apiBase";
 import { ConfirmDialog } from "@/components/shared/ConfirmDialog";
 import type { CampaignContent, CampaignDetail } from "@/lib/types";
-import { approveCampaign, deleteCampaign, saveCampaignContent } from "../actions";
+import { deleteCampaign, saveCampaignContent, sendCampaign } from "../actions";
 import { STATUS, couponState, ctaLabel, formatDay, formatWhen, goalLabel } from "../labels";
 
 const AREA =
@@ -73,20 +73,36 @@ function PhotoSwitch({ label, checked, disabled, onChange }: { label: string; ch
 }
 
 // The editor for one campaign: wording for each channel beside its preview, versions and approval.
-export function CampaignEditor({ vendorId, initial, readOnly }: { vendorId: number; initial: CampaignDetail; readOnly: boolean }) {
+const customers = (n: number) => `${n} customer${n === 1 ? "" : "s"}`;
+
+/** Which allowance a send uses, in the owner's words. */
+function allowanceText(send: { plan: "active" | "free" | "expired" | null; left_after: number | null }) {
+    if (send.plan === "active") return `Uses 1 of your pass's email campaigns (${send.left_after} left after this).`;
+    if (send.plan === "free") return "Uses your free email campaign for this month.";
+    if (send.plan === "expired") return "Uses your free email campaign for this week.";
+    return "";
+}
+
+export function CampaignEditor({ vendorId, initial, readOnly: viewOnly }: { vendorId: number; initial: CampaignDetail; readOnly: boolean }) {
     const router = useRouter();
     const [campaign, setCampaign] = useState(initial);
     const latest = campaign.versions[0];
     const [content, setContent] = useState<CampaignContent>(complete(latest.version_content));
     const [errors, setErrors] = useState<Record<string, string>>({});
     const [message, setMessage] = useState<{ ok: boolean; text: string } | null>(null);
-    const [asking, setAsking] = useState<"approve" | "delete" | null>(null);
+    const [asking, setAsking] = useState<"delete" | "send" | null>(null);
     const [pending, startTransition] = useTransition();
 
+    // Admins only look; a campaign that has gone out can't be changed.
+    const readOnly = viewOnly || campaign.status === "sending" || campaign.status === "sent";
     const dirty = !sameContent(content, latest.version_content);
-    const placeholders = campaign.placeholders;
-    const approvedVersion = campaign.versions.find((v) => v.version_id === campaign.approved_version_id);
-    const canApprove = !readOnly && campaign.status === "draft" && !dirty && placeholders.length === 0;
+    // Parts still marked [[like this]] in the wording as it is now, saved or not; they block sending.
+    const placeholders = [...new Set(
+        [content.email.subject, content.email.body, content.facebook.text, content.whatsapp.text].flatMap((t) => t.match(/\[\[[^\]]+\]\]/g) ?? [])
+    )];
+    // No separate approval: the owner previews, then confirms the send, which approves what goes out.
+    const unsent = campaign.status === "draft" || campaign.status === "approved";
+    const canSend = !readOnly && unsent && "can_send" in campaign.send && campaign.send.can_send && placeholders.length === 0;
     const { snapshot } = campaign;
     const name = campaign.brief.language === "bn" && snapshot.business.name_bn ? snapshot.business.name_bn : snapshot.business.name;
     const logo = browserAssetUrl(snapshot.business.logo_url);
@@ -125,12 +141,29 @@ export function CampaignEditor({ vendorId, initial, readOnly }: { vendorId: numb
         });
     }
 
-    function approve() {
+    function send() {
         setAsking(null);
         setMessage(null);
         startTransition(async () => {
-            const result = await approveCampaign(vendorId, campaign.campaign_id, latest.version_id);
-            done(result, `Version ${latest.version_number} is approved and locked.`);
+            // Unsaved changes (wording or a photo switch) are saved as a new version first, so what was
+            // previewed is what goes out.
+            if (dirty) {
+                const saved = await saveCampaignContent(vendorId, campaign.campaign_id, content);
+                if (!saved.ok) {
+                    done(saved, "");
+                    return;
+                }
+                done(saved, `Saved as version ${saved.data.versions[0].version_number}.`);
+            }
+            const result = await sendCampaign(vendorId, campaign.campaign_id);
+            // On success the "Sent" box replaces the send panel and the editor locks.
+            if (result.ok) {
+                setCampaign(result.data.campaign);
+            } else {
+                setMessage({ ok: false, text: result.error });
+                // The page's figures (audience, allowance) may have changed; reload them.
+                router.refresh();
+            }
         });
     }
 
@@ -185,23 +218,42 @@ export function CampaignEditor({ vendorId, initial, readOnly }: { vendorId: numb
                 </span>
             </p>
 
-            {campaign.status === "approved" && approvedVersion && (
-                <p className="flex gap-2 rounded-lg border border-success-ink/30 bg-success-bg p-3 text-sm text-success-ink">
-                    <Lock className="mt-0.5 size-4 shrink-0" aria-hidden />
-                    Version {approvedVersion.version_number} is approved and locked. Editing saves a new version, which needs approving again.
-                </p>
-            )}
-            {campaign.status === "draft" && approvedVersion && (
-                <p className="rounded-lg border border-line bg-surface-2 p-3 text-sm text-muted">
-                    Version {approvedVersion.version_number} was approved earlier. This newer version needs approving before it can be sent.
-                </p>
+            {"results" in campaign.send ? (
+                <section aria-label="Sent" className="flex gap-2 rounded-xl border border-success-ink/30 bg-success-bg p-4 text-sm text-success-ink">
+                    <CheckCircle2 className="mt-0.5 size-4 shrink-0" aria-hidden />
+                    <span>
+                        <span className="font-semibold">Sent {formatWhen(campaign.send.sent_at)}</span> to{" "}
+                        {customers(campaign.send.results?.sent ?? 0)} by email
+                        {campaign.send.results?.failed ? `; ${campaign.send.results.failed} couldn't be delivered` : ""}. A sent
+                        campaign can&apos;t be changed or sent again; start a new campaign for your next message.
+                    </span>
+                </section>
+            ) : (
+                unsent && (
+                    <section aria-labelledby="send-heading" className="rounded-xl border border-line bg-surface p-5 shadow-card">
+                        <h2 id="send-heading" className="flex items-center gap-2 font-semibold">
+                            <Mail className="size-4 text-brand-600" aria-hidden /> Send by email
+                        </h2>
+                        <p className="mt-1.5 text-sm text-muted">
+                            Goes to the {customers(campaign.send.audience)} who chose to get your offers by email, each with a link to
+                            unsubscribe. {allowanceText(campaign.send)}
+                        </p>
+                        {campaign.send.reason && (
+                            <p className="mt-2 flex gap-2 text-sm text-sponsor-ink">
+                                <AlertTriangle className="mt-0.5 size-4 shrink-0" aria-hidden /> {campaign.send.reason}
+                            </p>
+                        )}
+                        <p className="mt-2 text-xs text-soft">
+                            Check the previews below, then use the Send button at the bottom. Sending approves the wording as it is then.{" "}Only the email is sent. The Facebook and WhatsApp versions below are previews; posting them from here comes in a later release.</p>
+                    </section>
+                )
             )}
             {placeholders.length > 0 && (
                 <div className="rounded-lg border border-sponsor-ink/30 bg-sponsor-bg p-3 text-sm text-sponsor-ink">
                     <p className="flex items-center gap-2 font-semibold">
-                        <AlertTriangle className="size-4" aria-hidden /> Before approving
+                        <AlertTriangle className="size-4" aria-hidden /> Before sending
                     </p>
-                    <p className="mt-1">Replace the highlighted parts marked [[like this]] with your own words, then save:</p>
+                    <p className="mt-1">Replace the highlighted parts marked [[like this]] with your own words:</p>
                     <ul className="mt-1 list-disc pl-6">
                         {placeholders.map((p) => (
                             <li key={p}>{p.slice(2, -2)}</li>
@@ -294,7 +346,9 @@ export function CampaignEditor({ vendorId, initial, readOnly }: { vendorId: numb
             <div className="grid gap-5 lg:grid-cols-2">
                 <section aria-labelledby="facebook-heading" className="rounded-xl border border-line bg-surface p-5 shadow-card">
                     <div className="flex flex-wrap items-center justify-between gap-2">
-                        <h2 id="facebook-heading" className="font-semibold">Facebook post</h2>
+                        <h2 id="facebook-heading" className="flex items-center gap-2 font-semibold">
+                            Facebook post <span className="rounded-full bg-sponsor-bg px-2 py-0.5 text-[0.6875rem] font-medium text-sponsor-ink">Preview only</span>
+                        </h2>
                         {socialPhoto && (
                             <PhotoSwitch
                                 label="Include a photo in the Facebook post"
@@ -324,10 +378,19 @@ export function CampaignEditor({ vendorId, initial, readOnly }: { vendorId: numb
                             <img src={socialPhoto} alt="" className="h-36 w-full object-cover" />
                         )}
                     </div>
+                    <p className="mt-3 flex gap-2 text-xs text-muted">
+                        <Info className="mt-0.5 size-3.5 shrink-0" aria-hidden />
+                        <span>
+                            This is a preview of how it could look. Posting to Facebook from Shaheb Bazar comes in a later release; for now
+                            you can copy the text and post it yourself.
+                        </span>
+                    </p>
                 </section>
                 <section aria-labelledby="whatsapp-heading" className="rounded-xl border border-line bg-surface p-5 shadow-card">
                     <div className="flex flex-wrap items-center justify-between gap-2">
-                        <h2 id="whatsapp-heading" className="font-semibold">WhatsApp message</h2>
+                        <h2 id="whatsapp-heading" className="flex items-center gap-2 font-semibold">
+                            WhatsApp message <span className="rounded-full bg-sponsor-bg px-2 py-0.5 text-[0.6875rem] font-medium text-sponsor-ink">Preview only</span>
+                        </h2>
                         {socialPhoto && (
                             <PhotoSwitch
                                 label="Include a photo in the WhatsApp message"
@@ -358,6 +421,13 @@ export function CampaignEditor({ vendorId, initial, readOnly }: { vendorId: numb
                             </p>
                         </div>
                     </div>
+                    <p className="mt-3 flex gap-2 text-xs text-muted">
+                        <Info className="mt-0.5 size-3.5 shrink-0" aria-hidden />
+                        <span>
+                            This is a preview of how it could look. Posting to WhatsApp from Shaheb Bazar comes in a later release; for now
+                            you can copy the text and post it yourself.
+                        </span>
+                    </p>
                 </section>
             </div>
 
@@ -372,16 +442,18 @@ export function CampaignEditor({ vendorId, initial, readOnly }: { vendorId: numb
                         {pending && <Loader2 className="size-4 animate-spin" />}
                         Save changes
                     </button>
-                    <button
-                        type="button"
-                        onClick={() => setAsking("approve")}
-                        disabled={pending || !canApprove}
-                        title={dirty ? "Save your changes first" : placeholders.length ? "Replace the highlighted parts first" : undefined}
-                        className="inline-flex items-center gap-2 rounded-[10px] bg-brand-600 px-4 py-2 text-sm font-semibold text-white hover:bg-brand-700 disabled:opacity-50"
-                    >
-                        <CheckCircle2 className="size-4" />
-                        Approve version {latest.version_number}
-                    </button>
+                    {"audience" in campaign.send && (
+                        <button
+                            type="button"
+                            onClick={() => setAsking("send")}
+                            disabled={pending || !canSend}
+                            title={placeholders.length ? "Replace the highlighted parts first" : campaign.send.reason ?? undefined}
+                            className="inline-flex items-center gap-2 rounded-[10px] bg-brand-600 px-4 py-2 text-sm font-semibold text-white hover:bg-brand-700 disabled:opacity-50"
+                        >
+                            <Send className="size-4" />
+                            {dirty ? "Save and send" : "Send"} to {customers(campaign.send.audience)}
+                        </button>
+                    )}
                     {message && (
                         <span role={message.ok ? "status" : "alert"} className={`text-sm ${message.ok ? "text-success-ink" : "text-error-ink"}`}>
                             {message.text}
@@ -411,7 +483,9 @@ export function CampaignEditor({ vendorId, initial, readOnly }: { vendorId: numb
                                 {v.created_by ? ` by ${v.created_by}` : ""} · {formatWhen(v.version_created_at)}
                             </span>
                             {v.version_id === campaign.approved_version_id && (
-                                <span className="rounded-full bg-success-bg px-2 py-0.5 text-xs font-medium text-success-ink">Approved</span>
+                                <span className="rounded-full bg-success-bg px-2 py-0.5 text-xs font-medium text-success-ink">
+                                    {campaign.status === "sent" ? "Sent" : "Approved"}
+                                </span>
                             )}
                         </li>
                     ))}
@@ -422,15 +496,17 @@ export function CampaignEditor({ vendorId, initial, readOnly }: { vendorId: numb
                 </p>
             </section>
 
-            <ConfirmDialog
-                open={asking === "approve"}
-                title={`Approve version ${latest.version_number}?`}
-                body="It's then locked and ready to send. You can still edit, which saves a new version that needs approving again."
-                confirmLabel="Approve"
-                tone="primary"
-                onConfirm={approve}
-                onCancel={() => setAsking(null)}
-            />
+            {"audience" in campaign.send && (
+                <ConfirmDialog
+                    open={asking === "send"}
+                    title={`Send this email to ${customers(campaign.send.audience)}?`}
+                    body={`${dirty ? "Your changes are saved first. " : ""}It goes out now, exactly as in the email preview, and can't be changed or sent again. ${allowanceText(campaign.send)}`}
+                    confirmLabel="Send now"
+                    tone="primary"
+                    onConfirm={send}
+                    onCancel={() => setAsking(null)}
+                />
+            )}
             <ConfirmDialog
                 open={asking === "delete"}
                 title="Delete this campaign?"

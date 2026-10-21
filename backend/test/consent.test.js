@@ -34,6 +34,7 @@ before(async () => {
     shop = (await query(
         `SELECT vendor_id, vendor_slug FROM vendors v WHERE vendor_status = 'approved'
          AND NOT EXISTS (SELECT 1 FROM saved_businesses s WHERE s.vendor_id = v.vendor_id AND s.user_id IN ($1, $2))
+         AND NOT EXISTS (SELECT 1 FROM marketing_consents c WHERE c.vendor_id = v.vendor_id)
          ORDER BY vendor_id LIMIT 1`,
         [customerId, customer2Id]
     ))[0];

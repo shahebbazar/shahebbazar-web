@@ -21,7 +21,7 @@ const COPY = {
                 subject: (b, first, more) => `Just in at ${b}: ${first}${more}`,
                 headline: (b) => `Just in at ${b}!`,
                 intro: (b) => `Fresh in at ${b}. Here's what's new:`,
-                extra: (text) => `Plus: ${text}`,
+                extra: (text) => text,
                 closing: "Come and see what's new.",
             },
             offer: {
@@ -79,7 +79,7 @@ const COPY = {
                 subject: (b, first, more) => `${b}-এ নতুন এসেছে: ${first}${more}`,
                 headline: (b) => `${b}-এ নতুন এসেছে!`,
                 intro: (b) => `${b}-এ নতুন এসেছে। দেখে নিন:`,
-                extra: (text) => `সাথে: ${text}`,
+                extra: (text) => text,
                 closing: "এসে দেখে যান।",
             },
             offer: {

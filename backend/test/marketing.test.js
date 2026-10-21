@@ -94,11 +94,13 @@ describe("activating and managing a pass", () => {
         assert.equal(row.has_active_pass, false);
     });
 
-    it("before a pass: not sponsored, and no paid action is allowed", async () => {
+    it("before a pass: not sponsored, no paid action is allowed, and email uses the free plan", async () => {
         assert.deepEqual(await sponsored(vendor), { sponsored: false, organic: true });
-        const check = await checkEntitlement(db, vendor.vendor_id, "email_campaign");
+        const check = await checkEntitlement(db, vendor.vendor_id, "ai_action");
         assert.equal(check.allowed, false);
         assert.match(check.reason, /no Marketing pass/);
+        const email = await checkEntitlement(db, vendor.vendor_id, "email_campaign");
+        assert.deepEqual([email.allowed, email.status, email.free, email.subscriptionId], [true, "free", true, null]);
     });
 
     it("an admin activates a 30-day pass; it is recorded against that admin", async () => {
@@ -210,7 +212,9 @@ describe("activating and managing a pass", () => {
         });
         assert.equal(cancel.status, 200);
         assert.equal((await sponsored(vendor)).sponsored, false);
-        assert.match((await checkEntitlement(db, vendor.vendor_id, "email_campaign")).reason, /cancelled/);
+        assert.match((await checkEntitlement(db, vendor.vendor_id, "ai_action")).reason, /cancelled/);
+        // Back on the free plan, whose email for this month went on the free email after the pass ended.
+        assert.match((await checkEntitlement(db, vendor.vendor_id, "email_campaign")).reason, /free plan's email for \w+ is used/);
         const resume = await call("POST", `/admin/marketing/subscriptions/${res.data.subscription_id}/resume`, { as: "admin" });
         assert.equal(resume.status, 409);
     });
@@ -292,9 +296,10 @@ describe("rules and validation", () => {
              VALUES ($1, $2, 'pending', 999)`,
             [vendor.vendor_id, await packageId(30)]
         );
-        const check = await checkEntitlement(db, vendor.vendor_id, "email_campaign");
+        const check = await checkEntitlement(db, vendor.vendor_id, "ai_action");
         assert.equal(check.allowed, false);
         assert.match(check.reason, /waiting to be activated/);
+        assert.equal((await checkEntitlement(db, vendor.vendor_id, "email_campaign")).status, "free", "free plan until it starts");
     });
 });
 

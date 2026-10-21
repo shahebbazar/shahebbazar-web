@@ -453,9 +453,14 @@ export interface Customer {
 // Admin settings (KAN-293).
 export interface AdminSetting {
     key: string;
+    // "boolean" settings are switches; "integer" ones are numbers between min and max.
+    type: "boolean" | "integer";
+    group: "approval" | "marketing";
+    min?: number;
+    max?: number;
     label: string;
     help: string;
-    value: boolean;
+    value: boolean | number;
     updated_at: string | null;
     updated_by: string | null;
 }
@@ -732,7 +737,11 @@ export interface MarketingWorkspace {
     // free: never paid (or cancelled); ended: the pass ran out; suspended: blocked by an admin.
     plan: "pass" | "free" | "ended" | "suspended";
     free_emails_per_month: number;
+    // The free plan's emails this calendar month (Bangladesh time).
+    free_emails: { limit: number; used: number; left: number };
     ended_emails_per_week: number;
+    // Customers who chose to get this business's offers by email.
+    email_subscribers: number;
     readiness: { checks: ReadinessCheck[]; can_start: boolean; approved_listings: number };
     can_create: boolean;
     cannot_create_reason: string | null;
@@ -742,6 +751,19 @@ export interface MarketingWorkspace {
 }
 
 // photos: whether the channel goes out with photos. Missing (versions saved before the switch) means on.
+// Sending by email (KAN-286): before sending, who it goes to and whether the allowance covers it;
+// after, when it went and how many emails the provider accepted.
+export type CampaignSendInfo =
+    | {
+          audience: number;
+          // Which allowance it uses: the pass, the free plan's monthly email, or the ended pass's weekly email.
+          plan: "active" | "free" | "expired" | null;
+          left_after: number | null;
+          can_send: boolean;
+          reason: string | null;
+      }
+    | { sent_at: string; results: { sent: number; failed: number } | null };
+
 export interface CampaignContent {
     email: { subject: string; body: string; photos?: boolean };
     facebook: { text: string; photos?: boolean };
@@ -797,5 +819,6 @@ export interface CampaignDetail {
     latest_version_id: number;
     warnings: string[];
     placeholders: string[];
+    send: CampaignSendInfo;
     coupon: CampaignCoupon | null;
 }

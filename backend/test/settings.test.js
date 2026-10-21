@@ -22,13 +22,15 @@ before(async () => {
 after(stopApi);
 
 describe("defaults", () => {
-    it("both approvals start on, and the admin page shows what is waiting", async () => {
+    it("both approvals start on, the free plan has one email a month, and the admin page shows what is waiting", async () => {
         const res = await call("GET", "/admin/settings", { as: "admin" });
         assert.equal(res.status, 200);
         assert.deepEqual(res.data.settings.map((s) => [s.key, s.value]), [
             ["require_business_approval", true],
             ["require_listing_approval", true],
+            ["free_marketing_emails_per_month", 1],
         ]);
+        assert.deepEqual(res.data.settings.map((s) => s.group), ["approval", "approval", "marketing"]);
         assert.ok(res.data.settings.every((s) => s.label && s.help));
         assert.equal(typeof res.data.waiting.businesses, "number");
         assert.equal(typeof res.data.waiting.listings, "number");

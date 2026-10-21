@@ -3,15 +3,18 @@
 // Owners and managers read with business.marketing (an admin can look too) and change campaigns with
 // business.marketing.manage. Everything is hidden only if MARKETING_WORKSPACE_ENABLED=false. Every
 // approved business can write campaigns, with or without a pass (the free plan); only a suspended pass
-// blocks it. Drafting spends no allowance; sending (Stage 4) uses the pass or the free allowance.
+// blocks it. Drafting spends no allowance; sending (KAN-286, services/marketing/sending.js) uses the
+// pass or the free allowance.
 
 const express = require("express");
 const pool = require("../db");
 const { parseId } = require("../lib/currentUser");
 const { requireVendorOwnership } = require("../lib/middleware/auth");
 const { requireFeature } = require("../lib/access");
-const { passSummary, EXPIRED_EMAILS_PER_WEEK } = require("../services/marketing/entitlements");
-const { couponOf, workspaceEnabled, FREE_EMAILS_PER_MONTH, planOf, draftingCheck, validateBrief, validateContent, buildSnapshot, readiness, MAX_LISTINGS } = require("../services/marketing/campaigns");
+const { passSummary, checkEntitlement, freePlanEmails, EXPIRED_EMAILS_PER_WEEK } = require("../services/marketing/entitlements");
+const { audienceFor } = require("../services/marketing/consent");
+const { sendCampaign, sendResults, statusProblem } = require("../services/marketing/sending");
+const { couponOf, workspaceEnabled, planOf, draftingCheck, validateBrief, validateContent, buildSnapshot, readiness, MAX_LISTINGS } = require("../services/marketing/campaigns");
 const { generateDrafts, warnings, placeholdersIn } = require("../services/marketing/templates");
 
 const router = express.Router();
@@ -41,6 +44,30 @@ async function versionsOf(db, campaignId) {
     )).rows;
 }
 
+/**
+ * Sending, for the editor: who it would go to and whether the allowance covers it (before), or
+ * when it went and how many emails the provider accepted (after).
+ */
+async function sendInfo(db, row) {
+    if (row.campaign_status === "sent") {
+        return { sent_at: row.campaign_sent_at, results: await sendResults(db, row.campaign_id) };
+    }
+    const [audience, allowance] = await Promise.all([
+        audienceFor(db, row.vendor_id, "email"),
+        checkEntitlement(db, row.vendor_id, "email_campaign"),
+    ]);
+    const problem = statusProblem(row.campaign_status)
+        ?? (audience.length === 0 ? "No customers have chosen to get your offers by email yet, so there's no one to send to." : null)
+        ?? (allowance.allowed ? null : allowance.reason);
+    return {
+        audience: audience.length,
+        plan: allowance.allowed ? allowance.status : null,
+        left_after: allowance.allowed ? allowance.left : null,
+        can_send: problem === null,
+        reason: problem,
+    };
+}
+
 /** The full campaign for the editor: brief, snapshot, every version, and what still needs attention. */
 async function campaignDetail(db, row) {
     const versions = await versionsOf(db, row.campaign_id);
@@ -65,6 +92,7 @@ async function campaignDetail(db, row) {
         latest_version_id: latest.version_id,
         warnings: warnings(row.campaign_source_snapshot),
         placeholders: placeholdersIn(latest.version_content),
+        send: await sendInfo(db, row),
     };
 }
 
@@ -80,7 +108,7 @@ const tidy = (row) => ({ ...row, campaign_starts_on: isoDay(row.campaign_starts_
 router.get("/vendors/:vendorId/marketing/workspace", ...read, async (req, res) => {
     const vendorId = parseId(req.params.vendorId);
     try {
-        const [pass, ready, listings, campaigns] = await Promise.all([
+        const [pass, ready, listings, campaigns, freeEmails, subscribers] = await Promise.all([
             passSummary(pool, vendorId),
             readiness(pool, vendorId),
             pool.query(
@@ -98,12 +126,16 @@ router.get("/vendors/:vendorId/marketing/workspace", ...read, async (req, res) =
                  FROM marketing_campaigns c WHERE c.vendor_id = $1 ORDER BY c.campaign_updated_at DESC`,
                 [vendorId]
             ),
+            freePlanEmails(pool, vendorId),
+            audienceFor(pool, vendorId, "email"),
         ]);
         const drafting = draftingCheck(pass);
         res.json({
             pass,
             plan: planOf(pass),
-            free_emails_per_month: FREE_EMAILS_PER_MONTH,
+            free_emails_per_month: freeEmails.limit,
+            free_emails: freeEmails,
+            email_subscribers: subscribers.length,
             ended_emails_per_week: EXPIRED_EMAILS_PER_WEEK,
             readiness: ready,
             can_create: ready.can_start && drafting.allowed,
@@ -273,6 +305,24 @@ router.post("/vendors/:vendorId/marketing/campaigns/:campaignId/approve", ...man
         res.status(500).json({ error: "Could not approve the campaign. Nothing was changed." });
     } finally {
         client.release();
+    }
+});
+
+// Sends the campaign's latest version by email to the customers who chose this business's offers.
+// The owner's confirmation approves that version. Uses one email campaign from the pass or the free
+// allowance; a second send is refused.
+router.post("/vendors/:vendorId/marketing/campaigns/:campaignId/send", ...manage, async (req, res) => {
+    const vendorId = parseId(req.params.vendorId);
+    const campaignId = parseId(req.params.campaignId);
+    if (!campaignId) return res.status(400).json({ error: "Invalid campaign id" });
+    try {
+        const result = await sendCampaign(pool, { vendorId, campaignId, userId: req.user.user_id });
+        if (result.status !== 200) return res.status(result.status).json(result.body);
+        const row = await campaignRow(pool, vendorId, campaignId);
+        res.json({ ...result.body, campaign: await campaignDetail(pool, tidy(row)) });
+    } catch (err) {
+        console.error(`POST /api/vendors/${vendorId}/marketing/campaigns/${campaignId}/send failed:`, err);
+        res.status(500).json({ error: "Could not send the campaign. Check the campaign before trying again." });
     }
 });
 

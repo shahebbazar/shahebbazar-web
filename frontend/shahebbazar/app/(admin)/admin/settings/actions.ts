@@ -7,7 +7,7 @@ import type { AdminSettings } from "@/lib/types";
 // The API checks the forwarded session belongs to an admin and records each change in the audit log.
 export async function changeSetting(
     key: string,
-    value: boolean
+    value: boolean | number
 ): Promise<AuthenticatedSendResult<Pick<AdminSettings, "waiting"> & { setting: AdminSettings["settings"][number] }>> {
     const result = await authenticatedApiSend<Pick<AdminSettings, "waiting"> & { setting: AdminSettings["settings"][number] }>(
         "PUT",

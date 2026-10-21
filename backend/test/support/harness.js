@@ -132,8 +132,11 @@ async function signIn(role) {
     cookies[role] = session;
 }
 
-/** Loads the test database, starts the API and signs in as every role. */
-async function startApi() {
+/**
+ * Loads the test database, starts the API and signs in as every role. `env` overrides the API's
+ * settings, e.g. to point email at a provider that is down.
+ */
+async function startApi(env = {}) {
     assert.notEqual(TEST_DB, DEV_DB, "The test database must not be the development database.");
 
     const load = spawnSync(process.execPath, ["scripts/load-db.js", "--reset", "--yes", `--database=${TEST_DB}`], {
@@ -153,6 +156,9 @@ async function startApi() {
             NODE_ENV: "test",
             MOCK_VERIFICATION_DELIVERY: "console",
             MARKETING_WORKSPACE_ENABLED: "true",
+            // Emails go to the console unless a test file says otherwise, whatever backend/.env says.
+            MARKETING_EMAIL_ENABLED: "false",
+            ...env,
         },
     });
     server.stdout.on("data", (chunk) => (serverLog += chunk));
@@ -183,10 +189,14 @@ async function testClient() {
     return client;
 }
 
+/** Everything the API has printed so far (for example the console email adapter). */
+const apiOutput = () => serverLog;
+
 const userIdOf = async (role) =>
     (await query("SELECT user_id FROM users WHERE user_phone = $1", [PHONES[role]]))[0].user_id;
 
 module.exports = {
+    apiOutput,
     BACKEND_DIR,
     TEST_DB,
     ORIGIN,
