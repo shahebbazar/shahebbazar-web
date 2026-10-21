@@ -158,6 +158,7 @@ async function syncSponsoredPlacement(db, vendorId) {
 }
 
 module.exports = {
+    EXPIRED_EMAILS_PER_WEEK,
     ACTIONS,
     PASS_SQL,
     currentPass,

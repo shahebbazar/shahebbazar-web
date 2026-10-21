@@ -2,7 +2,7 @@
 
 import { useState, useTransition } from "react";
 import { Loader2 } from "lucide-react";
-import { ConfirmDialog } from "@/components/admin/ConfirmDialog";
+import { ConfirmDialog } from "@/components/shared/ConfirmDialog";
 import type { AdminMarketing, MarketingPassRow } from "@/lib/types";
 import { activatePass, changePass, type PassAction } from "./actions";
 

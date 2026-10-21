@@ -2,7 +2,7 @@
 
 import { useId, useState, useTransition } from "react";
 import { Loader2 } from "lucide-react";
-import { ConfirmDialog } from "@/components/admin/ConfirmDialog";
+import { ConfirmDialog } from "@/components/shared/ConfirmDialog";
 import type { AdminSetting } from "@/lib/types";
 import { changeSetting } from "./actions";
 

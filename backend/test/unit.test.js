@@ -153,3 +153,23 @@ describe("role and feature access matrix", () => {
         }
     });
 });
+
+describe("Marketing workspace switch (KAN-285)", () => {
+    const { workspaceEnabled } = require("../services/marketing/campaigns");
+    const saved = process.env.MARKETING_WORKSPACE_ENABLED;
+    const withValue = (value) => {
+        if (value === undefined) delete process.env.MARKETING_WORKSPACE_ENABLED;
+        else process.env.MARKETING_WORKSPACE_ENABLED = value;
+        const on = workspaceEnabled();
+        if (saved === undefined) delete process.env.MARKETING_WORKSPACE_ENABLED;
+        else process.env.MARKETING_WORKSPACE_ENABLED = saved;
+        return on;
+    };
+
+    it("is on by default, and off only when set to false", () => {
+        assert.equal(withValue(undefined), true);
+        assert.equal(withValue("true"), true);
+        assert.equal(withValue(""), true);
+        assert.equal(withValue("false"), false);
+    });
+});

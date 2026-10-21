@@ -29,7 +29,8 @@ Business routes also check that the vendor runs that business (owner or manager,
 | See who runs the business and their contact details (`business.team.read`) | - | - | Yes | Yes | vendors: own businesses only |
 | Edit their own contact details (`business.settings`) | - | - | Yes | - | own businesses only |
 | Add or remove managers (`business.team`) | - | - | Yes | - | business owner only |
-| See the business's Marketing pass and allowance left (`business.marketing`) | - | - | Yes | Yes | vendors: own businesses only |
+| See the business's Marketing pass, allowance left and campaigns (`business.marketing`) | - | - | Yes | Yes | vendors: own businesses only |
+| Create, edit and approve marketing campaigns (`business.marketing.manage`) | - | - | Yes | - | own businesses only |
 | Approve or reject businesses and listings (`admin.approvals`) | - | - | - | Yes |  |
 | Handle reports and hide reviews (`admin.moderation`) | - | - | - | Yes |  |
 | Manage categories (`admin.categories`) | - | - | - | Yes |  |

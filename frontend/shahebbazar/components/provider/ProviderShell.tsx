@@ -1,11 +1,11 @@
 import Link from "next/link";
 import { LogoutButton } from "@/components/auth/LogoutButton";
 import {
-    BadgePercent,
     CalendarDays,
     ChevronDown,
     House,
     MapPin,
+    Megaphone,
     MessagesSquare,
     Package,
     Plus,
@@ -32,6 +32,7 @@ export type ProviderNavKey =
     | "inquiries"
     | "reviews"
     | "messages"
+    | "marketing"
     | "settings";
 
 type NavItem = {
@@ -54,7 +55,7 @@ const NAV: NavItem[] = [
     { key: "reviews", label: "Reviews", Icon: Star, path: "/vendors/dashboard/reviews" },
     { key: "messages", label: "Messages", Icon: MessagesSquare, path: "/vendors/dashboard/messages" },
     { key: "bookings", label: "Bookings", Icon: CalendarDays, availability: "Later" },
-    { key: "promotions", label: "Promotions", Icon: BadgePercent, availability: "Later" },
+    { key: "marketing", label: "Marketing", Icon: Megaphone, path: "/vendors/dashboard/marketing" },
     { key: "settings", label: "Settings", Icon: Settings, path: "/vendors/dashboard/settings" },
 ];
 
@@ -93,6 +94,7 @@ const PAGE_PATHS: Record<ProviderNavKey, string> = {
     inquiries: "/vendors/dashboard/inquiries",
     reviews: "/vendors/dashboard/reviews",
     messages: "/vendors/dashboard/messages",
+    marketing: "/vendors/dashboard/marketing",
     settings: "/vendors/dashboard/settings",
 };
 

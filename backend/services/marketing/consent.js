@@ -5,6 +5,7 @@
 // (consent_withdrawn_at), so there is a record of when consent was given and withdrawn, and how.
 
 const crypto = require("crypto");
+const { siteUrl } = require("../../lib/site");
 
 const CHANNELS = ["email", "sms"];
 
@@ -119,8 +120,7 @@ function readUnsubscribeToken(token) {
 
 /** The page a customer opens from an offer to stop offers from that business on that channel. */
 function unsubscribeUrl(userId, vendorId, channel) {
-    const site = (process.env.PUBLIC_SITE_URL || (process.env.CORS_ORIGIN || "http://localhost:3000").split(",")[0]).trim();
-    return `${site.replace(/\/$/, "")}/unsubscribe/${unsubscribeToken(userId, vendorId, channel)}`;
+    return `${siteUrl()}/unsubscribe/${unsubscribeToken(userId, vendorId, channel)}`;
 }
 
 module.exports = {

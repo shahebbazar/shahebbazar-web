@@ -77,6 +77,7 @@ const OWNER_OR_ADMIN = [
     ["save owner details", "PUT", () => `/vendors/${OWNED}/owner`, { user_name: "Changed Name" }],
     ["business reviews", "GET", () => `/vendors/${OWNED}/reviews`],
     ["marketing pass", "GET", () => `/vendors/${OWNED}/marketing`],
+    ["marketing workspace", "GET", () => `/vendors/${OWNED}/marketing/workspace`],
 ];
 
 const OWNER_ONLY = [

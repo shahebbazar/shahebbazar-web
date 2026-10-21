@@ -8,7 +8,7 @@ const CONFIRM = {
     primary: "bg-brand-600 text-white hover:bg-brand-700",
 };
 
-// In-page confirmation for admin actions, in place of the browser's confirm() and prompt() boxes.
+// In-page confirmation for actions (admin and business owners), in place of the browser's confirm() and prompt() boxes.
 // Uses <dialog>, so focus stays inside it and Escape cancels. With `reasonLabel`, it also asks for
 // an optional reason.
 export function ConfirmDialog({

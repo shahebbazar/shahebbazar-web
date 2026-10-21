@@ -29,6 +29,7 @@ trace of each failed test). The API's own log is in `e2e/test-results/api.log`.
 | `tests/auth.spec.ts` | Signing in with a code as a customer and a business owner, signing out, a wrong code, private pages when signed out |
 | `tests/customer.spec.ts` | Saving a business and the offers prompt, email offers and My details, unsubscribing, account tabs on a phone |
 | `tests/business.spec.ts` | The owner's dashboard, adding a product (waits for approval), every dashboard page |
+| `tests/marketing.spec.ts` | The business owner's Marketing workspace: writing, fixing and approving a campaign, Bangla drafts, the free plan, an offer coupon and its last day, saved details marked blue, photo switches, deleting from the editor and the list, admin read-only |
 | `tests/admin.spec.ts` | Approving from the queue (audited), the approval switch and its confirmation, ending a pass (Cancel), every admin page, customers kept out |
 
 Every test runs on a desktop browser. Tests tagged `@phone` in their name also run on a phone-sized
