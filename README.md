@@ -237,7 +237,8 @@ Accounts are identified by phone number. There are no passwords.
    an HTTP-only `shaheb_session` cookie. Only a hash of the session token is stored.
 5. The website sends the user to their area: `/account`, `/vendors/dashboard` or `/admin`.
 
-Protections: Australian and Bangladeshi number normalisation; 5 wrong guesses per
+Protections: Bangladeshi mobile numbers only (the SMS provider can only text those), in any
+common format; 5 wrong guesses per
 code; 3 code requests per number and purpose per 10 minutes; request IP
 recorded; codes are never stored or returned in plain text.
 

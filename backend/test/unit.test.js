@@ -17,14 +17,13 @@ describe("account phone numbers (sign-in)", () => {
         ["8801712345678", "+8801712345678"],
         ["+880 1712-345678", "+8801712345678"],
         ["008801712345678", "+8801712345678"],
-        ["0412345678", "+61412345678"],
-        ["61412345678", "+61412345678"],
-        ["+447911123456", "+447911123456"],
+        ["(017) 1234-5678", "+8801712345678"],
     ];
     for (const [input, expected] of cases) {
         it(`${input} -> ${expected}`, () => assert.equal(accountPhone(input), expected));
     }
-    for (const bad of ["", "12345", "+0123456789", "phone", null, 1712345678]) {
+    // Sign-in codes go by SMS through a Bangladeshi provider, so foreign numbers and landlines are refused.
+    for (const bad of ["", "12345", "+0123456789", "phone", null, 1712345678, "0412345678", "+61412345678", "+447911123456", "01212345678", "0721776655"]) {
         it(`refuses ${JSON.stringify(bad)}`, () => assert.equal(accountPhone(bad), null));
     }
 });

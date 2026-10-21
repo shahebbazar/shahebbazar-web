@@ -64,7 +64,7 @@ router.post("/request-verification", async (req, res) => {
     if (!phone) {
         return res.status(400).json({
             success: false,
-            error: "Enter a valid phone number.",
+            error: "Enter a Bangladesh mobile number, for example 01712-345678.",
         });
     }
 
@@ -233,7 +233,7 @@ router.post("/verify", async (req, res) => {
     if (!phone) {
         return res.status(400).json({
             success: false,
-            error: "Enter a valid phone number.",
+            error: "Enter a Bangladesh mobile number, for example 01712-345678.",
         });
     }
 
@@ -528,7 +528,7 @@ router.post("/register/customer", async (req, res) => {
     if (!phone) {
         return res.status(400).json({
             success: false,
-            error: "Enter a valid phone number.",
+            error: "Enter a Bangladesh mobile number, for example 01712-345678.",
         });
     }
 

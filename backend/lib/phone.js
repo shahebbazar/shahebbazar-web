@@ -1,4 +1,5 @@
-// Converts supported local and international phone formats to E.164-style values.
+// Converts a Bangladeshi mobile number, written any common way, to +8801XXXXXXXXX.
+// Sign-in codes go by SMS through a Bangladeshi provider, so other numbers are refused.
 function normalisePhone(value) {
     if (typeof value !== "string") {
         return null;
@@ -6,35 +7,22 @@ function normalisePhone(value) {
 
     let phone = value
         .trim()
-        .replace(/[\s\-()]/g, "");
+        .replace(/[\s\-().]/g, "");
 
     // Convert an international dialing prefix to "+".
     if (phone.startsWith("00")) {
         phone = `+${phone.slice(2)}`;
     }
 
-    // Bangladesh local mobile format.
+    // Local format (01XXXXXXXXX) or country code without "+" (8801XXXXXXXXX).
     if (/^01\d{9}$/.test(phone)) {
         phone = `+88${phone}`;
-    }
-
-    // Bangladesh number with country code but no "+".
-    if (/^8801\d{9}$/.test(phone)) {
+    } else if (/^8801\d{9}$/.test(phone)) {
         phone = `+${phone}`;
     }
 
-    // Australian local mobile format.
-    if (/^04\d{8}$/.test(phone)) {
-        phone = `+61${phone.slice(1)}`;
-    }
-
-    // Australian number with country code but no "+".
-    if (/^614\d{8}$/.test(phone)) {
-        phone = `+${phone}`;
-    }
-
-    // Accept other correctly formatted international numbers.
-    if (!/^\+[1-9]\d{7,14}$/.test(phone)) {
+    // Mobile numbers start 013 to 019.
+    if (!/^\+8801[3-9]\d{8}$/.test(phone)) {
         return null;
     }
 

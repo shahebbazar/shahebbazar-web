@@ -120,7 +120,8 @@ describe("business registration", () => {
     it("checks the business details before anything else", async () => {
         const cases = [
             [{ vendor_name: "" }, /Business name is required/],
-            [{ vendor_phone: "not a phone" }, /valid phone/],
+            [{ vendor_phone: "not a phone" }, /Bangladesh mobile/],
+            [{ vendor_phone: "0412345678" }, /Bangladesh mobile/],
             [{ vendor_email: "not-an-email" }, /valid email/],
         ];
         for (const [override, message] of cases) {

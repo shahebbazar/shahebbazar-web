@@ -377,10 +377,7 @@ export function VendorRegistrationForm({
                         />
 
                         <p className="mt-1.5 text-xs leading-5 text-muted">
-                            Enter a local Australian or
-                            Bangladesh mobile number, or use
-                            international format with a
-                            country code.
+                            Enter your Bangladesh mobile number, for example 01712-345678.
                         </p>
                     </div>
                 </div>
