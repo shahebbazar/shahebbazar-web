@@ -2,24 +2,21 @@ import Link from "next/link";
 import { LogoutButton } from "@/components/auth/LogoutButton";
 import {
     CalendarDays,
-    ChevronDown,
     House,
     MapPin,
     Megaphone,
     MessagesSquare,
     Package,
-    Plus,
     Settings,
     Star,
     Store,
-    UserRound,
     Wallet,
     type LucideIcon,
 } from "lucide-react";
 import { authenticatedApiGet } from "@/lib/auth-server";
-import { switchHref } from "@/lib/activeBusiness";
 import type { VendorPickerRow } from "@/lib/types";
 import { MobileMenu } from "../shared/MobileMenu";
+import { AccountSwitcher, AccountSwitcherList } from "../shared/AccountSwitcher";
 import { ThemeSelector } from "@/components/theme/ThemeSelector";
 
 // Page frame for the provider area: header, navigation rail and content.
@@ -107,10 +104,8 @@ export async function ProviderShell({
     current: ProviderNavKey;
     children: React.ReactNode;
 }) {
-    const initial = vendor.vendor_name.trim().charAt(0).toUpperCase() || "?";
     const businesses = (await authenticatedApiGet<VendorPickerRow[]>("/vendor-account/businesses")) ?? [];
-    const role = businesses.find((b) => b.vendor_id === vendor.vendor_id)?.member_role;
-    const switcher = <BusinessList businesses={businesses} activeId={vendor.vendor_id} path={PAGE_PATHS[current]} />;
+    const switcher = <AccountSwitcherList side={{ kind: "business", vendorId: vendor.vendor_id }} businesses={businesses} businessPath={PAGE_PATHS[current]} />;
 
     const navList = (
         <ul className="space-y-0.5">
@@ -138,31 +133,12 @@ export async function ProviderShell({
                                 <ThemeSelector />
                             </div>
 
-                        <details className="group relative min-w-0">
-                            <summary className="flex min-w-0 cursor-pointer list-none items-center gap-2.5 rounded-[10px] px-1.5 py-1 hover:bg-surface-2 [&::-webkit-details-marker]:hidden">
-                                <span
-                                    aria-hidden
-                                    className="grid size-9 shrink-0 place-items-center rounded-full bg-brand-100 text-sm font-semibold text-brand-700"
-                                >
-                                    {initial}
-                                </span>
-
-                                <span className="hidden min-w-0 leading-tight min-[420px]:block">
-                                    <span className="block truncate text-sm font-semibold">
-                                        {vendor.vendor_name}
-                                    </span>
-                                    <span className="block text-[0.75rem] text-muted">
-                                        {role === "manager" ? "Manager" : "Business owner"}
-                                    </span>
-                                </span>
-                                <ChevronDown className="hidden size-4 shrink-0 text-soft transition-transform group-open:rotate-180 lg:block" />
-                            </summary>
-
-                            {/* Business switcher (KAN-251) */}
-                            <div className="absolute right-0 z-50 mt-2 hidden w-72 rounded-xl border border-line bg-surface p-2 shadow-raised lg:block">
-                                {switcher}
-                            </div>
-                        </details>
+                        <AccountSwitcher
+                            userName={vendor.vendor_name}
+                            side={{ kind: "business", vendorId: vendor.vendor_id }}
+                            businesses={businesses}
+                            businessPath={PAGE_PATHS[current]}
+                        />
 
                         {/* Desktop logout */}
                         <div className="hidden lg:block">
@@ -244,52 +220,5 @@ function NavRow({ item, vendorId, active }: { item: NavItem; vendorId: number; a
             <Icon className={`size-4 shrink-0 ${active ? "text-brand-600" : ""}`} />
             <span>{label}</span>
         </Link>
-    );
-}
-
-// The businesses this vendor runs, plus ways to add another or use their customer account.
-function BusinessList({
-    businesses,
-    activeId,
-    path,
-}: {
-    businesses: VendorPickerRow[];
-    activeId: number;
-    path: string;
-}) {
-    const row = "flex items-center gap-3 rounded-[10px] px-3.5 py-2.5 text-sm font-medium";
-
-    return (
-        <div>
-            {businesses.length > 1 && (
-                <>
-                    <p className="px-3.5 pb-1 text-[0.75rem] font-medium text-muted">Your businesses</p>
-                    <ul className="space-y-0.5">
-                        {businesses.map((b) => (
-                            <li key={b.vendor_id}>
-                                <Link
-                                    href={switchHref(b.vendor_id, path)}
-                                    aria-current={b.vendor_id === activeId ? "true" : undefined}
-                                    className={`${row} ${b.vendor_id === activeId ? "bg-brand-50 text-brand-700" : "text-muted hover:bg-surface-2 hover:text-ink"}`}
-                                >
-                                    <Store className="size-4 shrink-0" />
-                                    <span className="min-w-0 flex-1 truncate">{b.vendor_name}</span>
-                                    {b.member_role === "manager" && <span className="text-[0.6875rem] text-soft">Manager</span>}
-                                </Link>
-                            </li>
-                        ))}
-                    </ul>
-                    <div className="my-2 border-t border-line" />
-                </>
-            )}
-            <Link href="/vendors/register" className={`${row} text-muted hover:bg-surface-2 hover:text-ink`}>
-                <Plus className="size-4 shrink-0" />
-                Register another business
-            </Link>
-            <Link href="/account" className={`${row} text-muted hover:bg-surface-2 hover:text-ink`}>
-                <UserRound className="size-4 shrink-0" />
-                My customer account
-            </Link>
-        </div>
     );
 }

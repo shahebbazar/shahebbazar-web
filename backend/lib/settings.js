@@ -16,6 +16,16 @@ const SETTINGS = {
         label: "Approve new products and services before they appear",
         help: "When off, a new product or service is public straight away.",
     },
+    // KAN-286: what the free plan includes (decided 21 October 2026, to confirm with the client).
+    free_marketing_emails_per_month: {
+        type: "integer",
+        group: "marketing",
+        default: 1,
+        min: 0,
+        max: 20,
+        label: "Free email campaigns a month",
+        help: "For businesses without a Marketing pass. 0 switches the free email off.",
+    },
 };
 
 /** The current value of one setting. */
@@ -35,6 +45,9 @@ async function listSettings(db) {
     const stored = Object.fromEntries(result.rows.map((row) => [row.setting_key, row]));
     return Object.entries(SETTINGS).map(([key, setting]) => ({
         key,
+        type: setting.type,
+        group: setting.group ?? "approval",
+        ...(setting.type === "integer" ? { min: setting.min, max: setting.max } : {}),
         label: setting.label,
         help: setting.help,
         value: stored[key] ? stored[key].setting_value : setting.default,
@@ -47,6 +60,9 @@ async function listSettings(db) {
 function invalidValue(key, value) {
     const setting = SETTINGS[key];
     if (setting.type === "boolean" && typeof value !== "boolean") return "Value must be true or false";
+    if (setting.type === "integer" && (!Number.isInteger(value) || value < setting.min || value > setting.max)) {
+        return `Enter a whole number from ${setting.min} to ${setting.max}`;
+    }
     return null;
 }
 

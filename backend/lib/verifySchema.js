@@ -29,6 +29,8 @@ const REQUIRED_OBJECTS = Object.fromEntries(
         "platform_settings",
         // Marketing campaigns (also database/migrations/004_marketing_campaigns.sql)
         "marketing_campaigns", "marketing_campaign_versions",
+        // Marketing email sends (also database/migrations/005_marketing_sends.sql)
+        "marketing_sends",
         // Views
         "v_business_cards", "v_moderation_queue", "v_search_trends_daily", "v_active_users_daily",
     ].map((name) => [name, SCHEMA_FILE])

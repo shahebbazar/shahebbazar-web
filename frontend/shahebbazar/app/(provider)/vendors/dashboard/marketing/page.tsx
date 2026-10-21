@@ -21,9 +21,10 @@ const FIX_PATHS = {
 /** What a business without a running pass gets, and what a pass would add. */
 function FreePlan({ workspace }: { workspace: MarketingWorkspace }) {
     const ended = workspace.plan === "ended" && workspace.pass;
+    const free = workspace.free_emails;
     const emails = ended
         ? `${workspace.ended_emails_per_week} email campaign a week`
-        : `${workspace.free_emails_per_month} email campaign a month`;
+        : `${free.limit} email campaign${free.limit === 1 ? "" : "s"} a month`;
     return (
         <>
             <p className="mt-2 text-sm">
@@ -31,8 +32,22 @@ function FreePlan({ workspace }: { workspace: MarketingWorkspace }) {
                 {ended && workspace.pass && <span className="text-muted"> · ended {formatDay(workspace.pass.ends_at)}</span>}
             </p>
             <p className="mt-1 text-sm text-muted">
-                You can write campaigns and send {emails} to customers who chose to get your offers. Your past campaigns stay here.
+                {!ended && free.limit === 0
+                    ? "You can write campaigns. Sending them by email needs a Marketing pass."
+                    : `You can write campaigns and send ${emails} to customers who chose to get your offers.`}{" "}
+                Your past campaigns stay here.
             </p>
+            {!ended && free.limit > 0 && (
+                <dl className="mt-3 text-sm">
+                    <div className="rounded-lg bg-surface-2 p-3">
+                        <dt className="text-xs text-muted">Free email campaigns left this month</dt>
+                        <dd className="mt-0.5 text-lg font-bold">
+                            {free.left}
+                            <span className="text-sm font-normal text-muted"> of {free.limit}</span>
+                        </dd>
+                    </div>
+                </dl>
+            )}
             <div className="mt-3 rounded-lg border border-brand-200 bg-brand-50 p-3 text-sm">
                 <p className="flex items-center gap-1.5 font-semibold text-brand-700">
                     <Sparkles className="size-4" aria-hidden /> A Marketing pass adds
@@ -148,6 +163,13 @@ export default async function MarketingPage({ searchParams }: { searchParams: Pr
                             <p className="mt-2 text-xs text-soft">Writing and editing drafts is free; an allowance is used only when a campaign is sent.</p>
                         </>
                     )}
+                    <p className="mt-3 border-t border-line pt-3 text-sm">
+                        <span className="font-semibold">{workspace.email_subscribers}</span>{" "}
+                        {workspace.email_subscribers === 1 ? "customer gets" : "customers get"} your offers by email.
+                        {workspace.email_subscribers === 0 && (
+                            <span className="text-muted"> Customers choose this when they save your business.</span>
+                        )}
+                    </p>
                 </section>
 
                 <section aria-labelledby="ready-heading" className="rounded-xl border border-line bg-surface p-5 shadow-card">

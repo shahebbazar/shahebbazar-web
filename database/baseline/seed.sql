@@ -932,6 +932,30 @@ FROM public.users u
 JOIN public.vendors v ON v.vendor_slug = 'shaheb-bazar-silk-house'
 WHERE u.user_phone = '+8801722000001';
 
+-- Email subscribers for Rajshahi Mango Traders (KAN-286), so a campaign can be sent in development.
+-- Three get its offers by email; Mahmud Hasan unsubscribed two days ago, so sends leave him out.
+-- example.com addresses can never receive mail, so even a real email provider reaches no one.
+INSERT INTO public.users (user_phone, user_email, user_name, user_role, user_phone_verified_at) VALUES
+    ('+8801722000003', 'rumana.akter@example.com',  'Rumana Akter',  'customer', NOW()),
+    ('+8801722000004', 'sajid.rahman@example.com',  'Sajid Rahman',  'customer', NOW()),
+    ('+8801722000005', 'tania.sultana@example.com', 'Tania Sultana', 'customer', NOW()),
+    ('+8801722000006', 'mahmud.hasan@example.com',  'Mahmud Hasan',  'customer', NOW());
+
+INSERT INTO public.saved_businesses (user_id, vendor_id)
+SELECT u.user_id, v.vendor_id
+FROM public.users u
+JOIN public.vendors v ON v.vendor_slug = 'rajshahi-mango-traders'
+WHERE u.user_phone IN ('+8801722000003', '+8801722000004', '+8801722000005', '+8801722000006');
+
+INSERT INTO public.marketing_consents (user_id, vendor_id, consent_channel, consent_source, consent_given_at,
+                                       consent_withdrawn_at, consent_withdrawn_source)
+SELECT u.user_id, v.vendor_id, 'email', 'save_prompt', now() - INTERVAL '10 days',
+       CASE WHEN u.user_phone = '+8801722000006' THEN now() - INTERVAL '2 days' END,
+       CASE WHEN u.user_phone = '+8801722000006' THEN 'unsubscribe_link' END
+FROM public.users u
+JOIN public.vendors v ON v.vendor_slug = 'rajshahi-mango-traders'
+WHERE u.user_phone IN ('+8801722000003', '+8801722000004', '+8801722000005', '+8801722000006');
+
 -- Platform settings (KAN-293). Also in database/migrations/003_platform_settings.sql.
 -- Approval of new businesses and listings starts on, as the site has always worked.
 INSERT INTO public.platform_settings (setting_key, setting_value) VALUES

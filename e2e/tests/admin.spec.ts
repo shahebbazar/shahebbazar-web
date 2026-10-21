@@ -102,3 +102,24 @@ test("a customer cannot open the admin area", async ({ browser }) => {
     await expect(page).not.toHaveURL(/\/admin$/);
     await context.close();
 });
+
+test("the free plan's monthly emails are a number an admin sets on Settings", async ({ page }) => {
+    await page.goto("/admin/settings");
+    const marketing = page.getByRole("region", { name: "Marketing" });
+    const input = marketing.getByLabel("Free email campaigns a month");
+    await expect(input).toHaveValue("1");
+    const save = marketing.getByRole("button", { name: "Save" });
+    await expect(save).toBeDisabled();
+    try {
+        await input.fill("3");
+        await save.click();
+        await expect(marketing.getByRole("status")).toHaveText("Saved.");
+        await expect
+            .poll(async () => (await sql<{ setting_value: number }>("SELECT setting_value FROM platform_settings WHERE setting_key = 'free_marketing_emails_per_month'"))[0]?.setting_value)
+            .toBe(3);
+        await input.fill("50");
+        await expect(save).toBeDisabled();
+    } finally {
+        await sql("DELETE FROM platform_settings WHERE setting_key = 'free_marketing_emails_per_month'");
+    }
+});

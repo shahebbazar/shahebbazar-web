@@ -1,4 +1,4 @@
-// The business owner's Marketing workspace (KAN-285): brief, drafts, editing, approval.
+// The business owner's Marketing workspace (KAN-285, KAN-286): brief, drafts, editing, sending.
 
 import { test, expect, signIn, sql, expectNoSideScroll } from "../fixtures";
 import type { Page } from "@playwright/test";
@@ -34,15 +34,15 @@ test("the workspace shows the pass, what's ready and the campaigns @phone", asyn
     await expectNoSideScroll(page);
 });
 
-test("an owner writes, fixes and approves an offer campaign", async ({ page }) => {
+test("an owner writes and fixes an offer campaign; parts still to fill in block sending", async ({ page }) => {
     await newCampaign(page, { goal: "Offer", products: ["Khirsapat Mango", "Fazli Mango"] });
 
-    // The drafts use the business's real details; the missing offer is marked and blocks approval.
+    // The drafts use the business's real details; the missing offer is marked and blocks sending.
     const subject = page.getByLabel("Subject");
     await expect(page.getByRole("textbox", { name: "Message", exact: true })).toHaveValue(/Khirsapat Mango \(Himsagar\): ৳2,800–৳4,200 per maund/);
-    await expect(page.getByText("Before approving", { exact: true })).toBeVisible();
+    await expect(page.getByText("Before sending", { exact: true })).toBeVisible();
     await expect(page.locator("mark").first()).toBeVisible();
-    await expect(page.getByRole("button", { name: /Approve version 1/ })).toBeDisabled();
+    await expect(page.getByRole("button", { name: /^Send to 3 customers/ })).toBeDisabled();
 
     // Replace every [[placeholder]] in all three channels and save.
     for (const box of [subject, page.getByRole("textbox", { name: "Message", exact: true }), page.getByRole("textbox", { name: "Facebook post" }), page.getByRole("textbox", { name: "WhatsApp message" })]) {
@@ -51,17 +51,11 @@ test("an owner writes, fixes and approves an offer campaign", async ({ page }) =
     }
     await page.getByRole("button", { name: "Save changes" }).click();
     await expect(page.getByRole("status")).toHaveText("Saved as version 2.");
-    await expect(page.getByText("Before approving", { exact: true })).toBeHidden();
-
-    // Approve asks first, then locks the version.
-    await page.getByRole("button", { name: "Approve version 2" }).click();
-    const dialog = page.getByRole("dialog", { name: "Approve version 2?" });
-    await dialog.getByRole("button", { name: "Approve" }).click();
-    await expect(page.getByText("Version 2 is approved and locked.").first()).toBeVisible();
-    await expect(page.getByText("Approved", { exact: true }).first()).toBeVisible();
+    await expect(page.getByText("Before sending", { exact: true })).toBeHidden();
+    await expect(page.getByRole("button", { name: /^Send to 3 customers/ })).toBeEnabled();
 
     await page.getByRole("link", { name: "Marketing" }).first().click();
-    await expect(page.getByRole("link", { name: /Offer: Khirsapat Mango/ })).toContainText("Approved");
+    await expect(page.getByRole("link", { name: /Offer: Khirsapat Mango/ }).first()).toContainText("Draft");
 });
 
 test("a Bangla campaign is written in Bangla @phone", async ({ page }) => {
@@ -113,6 +107,8 @@ test("a business without a pass sees the free plan, what a pass adds, and can st
     await expect(page.getByText("Free plan")).toBeVisible();
     await expect(page.getByText(/send 1 email campaign a month/)).toBeVisible();
     await expect(page.getByText("A Marketing pass adds")).toBeVisible();
+    await expect(page.getByText("Free email campaigns left this month")).toBeVisible();
+    await expect(page.getByText(/0 customers get your offers by email/)).toBeVisible();
     await expect(page.getByRole("link", { name: "New campaign" })).toBeVisible();
     await expectNoSideScroll(page);
     await context.close();
@@ -168,4 +164,77 @@ test("each channel's photos can be switched off, which saves as a new version @p
     await expect(page.getByRole("switch", { name: "Include photos in the email" })).toBeChecked();
     await expect(whatsapp.locator("img")).toHaveCount(0);
     await expectNoSideScroll(page);
+});
+
+test("a campaign is previewed and sent by email to the customers who chose email offers, once", async ({ page }) => {
+    await page.goto(WORKSPACE);
+    await expect(page.getByText(/3 customers get your offers by email/)).toBeVisible();
+    await newCampaign(page, { goal: "Reminder", products: ["Khirsapat Mango"] });
+    const id = Number(new URL(page.url()).pathname.split("/").pop());
+
+    // Facebook and WhatsApp are previews for now.
+    await expect(page.getByText("Preview only")).toHaveCount(2);
+    await expect(page.getByText(/Posting to WhatsApp from Shaheb Bazar comes in a later release/)).toBeVisible();
+
+    // No approval step: the draft can be sent straight away.
+    const panel = page.getByRole("region", { name: "Send by email" });
+    await expect(panel).toContainText("Goes to the 3 customers who chose to get your offers by email");
+    await expect(panel).toContainText(/Uses 1 of your pass's email campaigns/);
+    await expect(page.getByRole("button", { name: /Approve/ })).toHaveCount(0);
+
+    // Switching a photo off doesn't block sending: the change is saved as part of the send.
+    await page.getByRole("switch", { name: "Include a photo in the WhatsApp message" }).uncheck({ force: true });
+    const sendButton = page.getByRole("button", { name: "Save and send to 3 customers" });
+    await expect(sendButton).toBeEnabled();
+
+    // Cancel sends nothing.
+    await sendButton.click();
+    const dialog = page.getByRole("dialog", { name: "Send this email to 3 customers?" });
+    await expect(dialog).toContainText("Your changes are saved first.");
+    await dialog.getByRole("button", { name: "Cancel" }).click();
+    expect((await sql<{ n: number }>("SELECT COUNT(*)::int AS n FROM marketing_sends WHERE campaign_id = $1", [id]))[0].n).toBe(0);
+
+    await sendButton.click();
+    await dialog.getByRole("button", { name: "Send now" }).click();
+    await expect(page.getByRole("region", { name: "Sent" })).toContainText("to 3 customers by email");
+    await expect(page.getByLabel("Subject")).toHaveAttribute("readonly", "");
+    await expect(page.getByRole("button", { name: /Send|Save changes|Delete campaign/ })).toHaveCount(0);
+    // The version that went out (version 2, with the photo switched off) is recorded as approved.
+    const [row] = await sql<{ version_number: number; photos: boolean }>(
+        `SELECT v.version_number, (v.version_content->'whatsapp'->>'photos')::boolean AS photos
+         FROM marketing_campaigns c JOIN marketing_campaign_versions v ON v.version_id = c.campaign_approved_version_id
+         WHERE c.campaign_id = $1`, [id]
+    );
+    expect(row).toEqual({ version_number: 2, photos: false });
+
+    const sends = await sql<{ send_address: string }>("SELECT send_address FROM marketing_sends WHERE campaign_id = $1 ORDER BY send_address", [id]);
+    expect(sends.map((r) => r.send_address)).toEqual(["rumana.akter@example.com", "sajid.rahman@example.com", "tania.sultana@example.com"]);
+
+    await page.goto(WORKSPACE);
+    await expect(page.getByRole("link", { name: /Reminder: Khirsapat Mango/ }).first()).toContainText("Sent");
+});
+
+test("the account switcher shows which side you're on and moves between the customer account and the business @phone", async ({ page }) => {
+    const wide = (page.viewportSize()?.width ?? 1280) >= 1024;
+    // On a wide screen the switcher is a dropdown in the header; on a phone its list is in the menu drawer.
+    const openSwitcher = async () => {
+        if (wide) await page.locator("summary").filter({ visible: true }).first().click();
+        else await page.getByRole("button", { name: /menu/i }).click();
+    };
+
+    await page.goto("/account");
+    if (wide) await expect(page.locator("summary").filter({ hasText: "Customer" }).first()).toContainText("Shahidul Haque");
+    await openSwitcher();
+    const customer = page.getByRole("link", { name: "Customer account" }).filter({ visible: true });
+    await expect(customer).toHaveAttribute("aria-current", "true");
+    await page.getByRole("link", { name: "Rajshahi Mango Traders" }).filter({ visible: true }).first().click();
+    await expect(page).toHaveURL(/\/vendors\/dashboard/);
+    await expect(page.getByRole("heading", { name: "Provider Dashboard" })).toBeVisible();
+
+    // On the business side the switcher shows the business; the customer account is one click away.
+    if (wide) await expect(page.locator("summary").filter({ visible: true }).first()).toContainText("Business owner");
+    await openSwitcher();
+    await expect(page.getByRole("link", { name: "Rajshahi Mango Traders" }).filter({ visible: true }).first()).toHaveAttribute("aria-current", "true");
+    await page.getByRole("link", { name: "Customer account" }).filter({ visible: true }).first().click();
+    await expect(page).toHaveURL(/\/account$/);
 });

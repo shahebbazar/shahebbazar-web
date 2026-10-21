@@ -363,7 +363,7 @@ The vendor marketing package (KAN-242/243) is being built in six stages
   (`POST /api/unsubscribe/:token`).
 - `backend/services/marketing/consent.js` is the only place that gives or withdraws
   consent and builds a business's audience (`audienceFor`). Campaign sending (Stage 4)
-  must use only that list.
+  uses only that list.
 - Existing databases: run `database/migrations/002_marketing_consents.sql`, or
   `npm run db:reset`.
 
@@ -400,6 +400,34 @@ The vendor marketing package (KAN-242/243) is being built in six stages
   Only a suspended pass blocks drafting. Sending and counting the free email come in Stage 4.
 - Existing databases: run `database/migrations/004_marketing_campaigns.sql`, or
   `npm run db:reset`.
+
+**Stage 4, email sending (KAN-286)**
+
+- There is no separate approval step: the owner previews the campaign and presses **Send to
+  N customers**; the confirmation approves the wording, which is recorded as the approved
+  version (unsaved changes are saved first; `[[placeholders]]` block sending). The **Send by
+  email** panel says how many customers it goes to and which allowance it uses. After the
+  confirmation, one email goes to each customer with active
+  email consent (`audienceFor`), each with their own unsubscribe link and the one-click
+  `List-Unsubscribe` header. The sender is "<Business> via Shaheb Bazar"; replies go to the
+  business's email if it has one.
+- A campaign is sent once. It then can't be edited, deleted or sent again, and the editor
+  shows when it went and how many emails were accepted. Every email is a row in
+  `marketing_sends`; the send is audited as `campaign.send`.
+- Sending uses one email campaign from the pass, or the free allowance: the free plan's
+  monthly emails (admin **Settings → Marketing**, default 1, counted per calendar month in
+  Bangladesh time) or 1 a week after a pass ends. If the email service accepts none of the
+  emails, nothing is recorded, no allowance is used and the campaign can be sent again.
+- `backend/integrations/email/` has two adapters. **Console** (the default) prints each
+  email to the API console. **SMTP** is used when `MARKETING_EMAIL_ENABLED=true` and
+  `SMTP_HOST` is set: Mailpit locally, or the client's provider in production.
+- **See the emails locally:** `docker compose up -d` also starts Mailpit. In
+  `backend/.env` set `MARKETING_EMAIL_ENABLED=true`, `SMTP_HOST=localhost` and
+  `SMTP_PORT=1025`, restart the API, send a campaign as Rajshahi Mango Traders (it has three
+  demo subscribers) and open http://localhost:8025. Nothing leaves your computer.
+- Tests always use the console adapter, whatever `backend/.env` says.
+- Existing databases: run `database/migrations/005_marketing_sends.sql`, or
+  `npm run db:reset` (which also adds the demo subscribers).
 
 ---
 

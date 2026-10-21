@@ -4,7 +4,7 @@
 # install, no Administrator rights, and a clean database in seconds when
 # the seed data changes.
 #
-#   docker compose up -d       start it (first run creates the volume)
+#   docker compose up -d       start it (first run creates the volume) and the test inbox
 #   npm run db:load            create the schema and seed it
 #   docker compose down        stop it -- data survives
 #   docker compose down -v     stop it AND delete the data
@@ -53,6 +53,17 @@ services:
       timeout: 5s
       retries: 10
       start_period: 10s
+
+  # A local test inbox for campaign emails (KAN-286). It accepts email on port 1025 and sends
+  # nothing on; read it at http://localhost:8025. The API uses it only when backend/.env sets
+  # MARKETING_EMAIL_ENABLED=true, SMTP_HOST=localhost and SMTP_PORT=1025.
+  mail:
+    image: axllent/mailpit:v1.31.3
+    container_name: shahebbazar-web-mail
+    restart: unless-stopped
+    ports:
+      - "${MAIL_SMTP_PORT:-1025}:1025"
+      - "${MAIL_WEB_PORT:-8025}:8025"
 
 volumes:
   shahebbazar-pgdata:

@@ -19,6 +19,8 @@ const apiEnv = (): NodeJS.ProcessEnv => ({
     UPLOAD_DIR,
     MOCK_VERIFICATION_DELIVERY: "console",
     MARKETING_WORKSPACE_ENABLED: "true",
+    // Campaign emails go to the API console, never to a real provider, whatever backend/.env says.
+    MARKETING_EMAIL_ENABLED: "false",
     ANALYTICS_SALT: process.env.ANALYTICS_SALT || "e2e-only-salt",
     NODE_ENV: "development", // codes are printed to the log, which the sign-in test reads
 });

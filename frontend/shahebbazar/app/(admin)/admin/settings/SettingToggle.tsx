@@ -12,7 +12,7 @@ const when = new Intl.DateTimeFormat("en-GB", { day: "numeric", month: "short", 
 // because new businesses or listings then go public without review.
 export function SettingToggle({ setting }: { setting: AdminSetting }) {
     const labelId = useId();
-    const [value, setValue] = useState(setting.value);
+    const [value, setValue] = useState(setting.value === true);
     const [meta, setMeta] = useState({ updated_at: setting.updated_at, updated_by: setting.updated_by });
     const [error, setError] = useState<string | null>(null);
     const [confirming, setConfirming] = useState(false);

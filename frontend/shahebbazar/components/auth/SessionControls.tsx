@@ -1,6 +1,8 @@
 import Link from "next/link";
 import type { AuthUser } from "@/lib/auth-client";
 import { authenticatedApiGet } from "@/lib/auth-server";
+import type { VendorPickerRow } from "@/lib/types";
+import { AccountSwitcher, AccountSwitcherList } from "@/components/shared/AccountSwitcher";
 import { LogoutButton } from "./LogoutButton";
 
 type AuthMeResponse = {
@@ -12,94 +14,60 @@ type SessionControlsProps = {
     variant?: "header" | "menu";
 };
 
+const OUTLINE =
+    "inline-flex items-center justify-center rounded-[10px] border border-line-strong bg-surface px-3.5 py-2 text-sm font-semibold text-ink hover:bg-surface-2";
+const PRIMARY =
+    "inline-flex items-center justify-center rounded-[10px] bg-brand-600 px-3.5 py-2 text-sm font-semibold text-white hover:bg-brand-700";
+
+// The public site is the customer side. Customers and business owners get the account switcher
+// (the same one as the business dashboard): it shows the customer account as current and lists each
+// business they run, so they can switch to it. Admins get a link to the admin area.
 export async function SessionControls({
     variant = "header",
 }: SessionControlsProps) {
     const session = await authenticatedApiGet<AuthMeResponse>("/auth/me");
 
-    // Unauthenticated state
     if (!session) {
-        if (variant === "menu") {
-            return (
-                <div className="grid grid-cols-2 gap-2">
-                    <Link href="/login" className="btn btn-outline">
-                        Log in
-                    </Link>
-                    <Link href="/register" className="btn btn-primary">
-                        Register
-                    </Link>
-                </div>
-            );
-        }
-
         return (
-            <div className="flex items-center gap-3">
-                <Link href="/login" className="btn btn-outline">
+            <div className={variant === "menu" ? "grid grid-cols-2 gap-2" : "flex items-center gap-3"}>
+                <Link href="/login" className={OUTLINE}>
                     Log in
                 </Link>
-                <Link href="/register" className="btn btn-primary">
+                <Link href="/register" className={PRIMARY}>
                     Register
                 </Link>
             </div>
         );
     }
 
-    // Authenticated state configuration
-    const destinationByRole = {
-        customer: "/account",
-        vendor: "/vendors/dashboard",
-        admin: "/admin",
-    } as const;
-
-    const labelByRole = {
-        customer: "My Account",
-        vendor: "Vendor Dashboard",
-        admin: "Admin Dashboard",
-    } as const;
-
-    // Typecast or fallback to ensure role matching works safely
-    const role = session.user.user_role as keyof typeof destinationByRole;
-    const href = destinationByRole[role] ?? "/account";
-    const label = labelByRole[role] ?? "My Account";
-
-    // Authenticated: Menu Variant
-    if (variant === "menu") {
+    if (session.user.user_role === "admin") {
         return (
-            <div className="grid grid-cols-2 gap-2">
-                <Link href={href} className="btn btn-outline">
-                    {label}
+            <div className={variant === "menu" ? "grid grid-cols-2 gap-2" : "flex items-center gap-3"}>
+                <Link href="/admin" className={OUTLINE}>
+                    Admin dashboard
                 </Link>
-                {role === "vendor" && (
-                    <Link href="/account" className="btn btn-outline">
-                        My Account
-                    </Link>
-                )}
                 <LogoutButton />
             </div>
         );
     }
 
-    // Authenticated: Header Variant (Default)
+    const businesses =
+        session.user.user_role === "vendor"
+            ? ((await authenticatedApiGet<VendorPickerRow[]>("/vendor-account/businesses")) ?? [])
+            : [];
+
+    if (variant === "menu") {
+        return (
+            <div className="space-y-3">
+                <AccountSwitcherList side={{ kind: "customer" }} businesses={businesses} />
+                <LogoutButton />
+            </div>
+        );
+    }
+
     return (
         <div className="flex items-center gap-3">
-            <div className="hidden text-right leading-tight xl:block">
-                <p className="max-w-40 truncate text-sm font-semibold text-ink">
-                    {session.user.user_name}
-                </p>
-                <p className="text-xs capitalize text-muted">
-                    {role}
-                </p>
-            </div>
-
-            {/* Vendors keep their customer account too. */}
-            {role === "vendor" && (
-                <Link href="/account" className="hidden text-sm font-medium text-muted hover:text-ink xl:block">
-                    My Account
-                </Link>
-            )}
-            <Link href={href} className="btn btn-outline">
-                {label}
-            </Link>
+            <AccountSwitcher userName={session.user.user_name} side={{ kind: "customer" }} businesses={businesses} />
             <LogoutButton />
         </div>
     );

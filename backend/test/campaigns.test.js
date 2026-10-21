@@ -117,6 +117,7 @@ describe("creating a campaign writes drafts from saved facts only", () => {
         }
         assert.equal(new Set(Object.values(drafts).map((d) => d.subject)).size, 4, "four different subjects");
         assert.match(drafts.new_stock.body, /Here's what's new:/);
+        assert.match(drafts.new_stock.body, /\n\nour Eid mango fair\n/, "the owner's own words, with nothing put in front");
         assert.match(drafts.offer.body, /Good news from Rajshahi Mango Traders: our Eid mango fair[\s\S]*Offer runs 1 November to 3 November\./);
         assert.match(drafts.event.body, /invites you to our Eid mango fair\.\n\nWhen: 1 November to 3 November\nWhere: Shaheb Bazar Road, Rajshahi/);
         assert.ok(!/Visit us at/.test(drafts.event.body), "an event doesn't repeat the address");

@@ -2301,7 +2301,9 @@ CREATE UNIQUE INDEX uq_vendor_marketing_subscriptions_live
 
 CREATE TABLE public.marketing_usage_events (
     usage_id bigserial PRIMARY KEY,
-    subscription_id integer NOT NULL REFERENCES public.vendor_marketing_subscriptions(subscription_id) ON DELETE CASCADE,
+    -- Usage belongs to a business; the pass is empty for the free plan (migration 005).
+    vendor_id integer NOT NULL REFERENCES public.vendors(vendor_id) ON DELETE CASCADE,
+    subscription_id integer REFERENCES public.vendor_marketing_subscriptions(subscription_id) ON DELETE CASCADE,
     usage_type character varying(20) NOT NULL,
     usage_quantity integer DEFAULT 1 NOT NULL,
     usage_is_free boolean DEFAULT false NOT NULL,
@@ -2313,6 +2315,9 @@ CREATE TABLE public.marketing_usage_events (
 
 CREATE INDEX idx_marketing_usage_events_subscription
     ON public.marketing_usage_events (subscription_id, usage_type);
+
+CREATE INDEX idx_marketing_usage_events_vendor
+    ON public.marketing_usage_events (vendor_id, usage_type, usage_created_at);
 
 
 --
@@ -2387,6 +2392,8 @@ CREATE TABLE public.marketing_campaigns (
     campaign_created_by integer REFERENCES public.users(user_id) ON DELETE SET NULL,
     campaign_created_at timestamp with time zone DEFAULT now() NOT NULL,
     campaign_updated_at timestamp with time zone DEFAULT now() NOT NULL,
+    campaign_sent_at timestamp with time zone,
+    campaign_sent_by integer REFERENCES public.users(user_id) ON DELETE SET NULL,
     CONSTRAINT marketing_campaigns_goal_check CHECK (campaign_goal IN ('new_stock', 'offer', 'event', 'reminder')),
     CONSTRAINT marketing_campaigns_language_check CHECK (campaign_language IN ('en', 'bn')),
     CONSTRAINT marketing_campaigns_cta_check CHECK (campaign_call_to_action IN ('visit', 'call', 'message', 'order')),
@@ -2418,6 +2425,30 @@ CREATE TABLE public.marketing_campaign_versions (
 ALTER TABLE public.marketing_campaigns
     ADD CONSTRAINT marketing_campaigns_approved_version_fkey
     FOREIGN KEY (campaign_approved_version_id) REFERENCES public.marketing_campaign_versions(version_id) ON DELETE SET NULL;
+
+--
+-- Marketing email sends (KAN-286). Also in database/migrations/005_marketing_sends.sql.
+-- One row per email a campaign sent. Kept when the customer's account is deleted (user_id empties).
+--
+
+CREATE TABLE public.marketing_sends (
+    send_id bigserial PRIMARY KEY,
+    campaign_id integer NOT NULL REFERENCES public.marketing_campaigns(campaign_id) ON DELETE CASCADE,
+    vendor_id integer NOT NULL REFERENCES public.vendors(vendor_id) ON DELETE CASCADE,
+    user_id integer REFERENCES public.users(user_id) ON DELETE SET NULL,
+    send_channel character varying(10) DEFAULT 'email' NOT NULL,
+    send_address character varying(255) NOT NULL,
+    send_status character varying(20) NOT NULL,
+    send_provider character varying(20) NOT NULL,
+    send_provider_message_id character varying(255),
+    send_error character varying(500),
+    send_created_at timestamp with time zone DEFAULT now() NOT NULL,
+    CONSTRAINT marketing_sends_channel_check CHECK (send_channel IN ('email')),
+    CONSTRAINT marketing_sends_status_check CHECK (send_status IN ('sent', 'failed'))
+);
+
+CREATE INDEX idx_marketing_sends_campaign ON public.marketing_sends (campaign_id);
+CREATE INDEX idx_marketing_sends_vendor ON public.marketing_sends (vendor_id, send_created_at DESC);
 
 
 --

@@ -44,6 +44,18 @@ export async function approveCampaign(vendorId: number, campaignId: number, vers
     return result;
 }
 
+export async function sendCampaign(
+    vendorId: number,
+    campaignId: number
+): Promise<AuthenticatedSendResult<{ sent: number; failed: number; campaign: CampaignDetail }>> {
+    const result = await authenticatedApiSend<{ sent: number; failed: number; campaign: CampaignDetail }>(
+        "POST",
+        `/vendors/${vendorId}/marketing/campaigns/${campaignId}/send`
+    );
+    if (result.ok) refresh();
+    return result;
+}
+
 export async function deleteCampaign(vendorId: number, campaignId: number): Promise<AuthenticatedSendResult> {
     const result = await authenticatedApiSend("DELETE", `/vendors/${vendorId}/marketing/campaigns/${campaignId}`);
     if (result.ok) refresh();

@@ -14,9 +14,8 @@ const LIMITS = { title: 120, offer: 200, subject: 150, body: 5000, facebook: 200
 const workspaceEnabled = () => process.env.MARKETING_WORKSPACE_ENABLED !== "false";
 
 // Every business can write campaigns; a free plan gives a glimpse of what a pass adds (decided
-// 21 October 2026, to be confirmed with the client). Stage 4 counts the free monthly email when
-// sending and makes the number an admin setting.
-const FREE_EMAILS_PER_MONTH = Number(process.env.MARKETING_FREE_EMAILS_PER_MONTH ?? 1);
+// 21 October 2026, to be confirmed with the client). Its monthly email allowance is the admin
+// setting free_marketing_emails_per_month, counted in entitlements.js (KAN-286).
 
 /** The business's Marketing plan, from its pass summary: "pass", "ended", "suspended" or "free". */
 function planOf(pass) {
@@ -185,4 +184,4 @@ async function readiness(db, vendorId) {
     return { checks, can_start: canStart, approved_listings: row.approved_listings };
 }
 
-module.exports = { todayInDhaka, couponOf, workspaceEnabled, FREE_EMAILS_PER_MONTH, planOf, draftingCheck, GOALS, LANGUAGES, CALLS_TO_ACTION, MAX_LISTINGS, LIMITS, validateBrief, validateContent, buildSnapshot, readiness };
+module.exports = { todayInDhaka, couponOf, workspaceEnabled, planOf, draftingCheck, GOALS, LANGUAGES, CALLS_TO_ACTION, MAX_LISTINGS, LIMITS, validateBrief, validateContent, buildSnapshot, readiness };
