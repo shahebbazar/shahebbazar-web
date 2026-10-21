@@ -16,6 +16,26 @@ test("search finds a business and labels paid placement as Sponsored", async ({ 
     await expect(page.getByText("Sponsored").first()).toBeVisible();
 });
 
+test("search filters apply as soon as they change, with no Search button @phone", async ({ page }) => {
+    await page.goto("/search");
+    // The header has its own search box; the filters themselves have no Search button.
+    await expect(page.getByRole("main").getByRole("button", { name: "Search", exact: true })).toHaveCount(0);
+
+    await page.getByLabel("Category").selectOption({ label: "Medical" });
+    await expect(page).toHaveURL(/category=health/);
+    await expect(page.getByRole("link", { name: /Category: Medical/ })).toBeVisible();
+    await expect(page.getByRole("link", { name: "Rajshahi Medical Centre" }).first()).toBeVisible();
+
+    await page.getByLabel("Sort by").selectOption("name");
+    await expect(page).toHaveURL(/category=health.*sort=name|sort=name.*category=health/);
+
+    // Removing the filter resets the dropdown as well as the results.
+    await page.getByRole("link", { name: /Category: Medical/ }).click();
+    await expect(page).not.toHaveURL(/category=/);
+    await expect(page.getByLabel("Category")).toHaveValue("");
+    await expectNoSideScroll(page);
+});
+
 test("a business page shows its details and payment methods @phone", async ({ page }) => {
     await page.goto("/business/rajshahi-mango-traders");
     await expect(page.getByRole("heading", { level: 1, name: "Rajshahi Mango Traders" })).toBeVisible();

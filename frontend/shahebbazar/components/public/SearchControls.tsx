@@ -1,6 +1,7 @@
 import Link from "next/link";
 import { ChevronDown, ListFilter, MapPin, X } from "lucide-react";
 import { t, type Locale } from "@/lib/i18n";
+import { AutoApplyFilters } from "./AutoApplyFilters";
 import type { CategoryTile, Facet } from "@/lib/types";
 
 // Search filter controls and active filter indicators.
@@ -69,8 +70,13 @@ export function SearchControls({
 
     return (
         <>
-            {/* A single form submits all filters together. */}
-            <form action="/search" method="get" className="flex flex-wrap items-center gap-3">
+            {/* Filters apply as soon as one changes. The key remounts the form when the URL's filters change
+                (a removed chip, Clear all), so the selects always show the current filters. */}
+            <AutoApplyFilters
+                key={`${query.category ?? ""}|${query.area ?? ""}|${query.sort ?? ""}|${query.q ?? ""}`}
+                className="flex flex-wrap items-center gap-3"
+                loadingLabel={copy.updatingResults}
+            >
                 {query.q && <input type="hidden" name="q" value={query.q} />}
                 {locale === "bn" && <input type="hidden" name="lang" value="bn" />}
 
@@ -105,14 +111,17 @@ export function SearchControls({
                     ))}
                 </SelectField>
 
-                <button
-                    type="submit"
-                    className="inline-flex h-11 items-center gap-2 rounded-[10px] border border-line-strong bg-surface px-4 text-sm font-medium text-ink transition-colors hover:border-brand-600 hover:bg-brand-50"
-                >
-                    <ListFilter className="size-4" />
-                    {copy.search}
-                </button>
-            </form>
+                {/* Only needed without JavaScript; otherwise filters apply on change. */}
+                <noscript>
+                    <button
+                        type="submit"
+                        className="inline-flex h-11 items-center gap-2 rounded-[10px] border border-line-strong bg-surface px-4 text-sm font-medium text-ink transition-colors hover:border-brand-600 hover:bg-brand-50"
+                    >
+                        <ListFilter className="size-4" />
+                        {copy.search}
+                    </button>
+                </noscript>
+            </AutoApplyFilters>
 
             {activeChips.length > 0 && (
                 <div className="mt-3 flex flex-wrap items-center gap-2">
