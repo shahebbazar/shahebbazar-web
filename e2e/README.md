@@ -25,7 +25,7 @@ trace of each failed test). The API's own log is in `e2e/test-results/api.log`.
 
 | File | Covers |
 | --- | --- |
-| `tests/public.spec.ts` | Home, search and Sponsored, a business page, Bangla, every footer link, FAQ, not-found page, a bad unsubscribe link |
+| `tests/public.spec.ts` | Home, search and Sponsored, filters applying on change, a business page, Bangla, every footer link, FAQ, not-found page, a bad unsubscribe link |
 | `tests/auth.spec.ts` | Signing in with a code as a customer and a business owner, signing out, a wrong code, private pages when signed out |
 | `tests/customer.spec.ts` | Saving a business and the offers prompt, email offers and My details, unsubscribing, account tabs on a phone |
 | `tests/business.spec.ts` | The owner's dashboard, adding a product (waits for approval), every dashboard page |

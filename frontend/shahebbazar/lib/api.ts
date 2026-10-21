@@ -26,7 +26,9 @@ class ApiError extends Error {
 async function getJson<T>(path: string, revalidateSeconds: number): Promise<T> {
     const res = await fetch(`${API_BASE}${path}`, {
         // Directory content changes rarely, so a short revalidation window reduces database load.
-        next: { revalidate: revalidateSeconds },
+        // Not in development, where the database is often reloaded or edited directly (db:reset, seed
+        // photos) and a cached page would show the old data for up to five minutes.
+        next: { revalidate: process.env.NODE_ENV === "development" ? 0 : revalidateSeconds },
         headers: { Accept: "application/json" },
     });
 
