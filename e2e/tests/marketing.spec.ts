@@ -224,8 +224,11 @@ test("the owner posts on Facebook and WhatsApp themselves and marks it as posted
     // WhatsApp opens with the message filled in; Facebook shares the business page and its preview card.
     const whatsapp = page.getByRole("group", { name: "Post on WhatsApp" });
     const facebook = page.getByRole("group", { name: "Post on Facebook" });
+    // The page link in each carries the channel and campaign, so visits from it count for the campaign.
+    const id = Number(new URL(page.url()).pathname.split("/").pop());
     await expect(whatsapp.getByRole("link", { name: "Open in WhatsApp" })).toHaveAttribute("href", /^https:\/\/wa\.me\/\?text=.*Rajshahi%20Mango%20Traders/);
-    await expect(facebook.getByRole("link", { name: "Open Facebook" })).toHaveAttribute("href", /facebook\.com\/sharer\/sharer\.php\?u=.*rajshahi-mango-traders/);
+    await expect(whatsapp.getByRole("link", { name: "Open in WhatsApp" })).toHaveAttribute("href", new RegExp(`rajshahi-mango-traders%3Ffrom%3Dwhatsapp%26c%3D${id}`));
+    await expect(facebook.getByRole("link", { name: "Open Facebook" })).toHaveAttribute("href", new RegExp(`facebook\\.com/sharer/sharer\\.php\\?u=.*rajshahi-mango-traders%3Ffrom%3Dfacebook%26c%3D${id}$`));
     await expect(whatsapp.getByRole("link", { name: "Open the photo" })).toBeVisible();
 
     // WhatsApp: marked as posted without a link.
@@ -251,11 +254,18 @@ test("the owner posts on Facebook and WhatsApp themselves and marks it as posted
     await page.goto(WORKSPACE);
     await expect(page.getByRole("region", { name: "Campaigns" }).getByRole("link", { name: title.trim() }).first()).toContainText("posted on Facebook");
     const results = page.getByRole("region", { name: "Results" });
-    await expect(results).toContainText("Sponsored views");
-    await expect(results.getByRole("link", { name: new RegExp(title.trim()) }).first()).toContainText("posted on Facebook");
+    await expect(results).toContainText("Visits from your marketing");
+    for (const source of ["Sponsored results", "Email", "Facebook", "WhatsApp", "Other sites"]) {
+        await expect(results.getByRole("listitem", { name: new RegExp(`^${source}: \\d+$`) })).toBeVisible();
+    }
+    await expect(results.getByRole("link", { name: new RegExp(title.trim()) }).first()).toContainText(/\d+ visits? · posted on Facebook/);
     await results.getByRole("link", { name: "7 days" }).click();
     await expect(results.getByRole("link", { name: "7 days" })).toHaveAttribute("aria-current", "true");
     await expectNoSideScroll(page);
+
+    // Following a campaign link opens the business page; the marks are taken out of the address.
+    await page.goto(`/business/rajshahi-mango-traders?from=whatsapp&c=${id}`);
+    await expect(page).toHaveURL(/\/business\/rajshahi-mango-traders$/);
 });
 
 test("the account switcher shows which side you're on and moves between the customer account and the business @phone", async ({ page }) => {

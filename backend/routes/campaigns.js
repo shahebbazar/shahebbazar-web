@@ -18,7 +18,7 @@ const { sendCampaign, sendResults, statusProblem } = require("../services/market
 const { couponOf, workspaceEnabled, planOf, draftingCheck, validateBrief, validateContent, buildSnapshot, readiness, MAX_LISTINGS } = require("../services/marketing/campaigns");
 const { generateDrafts, warnings, placeholdersIn } = require("../services/marketing/templates");
 const { POST_CHANNELS, validatePostUrl, postsOf } = require("../services/marketing/posts");
-const { periodOf, marketingResults } = require("../services/marketing/results");
+const { periodOf, marketingResults, campaignVisits } = require("../services/marketing/results");
 
 const router = express.Router();
 const read = [requireFeature("business.marketing"), requireVendorOwnership];
@@ -97,6 +97,8 @@ async function campaignDetail(db, row) {
         placeholders: placeholdersIn(latest.version_content),
         send: await sendInfo(db, row),
         posts: await postsOf(db, row.campaign_id),
+        // Visits to the business page from this campaign's links, by channel.
+        visits: await campaignVisits(db, row.campaign_id),
     };
 }
 

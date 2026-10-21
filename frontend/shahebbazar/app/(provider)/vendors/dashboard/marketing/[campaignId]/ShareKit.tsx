@@ -3,6 +3,7 @@
 import { useState, useTransition } from "react";
 import { CheckCircle2, Copy, ExternalLink, Image as ImageIcon, Loader2 } from "lucide-react";
 import type { CampaignDetail, CampaignPost, PostChannel } from "@/lib/types";
+import { campaignLink, swapPageUrl } from "@/lib/analytics";
 import { markPosted, unmarkPosted } from "../actions";
 import { formatWhen } from "../labels";
 
@@ -25,10 +26,13 @@ export function ShareKit({
     pageUrl,
     photo,
     post,
+    visits,
     blocked,
     viewOnly,
     onChange,
 }: {
+    /** Visits to the business page from this channel's links. */
+    visits: number;
     vendorId: number;
     campaignId: number;
     channel: PostChannel;
@@ -48,9 +52,13 @@ export function ShareKit({
     const [error, setError] = useState<string | null>(null);
     const [pending, startTransition] = useTransition();
 
+    // The page link in what's posted carries the channel and campaign, so its visits count in the results.
+    const link = campaignLink(pageUrl, channel, campaignId);
+    const shareText = swapPageUrl(text, pageUrl, link);
+
     async function copy() {
         try {
-            await navigator.clipboard.writeText(text);
+            await navigator.clipboard.writeText(shareText);
             setCopied(`Copied. Paste it into ${channel === "facebook" ? "your Facebook post" : "WhatsApp"}.`);
         } catch {
             setCopied("Couldn't copy here. Select the text above and copy it instead.");
@@ -99,15 +107,26 @@ export function ShareKit({
             )}
         </p>
     );
+    const visitsLine = (post || visits > 0) && (
+        <p className="text-xs text-muted">
+            <span className="font-semibold text-ink">{visits}</span> visit{visits === 1 ? "" : "s"} to your page from the {name} link so far.
+        </p>
+    );
 
     if (viewOnly) {
-        return <div className="mt-3">{posted || <p className="text-xs text-muted">Not marked as posted on {name}.</p>}</div>;
+        return (
+            <div className="mt-3 space-y-1">
+                {posted || <p className="text-xs text-muted">Not marked as posted on {name}.</p>}
+                {visitsLine}
+            </div>
+        );
     }
 
     if (blocked) {
         return (
             <div className="mt-3 space-y-2">
                 {posted}
+                {visitsLine}
                 <p className="text-xs text-muted">{blocked}</p>
             </div>
         );
@@ -115,8 +134,8 @@ export function ShareKit({
 
     const open =
         channel === "whatsapp"
-            ? { href: `https://wa.me/?text=${encodeURIComponent(text)}`, label: "Open in WhatsApp" }
-            : { href: `https://www.facebook.com/sharer/sharer.php?u=${encodeURIComponent(pageUrl)}`, label: "Open Facebook" };
+            ? { href: `https://wa.me/?text=${encodeURIComponent(shareText)}`, label: "Open in WhatsApp" }
+            : { href: `https://www.facebook.com/sharer/sharer.php?u=${encodeURIComponent(link)}`, label: "Open Facebook" };
 
     return (
         <div aria-label={`Post on ${name}`} role="group" className="mt-3 space-y-3 rounded-lg border border-line bg-surface-2 p-3">
@@ -149,6 +168,7 @@ export function ShareKit({
                 {posted && !editing ? (
                     <div className="space-y-2">
                         {posted}
+                        {visitsLine}
                         <div className="flex flex-wrap gap-3 text-[0.8125rem]">
                             <button type="button" onClick={() => setEditing(true)} disabled={pending} className="font-medium text-brand-600 hover:underline">
                                 {post?.url ? "Change the link" : "Add a link to the post"}
@@ -167,7 +187,7 @@ export function ShareKit({
                         className="space-y-2"
                     >
                         <label className="block text-[0.8125rem] font-medium">
-                            {post ? "Link to the post" : `Posted it? Mark it here so it shows in your results.`}
+                            {post ? "Link to the post" : "Posted it? Mark it here so it shows in your results. Visits from the link are counted either way."}
                             <input
                                 type="text"
                                 inputMode="url"

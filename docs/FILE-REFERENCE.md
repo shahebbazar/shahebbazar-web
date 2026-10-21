@@ -50,6 +50,7 @@ Files marked **BROKEN** throw against the current schema.
 | `scripts/verify-db.js` | The `db:verify` command. Runs `database/checks/verify-baseline.sql`; also used by `load-db.js`. |
 | `../database/migrations/001_marketing_passes.sql` | Brings an existing database up to date for Marketing passes (also in the baseline). Safe to run twice. |
 | `../database/migrations/005_marketing_sends.sql` | Adds `marketing_sends` (one row per email a campaign sent, with provider and result), when and by whom a campaign was sent, and `vendor_id` on `marketing_usage_events` so the free plan's emails are counted per business (also in the baseline). Safe to run twice. |
+| `../database/migrations/007_campaign_visits.sql` | Adds `view_campaign_id` to `vendor_profile_views` and the `email`, `facebook` and `whatsapp` view sources, so visits from a campaign's links count for it (also in the baseline). Safe to run twice. |
 | `../database/migrations/006_marketing_posts.sql` | Adds `marketing_campaign_posts` (one row per campaign and channel the owner marked as posted on Facebook or WhatsApp, with the optional link and the version posted) and drops the unused `campaign_posted_url` (also in the baseline). Safe to run twice. |
 | `../database/migrations/004_marketing_campaigns.sql` | Adds `marketing_campaigns` (brief, frozen snapshot, status, approved version, an offer's coupon code, valid until the offer's last day) and `marketing_campaign_versions` (every saved wording) to an existing database (also in the baseline). Safe to run twice. |
 | `../database/migrations/003_platform_settings.sql` | Adds `platform_settings` (admin-changeable settings; first two: business and listing approval, both on) to an existing database (also in the baseline). Safe to run twice. |
@@ -211,7 +212,7 @@ adding a URL segment, so `app/(public)/page.tsx` serves `/`, not `/public`.
 | --- | --- |
 | `NavigationTracker.tsx` | In the root layout. Records every pathname change for `viewSource()`. |
 | `SearchBeacon.tsx` | On the search page, first page of a typed query only. Reports the query and the businesses shown. |
-| `ProfileViewBeacon.tsx` | On the business profile. Reports one view with its source. A link from the Sponsored results carries `?from=sponsored`: reported as a sponsored view, then removed from the address so a reload isn't counted again. |
+| `ProfileViewBeacon.tsx` | On the business profile. Reports one view with its source. A link from the Sponsored results carries `?from=sponsored`, and a campaign's links `?from=<channel>&c=<campaign>` (email, facebook or whatsapp): reported with that source and campaign, then removed from the address so a reload isn't counted again. |
 
 ### components/provider/ — the shop-owner area
 

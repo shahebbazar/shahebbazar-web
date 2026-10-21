@@ -651,7 +651,10 @@ CREATE TABLE public.vendor_profile_views (
     view_source character varying(20),
     view_session_hash character(64),
     view_created_at timestamp with time zone DEFAULT now() NOT NULL,
-    CONSTRAINT vendor_profile_views_view_source_check CHECK (((view_source)::text = ANY ((ARRAY['search'::character varying, 'category'::character varying, 'direct'::character varying, 'share'::character varying, 'sponsored'::character varying])::text[])))
+    -- The campaign whose link the visitor followed (KAN-287); its foreign key is added with the campaigns below.
+    view_campaign_id integer,
+    CONSTRAINT vendor_profile_views_view_source_check CHECK (
+        view_source IN ('search', 'category', 'direct', 'share', 'sponsored', 'email', 'facebook', 'whatsapp'))
 );
 
 
@@ -2471,6 +2474,18 @@ CREATE TABLE public.marketing_campaign_posts (
 
 CREATE INDEX idx_marketing_campaign_posts_vendor
     ON public.marketing_campaign_posts (vendor_id, post_marked_at DESC);
+
+--
+-- Visits from marketing campaigns (KAN-287). Also in database/migrations/007_campaign_visits.sql.
+-- Campaign links carry the channel (email, facebook, whatsapp) and the campaign.
+--
+
+ALTER TABLE public.vendor_profile_views
+    ADD CONSTRAINT vendor_profile_views_view_campaign_id_fkey
+    FOREIGN KEY (view_campaign_id) REFERENCES public.marketing_campaigns(campaign_id) ON DELETE SET NULL;
+
+CREATE INDEX idx_vendor_profile_views_campaign
+    ON public.vendor_profile_views (view_campaign_id) WHERE view_campaign_id IS NOT NULL;
 
 
 --

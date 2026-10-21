@@ -238,7 +238,9 @@ export default async function MarketingPage({ searchParams }: { searchParams: Pr
                 </section>
             </div>
 
-            {results && <MarketingResultsPanel vendorId={vendorId} results={results} />}
+            {results && (
+                <MarketingResultsPanel vendorId={vendorId} results={results} plan={workspace.plan} subscribers={workspace.email_subscribers} />
+            )}
 
             <section aria-labelledby="campaigns-heading" className="mt-6">
                 <h2 id="campaigns-heading" className="text-[1.0625rem] font-semibold">Campaigns</h2>

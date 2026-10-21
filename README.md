@@ -447,6 +447,9 @@ The vendor marketing package (KAN-242/243) is being built in six stages
 - Sponsored views are now recorded: Sponsored cards and rows link with `?from=sponsored`,
   which the profile beacon reports and then removes from the address. The API counts it only
   while the business is featured.
+- Campaign links (email, and the Facebook and WhatsApp posting tools) carry
+  `?from=<channel>&c=<campaign>`, so the results show visits from each campaign and
+  channel. Existing databases: run `database/migrations/007_campaign_visits.sql`.
 - A banner asks the owner to renew when the pass has ended or ends within 7 days.
 - Existing databases: run `database/migrations/006_marketing_posts.sql`, or
   `npm run db:reset` (which also gives the featured demo businesses some sponsored views).

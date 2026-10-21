@@ -66,6 +66,21 @@ function bodyHtml(text) {
         .replace(/\n/g, "<br>\n");
 }
 
+/**
+ * The business page's address with the channel and campaign added (?from=email&c=12), so a visit from
+ * the link counts for the campaign (frontend ProfileViewBeacon, which then removes them).
+ */
+function campaignLink(pageUrl, channel, campaignId) {
+    if (!campaignId) return pageUrl;
+    const [base, hash] = pageUrl.split("#");
+    const tracked = `${base}${base.includes("?") ? "&" : "?"}from=${channel}&c=${campaignId}`;
+    return hash === undefined ? tracked : `${tracked}#${hash}`;
+}
+
+/** Text with the bare business page address (not a longer address starting with it) swapped for `to`. */
+const swapPageUrl = (text, pageUrl, to) =>
+    text.replace(new RegExp(`${pageUrl.replace(/[.*+?^${}()|[\]\\]/g, "\\$&")}(?![\\w/?#-])`, "g"), () => to);
+
 /** A stored Bangladeshi number ("+8801712345678") as people write it ("01712-345678"). */
 const displayPhone = (phone) => {
     const m = /^\+880(1\d{3})(\d{6})$/.exec(String(phone).replace(/[\s-]/g, ""));
@@ -147,7 +162,10 @@ function buildCampaignEmail({ campaign, content, recipient, replyTo }) {
     const name = lang === "bn" && business.name_bn ? business.name_bn : business.name;
     const unsubscribe = unsubscribeUrl(recipient.user_id, campaign.vendor_id, "email");
     const oneClick = `${apiUrl()}/api/unsubscribe/${unsubscribeToken(recipient.user_id, campaign.vendor_id, "email")}`;
-    const pageUrl = business.page_url || `${siteUrl()}/business/${encodeURIComponent(business.slug)}`;
+    const plainPageUrl = business.page_url || `${siteUrl()}/business/${encodeURIComponent(business.slug)}`;
+    // Every link to the business page counts its visits for this campaign's email.
+    const pageUrl = campaignLink(plainPageUrl, "email", campaign.campaign_id);
+    const body = swapPageUrl(content.email.body, plainPageUrl, pageUrl);
     // Opens a message to the business, after logging in if needed (frontend /message/<slug>).
     const reply = `${siteUrl()}/message/${encodeURIComponent(business.slug)}`;
     const directions = business.address
@@ -178,7 +196,7 @@ function buildCampaignEmail({ campaign, content, recipient, replyTo }) {
 <tr><td height="4" bgcolor="${BRAND}" style="font-size:0;line-height:0;border-radius:12px 12px 0 0">&nbsp;</td></tr>
 <tr><td bgcolor="#ffffff" style="padding:20px 24px;border-bottom:1px solid ${LINE}">${headerHtml(name, assetUrl(business.logo_url))}</td></tr>
 <tr><td bgcolor="#ffffff" style="padding:24px 24px 8px;${FONT};font-size:15px;line-height:1.6;color:${INK};word-wrap:break-word;word-break:break-word">
-${bodyHtml(content.email.body)}
+${bodyHtml(body)}
 </td></tr>
 ${cards.length ? `<tr><td bgcolor="#ffffff" style="padding:16px 24px 4px">${productCardsHtml(cards, lang, pageUrl, c)}</td></tr>` : ""}
 ${coupon ? `<tr><td bgcolor="#ffffff" style="padding:12px 24px 4px">${couponHtml(coupon, endsOn, c)}</td></tr>` : ""}
@@ -197,7 +215,7 @@ ${escapeHtml(c.why(name))} <a href="${escapeHtml(unsubscribe)}" style="color:${M
 </html>`;
 
     const text = [
-        content.email.body,
+        body,
         "",
         c.replyText(reply),
         c.pageText(pageUrl),
@@ -223,4 +241,4 @@ ${escapeHtml(c.why(name))} <a href="${escapeHtml(unsubscribe)}" style="color:${M
     };
 }
 
-module.exports = { buildCampaignEmail, bodyHtml, escapeHtml };
+module.exports = { buildCampaignEmail, bodyHtml, escapeHtml, campaignLink };

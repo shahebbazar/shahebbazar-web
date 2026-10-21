@@ -42,6 +42,8 @@ const REQUIRED_OBJECTS = Object.fromEntries(
 const REQUIRED_COLUMNS = Object.fromEntries(
     [
         "reviews.review_reply",
+        // Visits from marketing campaigns (also database/migrations/007_campaign_visits.sql)
+        "vendor_profile_views.view_campaign_id",
         "vendors.vendor_nid_reference",
         "vendors.vendor_nid_status",
         "vendors.vendor_nid_submitted_at",

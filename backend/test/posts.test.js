@@ -4,8 +4,9 @@
 
 const { describe, it, before, after } = require("node:test");
 const assert = require("node:assert/strict");
-const { query, call, startApi, stopApi } = require("./support/harness");
+const { ORIGIN, query, call, startApi, stopApi } = require("./support/harness");
 const { validatePostUrl } = require("../services/marketing/posts");
+const { buildCampaignEmail } = require("../services/marketing/emailMessage");
 
 const MANGO = 1; // Rajshahi Mango Traders: running pass and three email subscribers (seed)
 const OTHER = 6; // owned by "otherVendor": no pass, so the free plan
@@ -128,6 +129,56 @@ describe("marking a campaign as posted", () => {
         for (const as of ["admin", "customer", "otherVendor"]) assert.equal((await mark(MANGO, campaign.campaign_id, "whatsapp", undefined, as)).status, 403, as);
         assert.equal((await call("PUT", path(MANGO, `/campaigns/${campaign.campaign_id}/posts/whatsapp`), { json: {} })).status, 401);
         assert.equal((await call("DELETE", path(MANGO, `/campaigns/${campaign.campaign_id}/posts/facebook`), { as: "otherVendor" })).status, 403);
+    });
+});
+
+describe("visits from a campaign's links", () => {
+    const BROWSER = "Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 Chrome/130.0 Safari/537.36";
+    // Each visit uses its own browser string, so the 30-minute repeat-visit rule doesn't merge them.
+    let n = 0;
+    const visit = (body) => fetch(`${ORIGIN}/api/track/view`, {
+        method: "POST", headers: { "Content-Type": "text/plain", "User-Agent": `${BROWSER} v${++n}` }, body: JSON.stringify(body),
+    });
+    const lastView = async () => (await query("SELECT view_source, view_campaign_id FROM vendor_profile_views ORDER BY view_id DESC LIMIT 1"))[0];
+    let campaign;
+
+    it("are counted for the campaign and channel", async () => {
+        campaign = await readyCampaign(MANGO, "owner", "Visits check");
+        await visit({ slug: "rajshahi-mango-traders", source: "email", campaign: campaign.campaign_id });
+        assert.deepEqual(await lastView(), { view_source: "email", view_campaign_id: campaign.campaign_id });
+        await visit({ slug: "rajshahi-mango-traders", source: "whatsapp", campaign: campaign.campaign_id });
+        await visit({ slug: "rajshahi-mango-traders", source: "whatsapp", campaign: campaign.campaign_id });
+        const detail = (await call("GET", path(MANGO, `/campaigns/${campaign.campaign_id}`), { as: "owner" })).data;
+        assert.deepEqual(detail.visits, { email: 1, facebook: 0, whatsapp: 2 });
+    });
+
+    it("ignore another business's campaign, and a campaign on other sources", async () => {
+        await visit({ slug: "uttara-light-engineering", source: "email", campaign: campaign.campaign_id });
+        assert.deepEqual(await lastView(), { view_source: "email", view_campaign_id: null }, "Mango's campaign isn't counted for another business");
+        await visit({ slug: "rajshahi-mango-traders", source: "search", campaign: campaign.campaign_id });
+        assert.deepEqual(await lastView(), { view_source: "search", view_campaign_id: null });
+        await visit({ slug: "rajshahi-mango-traders", source: "facebook", campaign: "12; DROP TABLE users" });
+        assert.deepEqual(await lastView(), { view_source: "facebook", view_campaign_id: null });
+    });
+
+    it("show in the results by source, in the total, and against the campaign", async () => {
+        const res = (await results(MANGO)).data;
+        assert.ok(res.visits_by_source.email.current >= 1);
+        assert.ok(res.visits_by_source.whatsapp.current >= 2);
+        const sum = Object.values(res.visits_by_source).reduce((s, v) => s + v.current, 0);
+        assert.equal(res.marketing_visits.current, sum);
+    });
+
+    it("are what the email's links carry: the channel and the campaign", async () => {
+        const [row] = await query("SELECT * FROM marketing_campaigns WHERE campaign_id = $1", [campaign.campaign_id]);
+        const email = buildCampaignEmail({
+            campaign: row, content: campaign.versions[0].version_content, recipient: { user_id: 1, user_name: "Test", address: "t@example.com" },
+        });
+        const tracked = `/business/rajshahi-mango-traders?from=email&amp;c=${campaign.campaign_id}`;
+        assert.ok(email.html.includes(`${tracked}"`), "the View our page button");
+        assert.ok(email.html.includes(`${tracked}#services"`), "the product cards");
+        assert.match(email.text, new RegExp(`/business/rajshahi-mango-traders\\?from=email&c=${campaign.campaign_id}\\n`), "the page address written in the message");
+        assert.doesNotMatch(email.html, /\/business\/rajshahi-mango-traders["#<]/, "no untracked link to the page is left");
     });
 });
 

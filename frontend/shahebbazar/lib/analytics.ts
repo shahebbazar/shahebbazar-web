@@ -2,7 +2,23 @@ import { BROWSER_API_BASE } from "./apiBase";
 
 // Browser-side analytics helpers, used by the beacons in components/analytics/.
 
-export type ViewSource = "search" | "category" | "direct" | "share" | "sponsored";
+export type ViewSource = "search" | "category" | "direct" | "share" | "sponsored" | "email" | "facebook" | "whatsapp";
+
+/**
+ * The business page's address marked with a campaign's channel and id (?from=whatsapp&c=12), so a
+ * visit from the link counts for the campaign. The backend's emails use the same form.
+ */
+export function campaignLink(pageUrl: string, channel: "email" | "facebook" | "whatsapp", campaignId: number): string {
+    const [base, hash] = pageUrl.split("#");
+    const tracked = `${base}${base.includes("?") ? "&" : "?"}from=${channel}&c=${campaignId}`;
+    return hash === undefined ? tracked : `${tracked}#${hash}`;
+}
+
+/** Text with the bare page address (not a longer address starting with it) swapped for `to`. */
+export function swapPageUrl(text: string, pageUrl: string, to: string): string {
+    const escaped = pageUrl.replace(/[.*+?^${}()|[\]\\]/g, "\\$&");
+    return text.replace(new RegExp(`${escaped}(?![\\w/?#-])`, "g"), () => to);
+}
 
 // Sends one analytics event.
 export function sendAnalytics(path: string, payload: unknown): void {

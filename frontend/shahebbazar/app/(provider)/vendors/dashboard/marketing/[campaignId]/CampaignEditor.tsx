@@ -244,8 +244,11 @@ export function CampaignEditor({ vendorId, initial, readOnly: viewOnly }: { vend
                     <span>
                         <span className="font-semibold">Sent {formatWhen(campaign.send.sent_at)}</span> to{" "}
                         {customers(campaign.send.results?.sent ?? 0)} by email
-                        {campaign.send.results?.failed ? `; ${campaign.send.results.failed} couldn't be delivered` : ""}. A sent
-                        campaign can&apos;t be changed or sent again; start a new campaign for your next message.
+                        {campaign.send.results?.failed ? `; ${campaign.send.results.failed} couldn't be delivered` : ""}.{" "}
+                        <span className="font-semibold">
+                            {campaign.visits.email} visit{campaign.visits.email === 1 ? "" : "s"} to your page from this email so far.
+                        </span>{" "}
+                        A sent campaign can&apos;t be changed or sent again; start a new campaign for your next message.
                     </span>
                 </section>
             ) : (
@@ -446,6 +449,7 @@ export function CampaignEditor({ vendorId, initial, readOnly: viewOnly }: { vend
                         pageUrl={snapshot.business.page_url}
                         photo={content.facebook.photos !== false ? socialPhoto : null}
                         post={campaign.posts.facebook}
+                        visits={campaign.visits.facebook}
                         blocked={shareBlocked}
                         viewOnly={viewOnly}
                         onChange={setCampaign}
@@ -494,6 +498,7 @@ export function CampaignEditor({ vendorId, initial, readOnly: viewOnly }: { vend
                         pageUrl={snapshot.business.page_url}
                         photo={content.whatsapp.photos !== false ? socialPhoto : null}
                         post={campaign.posts.whatsapp}
+                        visits={campaign.visits.whatsapp}
                         blocked={shareBlocked}
                         viewOnly={viewOnly}
                         onChange={setCampaign}
