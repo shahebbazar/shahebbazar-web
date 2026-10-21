@@ -21,7 +21,8 @@ export function SearchResultRow({
     const name = pick(locale, business.vendor_name, business.vendor_name_bn);
     const cover = assetUrl(business.vendor_cover_url);
     const reviews = toNumber(business.review_count);
-    const href = localeHref(`/business/${business.vendor_slug}`, locale);
+    // A visit from a Sponsored row is counted as a sponsored view (ProfileViewBeacon).
+    const href = localeHref(`/business/${business.vendor_slug}${sponsored ? "?from=sponsored" : ""}`, locale);
 
     return (
         <article className="flex flex-col gap-4 p-4 sm:flex-row">

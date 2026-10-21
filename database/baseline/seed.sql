@@ -805,6 +805,12 @@ CROSS JOIN generate_series(1, 60) AS d
 CROSS JOIN LATERAL generate_series(1, 4 + abs(hashtext(v.vendor_slug || ':n:' || d)) % 8 + (60 - d) / 15) AS k
 WHERE v.vendor_status = 'approved';
 
+-- Businesses in the Sponsored results get about one in five of their views from there (KAN-287 results).
+UPDATE vendor_profile_views pv SET view_source = 'sponsored'
+FROM vendors v
+WHERE v.vendor_id = pv.vendor_id AND v.vendor_is_featured
+  AND abs(hashtext(pv.view_session_hash)) % 5 = 0;
+
 -- Between 15 and 74 appearances a day, rising the same way.
 INSERT INTO vendor_search_impressions (vendor_id, impression_day, impression_count)
 SELECT v.vendor_id,

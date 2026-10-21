@@ -4,7 +4,8 @@
 // business.marketing.manage. Everything is hidden only if MARKETING_WORKSPACE_ENABLED=false. Every
 // approved business can write campaigns, with or without a pass (the free plan); only a suspended pass
 // blocks it. Drafting spends no allowance; sending (KAN-286, services/marketing/sending.js) uses the
-// pass or the free allowance.
+// pass or the free allowance. The owner posts Facebook and WhatsApp themselves and marks them as
+// posted (KAN-287, services/marketing/posts.js); results are in services/marketing/results.js.
 
 const express = require("express");
 const pool = require("../db");
@@ -16,6 +17,8 @@ const { audienceFor } = require("../services/marketing/consent");
 const { sendCampaign, sendResults, statusProblem } = require("../services/marketing/sending");
 const { couponOf, workspaceEnabled, planOf, draftingCheck, validateBrief, validateContent, buildSnapshot, readiness, MAX_LISTINGS } = require("../services/marketing/campaigns");
 const { generateDrafts, warnings, placeholdersIn } = require("../services/marketing/templates");
+const { POST_CHANNELS, validatePostUrl, postsOf } = require("../services/marketing/posts");
+const { periodOf, marketingResults } = require("../services/marketing/results");
 
 const router = express.Router();
 const read = [requireFeature("business.marketing"), requireVendorOwnership];
@@ -93,6 +96,7 @@ async function campaignDetail(db, row) {
         warnings: warnings(row.campaign_source_snapshot),
         placeholders: placeholdersIn(latest.version_content),
         send: await sendInfo(db, row),
+        posts: await postsOf(db, row.campaign_id),
     };
 }
 
@@ -122,7 +126,9 @@ router.get("/vendors/:vendorId/marketing/workspace", ...read, async (req, res) =
             pool.query(
                 `SELECT c.campaign_id, c.campaign_title, c.campaign_goal, c.campaign_language, c.campaign_status, c.campaign_updated_at,
                         c.campaign_coupon_code, c.campaign_starts_on, c.campaign_ends_on,
-                        (SELECT max(v.version_number) FROM marketing_campaign_versions v WHERE v.campaign_id = c.campaign_id) AS versions
+                        (SELECT max(v.version_number) FROM marketing_campaign_versions v WHERE v.campaign_id = c.campaign_id) AS versions,
+                        COALESCE((SELECT array_agg(p.post_channel ORDER BY p.post_channel) FROM marketing_campaign_posts p
+                                  WHERE p.campaign_id = c.campaign_id), '{}') AS posted_on
                  FROM marketing_campaigns c WHERE c.vendor_id = $1 ORDER BY c.campaign_updated_at DESC`,
                 [vendorId]
             ),
@@ -326,20 +332,117 @@ router.post("/vendors/:vendorId/marketing/campaigns/:campaignId/send", ...manage
     }
 });
 
-// Deletes a campaign that has not been sent.
+// Marks the campaign as posted on Facebook or WhatsApp: { url } (optional link to the post). The
+// owner posts it themselves; this records the latest version as the one posted, for the results.
+// Marking again updates the link.
+router.put("/vendors/:vendorId/marketing/campaigns/:campaignId/posts/:channel", ...manage, async (req, res) => {
+    const vendorId = parseId(req.params.vendorId);
+    const campaignId = parseId(req.params.campaignId);
+    const { channel } = req.params;
+    if (!campaignId) return res.status(400).json({ error: "Invalid campaign id" });
+    if (!POST_CHANNELS.includes(channel)) return res.status(404).json({ error: "Unknown channel" });
+    const { url, error } = validatePostUrl(channel, req.body?.url);
+    if (error) return res.status(400).json({ error, errors: { url: error } });
+
+    const client = await pool.connect();
+    try {
+        await client.query("BEGIN");
+        const row = await campaignRow(client, vendorId, campaignId, { lock: true });
+        const fail = async (status, message, extra = {}) => {
+            await client.query("ROLLBACK");
+            return res.status(status).json({ error: message, ...extra });
+        };
+        if (!row) return fail(404, "Campaign not found");
+        if (!["draft", "approved", "sent"].includes(row.campaign_status)) return fail(409, "This campaign can't be marked as posted right now.");
+        const [latest] = await versionsOf(client, campaignId);
+        const left = placeholdersIn(latest.version_content);
+        if (left.length) return fail(400, "Fill in the parts marked [[like this]] before posting.", { placeholders: left });
+
+        const before = (await client.query(
+            "SELECT post_url FROM marketing_campaign_posts WHERE campaign_id = $1 AND post_channel = $2", [campaignId, channel]
+        )).rows[0];
+        await client.query(
+            `INSERT INTO marketing_campaign_posts (campaign_id, vendor_id, post_channel, post_url, post_version_id, post_marked_by)
+             VALUES ($1, $2, $3, $4, $5, $6)
+             ON CONFLICT (campaign_id, post_channel)
+             DO UPDATE SET post_url = EXCLUDED.post_url, post_version_id = EXCLUDED.post_version_id,
+                           post_marked_by = EXCLUDED.post_marked_by, post_marked_at = now()`,
+            [campaignId, vendorId, channel, url, latest.version_id, req.user.user_id]
+        );
+        await client.query("UPDATE marketing_campaigns SET campaign_updated_at = now() WHERE campaign_id = $1", [campaignId]);
+        await client.query(
+            `INSERT INTO audit_logs (audit_actor_user_id, audit_action, audit_target_type, audit_target_id, audit_before, audit_after)
+             VALUES ($1, 'campaign.post', 'campaign', $2, $3, $4)`,
+            [req.user.user_id, campaignId, before ? JSON.stringify({ channel, url: before.post_url }) : null,
+                JSON.stringify({ channel, url, version: latest.version_number })]
+        );
+        await client.query("COMMIT");
+        res.json(await campaignDetail(pool, tidy(await campaignRow(pool, vendorId, campaignId))));
+    } catch (err) {
+        await client.query("ROLLBACK").catch(() => { });
+        console.error(`PUT /api/vendors/${vendorId}/marketing/campaigns/${campaignId}/posts/${channel} failed:`, err);
+        res.status(500).json({ error: "Could not save that it was posted. Nothing was changed." });
+    } finally {
+        client.release();
+    }
+});
+
+// Undoes "Mark as posted", for when it was marked by mistake.
+router.delete("/vendors/:vendorId/marketing/campaigns/:campaignId/posts/:channel", ...manage, async (req, res) => {
+    const vendorId = parseId(req.params.vendorId);
+    const campaignId = parseId(req.params.campaignId);
+    const { channel } = req.params;
+    if (!campaignId) return res.status(400).json({ error: "Invalid campaign id" });
+    if (!POST_CHANNELS.includes(channel)) return res.status(404).json({ error: "Unknown channel" });
+    try {
+        const row = await campaignRow(pool, vendorId, campaignId);
+        if (!row) return res.status(404).json({ error: "Campaign not found" });
+        const removed = (await pool.query(
+            "DELETE FROM marketing_campaign_posts WHERE campaign_id = $1 AND post_channel = $2 RETURNING post_url", [campaignId, channel]
+        )).rows[0];
+        if (removed) {
+            await pool.query(
+                `INSERT INTO audit_logs (audit_actor_user_id, audit_action, audit_target_type, audit_target_id, audit_before, audit_after)
+                 VALUES ($1, 'campaign.unpost', 'campaign', $2, $3, $4)`,
+                [req.user.user_id, campaignId, JSON.stringify({ channel, url: removed.post_url }), JSON.stringify({ channel, posted: false })]
+            );
+        }
+        res.json(await campaignDetail(pool, tidy(row)));
+    } catch (err) {
+        console.error(`DELETE /api/vendors/${vendorId}/marketing/campaigns/${campaignId}/posts/${channel} failed:`, err);
+        res.status(500).json({ error: "Could not change that. Nothing was changed." });
+    }
+});
+
+// ---------- results ----------
+
+// What the business's marketing did in the last ?days= (7, 30 or 90; default 30) against the period
+// before. Open to every plan: results stay after a pass ends.
+router.get("/vendors/:vendorId/marketing/results", ...read, async (req, res) => {
+    const vendorId = parseId(req.params.vendorId);
+    try {
+        res.json(await marketingResults(pool, vendorId, periodOf(req.query.days)));
+    } catch (err) {
+        console.error(`GET /api/vendors/${vendorId}/marketing/results failed:`, err);
+        res.status(500).json({ error: "Could not load the marketing results" });
+    }
+});
+
+// Deletes a campaign that has not been sent or posted.
 router.delete("/vendors/:vendorId/marketing/campaigns/:campaignId", ...manage, async (req, res) => {
     const vendorId = parseId(req.params.vendorId);
     const campaignId = parseId(req.params.campaignId);
     if (!campaignId) return res.status(400).json({ error: "Invalid campaign id" });
     try {
         const result = await pool.query(
-            "DELETE FROM marketing_campaigns WHERE campaign_id = $1 AND vendor_id = $2 AND campaign_status IN ('draft', 'approved')",
+            `DELETE FROM marketing_campaigns c WHERE c.campaign_id = $1 AND c.vendor_id = $2 AND c.campaign_status IN ('draft', 'approved')
+               AND NOT EXISTS (SELECT 1 FROM marketing_campaign_posts p WHERE p.campaign_id = c.campaign_id)`,
             [campaignId, vendorId]
         );
         if (result.rowCount === 0) {
             const exists = await campaignRow(pool, vendorId, campaignId);
             return exists
-                ? res.status(409).json({ error: "A sent campaign is kept as a record and can't be deleted." })
+                ? res.status(409).json({ error: "A sent or posted campaign is kept as a record and can't be deleted." })
                 : res.status(404).json({ error: "Campaign not found" });
         }
         res.status(204).end();

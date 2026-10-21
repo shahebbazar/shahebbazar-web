@@ -18,7 +18,7 @@ import { SiFacebook, SiInstagram, SiTiktok, SiYoutube } from "@icons-pack/react-
 import { assetUrl } from "@/lib/api";
 import { t, pick, localeHref, type Locale } from "@/lib/i18n";
 import { SITE_URL } from "@/lib/seo";
-import { formatClockTime, formatRating, localiseDigits, toNumber } from "@/lib/format";
+import { formatClockTime, formatPhone, formatRating, localiseDigits, toNumber } from "@/lib/format";
 import type { BusinessDetail, SocialPlatform } from "@/lib/types";
 import { SaveButton } from "@/components/customer/SaveButton";
 import { ShareMenu } from "@/components/shared/ShareMenu";
@@ -339,7 +339,7 @@ export function BusinessProfile({
                                         )}
 
                                         <Link
-                                            href={`/account/messages/new?vendor=${business.vendor_slug}&listing=${item.listing_id}`}
+                                            href={`/message/${business.vendor_slug}?listing=${item.listing_id}`}
                                             className="mt-2.5 inline-flex items-center gap-1.5 text-[0.8125rem] font-medium text-brand-600 hover:underline"
                                         >
                                             <MessageSquareText className="size-3.5" />
@@ -541,19 +541,30 @@ function ActionButtons({ locale, detail }: { locale: Locale; detail: BusinessDet
             )}`;
 
     const pageUrl = `${SITE_URL}${localeHref(`/business/${business.vendor_slug}`, locale)}`;
+    const phone = business.vendor_phone ? localiseDigits(formatPhone(business.vendor_phone), locale) : null;
 
     return (
         <div className="grid shrink-0 grid-cols-2 gap-2 lg:w-[260px]">
-            <a
-                href={`tel:${business.vendor_phone}`}
-                className="col-span-2 inline-flex items-center justify-center gap-2 rounded-[10px] bg-brand-600 px-4 py-2.5 text-sm font-medium text-white transition-colors hover:bg-brand-700"
-            >
-                <Phone className="size-4" />
-                {copy.call}
-            </a>
+            {phone && (
+                <>
+                    {/* Phones call straight away; a computer can't, so it shows the number to read or copy. */}
+                    <a
+                        href={`tel:${business.vendor_phone}`}
+                        className="col-span-2 inline-flex items-center justify-center gap-2 rounded-[10px] bg-brand-600 px-4 py-2.5 text-sm font-medium text-white transition-colors hover:bg-brand-700 lg:hidden"
+                    >
+                        <Phone className="size-4" />
+                        {copy.call} <span className="tabular-nums">{phone}</span>
+                    </a>
+                    <p className="col-span-2 hidden items-center justify-center gap-2 rounded-[10px] bg-brand-600 px-4 py-2.5 text-sm font-medium text-white lg:flex">
+                        <Phone className="size-4" aria-hidden />
+                        <span className="sr-only">{copy.call}: </span>
+                        <span className="tabular-nums select-all">{phone}</span>
+                    </p>
+                </>
+            )}
 
             <Link
-                href={`/account/messages/new?vendor=${business.vendor_slug}`}
+                href={`/message/${business.vendor_slug}`}
                 className="col-span-2 inline-flex items-center justify-center gap-2 rounded-[10px] border border-line-strong bg-surface px-4 py-2.5 text-sm font-medium text-brand-600 transition-colors hover:border-brand-600 hover:bg-brand-50"
             >
                 <MessageSquare className="size-4" />

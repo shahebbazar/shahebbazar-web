@@ -70,16 +70,23 @@ describe("view beacon", () => {
         assert.equal(await beacon("/track/view", {}), 400);
     });
 
+    const lastSource = async (slug) => (await query(
+        `SELECT view_source FROM vendor_profile_views pv JOIN vendors v USING (vendor_id)
+         WHERE v.vendor_slug = $1 ORDER BY view_id DESC LIMIT 1`, [slug]
+    ))[0].view_source;
+
     it("records a view of an approved business once per visitor in 30 minutes, with its source", async () => {
-        const before = await views("padma-handicrafts");
+        // Rajshahi Mango Traders has a pass, so it is in the Sponsored results.
+        const before = await views("rajshahi-mango-traders");
+        await beacon("/track/view", { slug: "rajshahi-mango-traders", source: "sponsored" });
+        await beacon("/track/view", { slug: "rajshahi-mango-traders", source: "sponsored" });
+        assert.equal(await views("rajshahi-mango-traders"), before + 1);
+        assert.equal(await lastSource("rajshahi-mango-traders"), "sponsored");
+    });
+
+    it("a sponsored view of a business that isn't in the Sponsored results is recorded as direct", async () => {
         await beacon("/track/view", { slug: "padma-handicrafts", source: "sponsored" });
-        await beacon("/track/view", { slug: "padma-handicrafts", source: "sponsored" });
-        assert.equal(await views("padma-handicrafts"), before + 1);
-        const [row] = await query(
-            `SELECT view_source FROM vendor_profile_views pv JOIN vendors v USING (vendor_id)
-             WHERE v.vendor_slug = 'padma-handicrafts' ORDER BY view_id DESC LIMIT 1`
-        );
-        assert.equal(row.view_source, "sponsored");
+        assert.equal(await lastSource("padma-handicrafts"), "direct");
     });
 
     it("an unknown source is recorded as direct", async () => {

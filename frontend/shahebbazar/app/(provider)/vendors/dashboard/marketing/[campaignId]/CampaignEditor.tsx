@@ -5,8 +5,10 @@ import { useRouter } from "next/navigation";
 import { AlertTriangle, CheckCircle2, Info, Loader2, Mail, Send, Ticket } from "lucide-react";
 import { browserAssetUrl } from "@/lib/apiBase";
 import { ConfirmDialog } from "@/components/shared/ConfirmDialog";
-import type { CampaignContent, CampaignDetail } from "@/lib/types";
+import { formatPhone, localiseDigits } from "@/lib/format";
+import type { CampaignContent, CampaignDetail, CampaignSnapshot } from "@/lib/types";
 import { deleteCampaign, saveCampaignContent, sendCampaign } from "../actions";
+import { ShareKit } from "./ShareKit";
 import { STATUS, couponState, ctaLabel, formatDay, formatWhen, goalLabel } from "../labels";
 
 const AREA =
@@ -40,6 +42,14 @@ function Marked({ text, facts }: { text: string; facts: string[] }) {
             )}
         </>
     );
+}
+
+/** A product's price as the email's card shows it: "৳2,800–৳4,200 per maund"; null when it has none. */
+function priceOf(l: CampaignSnapshot["listings"][number], bangla: boolean): string | null {
+    if (l.price == null) return null;
+    const money = (n: number) => localiseDigits(`৳${Number(n).toLocaleString("en-US", { maximumFractionDigits: 2 })}`, bangla ? "bn" : "en");
+    const range = l.price_max != null && Number(l.price_max) > Number(l.price) ? `${money(l.price)}–${money(l.price_max)}` : money(l.price);
+    return range + (l.price_unit ? (bangla ? ` (প্রতি ${l.price_unit})` : ` per ${l.price_unit}`) : "");
 }
 
 /** Content with every field present, so versions saved before the photo switch compare equal. */
@@ -103,8 +113,18 @@ export function CampaignEditor({ vendorId, initial, readOnly: viewOnly }: { vend
     // No separate approval: the owner previews, then confirms the send, which approves what goes out.
     const unsent = campaign.status === "draft" || campaign.status === "approved";
     const canSend = !readOnly && unsent && "can_send" in campaign.send && campaign.send.can_send && placeholders.length === 0;
+    // Facebook and WhatsApp are posted by the owner, from saved wording with nothing left to fill in.
+    const shareBlocked = !["draft", "approved", "sent"].includes(campaign.status)
+        ? "Posting tools aren't available while the campaign is being sent."
+        : placeholders.length
+            ? "Replace the highlighted parts marked [[like this]] to get the tools for posting this."
+            : dirty
+                ? "Save your changes first, so what you post is the saved version."
+                : null;
+    const posted = Boolean(campaign.posts.facebook || campaign.posts.whatsapp);
     const { snapshot } = campaign;
-    const name = campaign.brief.language === "bn" && snapshot.business.name_bn ? snapshot.business.name_bn : snapshot.business.name;
+    const bangla = campaign.brief.language === "bn";
+    const name = bangla && snapshot.business.name_bn ? snapshot.business.name_bn : snapshot.business.name;
     const logo = browserAssetUrl(snapshot.business.logo_url);
     const cover = browserAssetUrl(snapshot.business.cover_url);
     const photos = snapshot.listings.map((l) => browserAssetUrl(l.photo_url)).filter(Boolean) as string[];
@@ -244,7 +264,9 @@ export function CampaignEditor({ vendorId, initial, readOnly: viewOnly }: { vend
                             </p>
                         )}
                         <p className="mt-2 text-xs text-soft">
-                            Check the previews below, then use the Send button at the bottom. Sending approves the wording as it is then.{" "}Only the email is sent. The Facebook and WhatsApp versions below are previews; posting them from here comes in a later release.</p>
+                            Check the previews below, then use the Send button at the bottom. Sending approves the wording as it is then.
+                            Only the email is sent from here: you post Facebook and WhatsApp yourself, with the tools under each one below.
+                        </p>
                     </section>
                 )
             )}
@@ -325,17 +347,55 @@ export function CampaignEditor({ vendorId, initial, readOnly: viewOnly }: { vend
                             </span>
                         </span>
                     </div>
-                    {content.email.photos !== false && photos.length > 0 && (
-                        <div className="mt-3 flex gap-2">
-                            {photos.map((src) => (
-                                // eslint-disable-next-line @next/next/no-img-element
-                                <img key={src} src={src} alt="" className="h-20 min-w-0 flex-1 rounded-md object-cover" />
-                            ))}
-                        </div>
-                    )}
+                    {/* Laid out like the sent email (backend/services/marketing/emailMessage.js). */}
                     <p className="mt-3 whitespace-pre-line">
                         <Marked text={content.email.body} facts={facts} />
                     </p>
+                    {content.email.photos !== false && (
+                        <ul className="mt-3 space-y-2">
+                            {snapshot.listings.map((l) => {
+                                const src = browserAssetUrl(l.photo_url);
+                                const price = priceOf(l, bangla);
+                                return (
+                                    <li key={l.listing_id} className="flex items-center gap-3 rounded-lg border border-slate-200 p-2">
+                                        {src && (
+                                            // eslint-disable-next-line @next/next/no-img-element
+                                            <img src={src} alt="" className="size-16 shrink-0 rounded-md object-cover" />
+                                        )}
+                                        <span className="min-w-0">
+                                            <span className="block font-semibold">{bangla && l.title_bn ? l.title_bn : l.title}</span>
+                                            {price && <span className="block font-semibold text-green-700">{price}</span>}
+                                            <span className="block text-xs font-semibold text-[#2563eb]">{bangla ? "দেখুন" : "View"} →</span>
+                                        </span>
+                                    </li>
+                                );
+                            })}
+                        </ul>
+                    )}
+                    {coupon && coupon.status !== "expired" && (
+                        <div className="mt-3 rounded-lg border-2 border-dashed border-blue-300 bg-blue-50 p-3 text-center">
+                            <span className="block text-[0.6875rem] font-semibold tracking-wider text-slate-500 uppercase">
+                                {bangla ? "আপনার কোড" : "Your code"}
+                            </span>
+                            <span className="block text-lg font-bold tracking-[0.15em] text-blue-700">{coupon.code}</span>
+                        </div>
+                    )}
+                    {/* As in the sent email: replies come to your Messages on Shaheb Bazar. */}
+                    <span className="mt-4 inline-block rounded-lg bg-[#2563eb] px-4 py-2 text-[0.8125rem] font-bold text-white">
+                        {bangla ? "সাহেব বাজারে উত্তর দিন" : "Reply on Shaheb Bazar"}
+                    </span>
+                    <span className="mt-2 flex flex-wrap gap-1.5 text-xs font-semibold">
+                        <span className="rounded-md border border-slate-300 px-2.5 py-1">{bangla ? "আমাদের পেজ দেখুন" : "View our page"}</span>
+                        {snapshot.business.phone && (
+                            <span className="rounded-md border border-slate-300 px-2.5 py-1">
+                                {bangla ? "কল করুন" : "Call"} {formatPhone(snapshot.business.phone)}
+                            </span>
+                        )}
+                        {snapshot.business.address && (
+                            <span className="rounded-md border border-slate-300 px-2.5 py-1">{bangla ? "পথ দেখুন" : "Get directions"}</span>
+                        )}
+                    </span>
+                    <p className="mt-1.5 text-[0.6875rem] text-slate-500">Customers&apos; replies come to your Messages.</p>
                     <p className="mt-4 border-t border-slate-200 pt-2 text-[0.6875rem] text-slate-500">
                         You get this because you chose offers from {name}. An unsubscribe link is added here when it&apos;s sent.
                     </p>
@@ -347,7 +407,7 @@ export function CampaignEditor({ vendorId, initial, readOnly: viewOnly }: { vend
                 <section aria-labelledby="facebook-heading" className="rounded-xl border border-line bg-surface p-5 shadow-card">
                     <div className="flex flex-wrap items-center justify-between gap-2">
                         <h2 id="facebook-heading" className="flex items-center gap-2 font-semibold">
-                            Facebook post <span className="rounded-full bg-sponsor-bg px-2 py-0.5 text-[0.6875rem] font-medium text-sponsor-ink">Preview only</span>
+                            Facebook post <span className="rounded-full bg-surface-2 px-2 py-0.5 text-[0.6875rem] font-medium text-muted">You post this</span>
                         </h2>
                         {socialPhoto && (
                             <PhotoSwitch
@@ -378,18 +438,23 @@ export function CampaignEditor({ vendorId, initial, readOnly: viewOnly }: { vend
                             <img src={socialPhoto} alt="" className="h-36 w-full object-cover" />
                         )}
                     </div>
-                    <p className="mt-3 flex gap-2 text-xs text-muted">
-                        <Info className="mt-0.5 size-3.5 shrink-0" aria-hidden />
-                        <span>
-                            This is a preview of how it could look. Posting to Facebook from Shaheb Bazar comes in a later release; for now
-                            you can copy the text and post it yourself.
-                        </span>
-                    </p>
+                    <ShareKit
+                        vendorId={vendorId}
+                        campaignId={campaign.campaign_id}
+                        channel="facebook"
+                        text={content.facebook.text}
+                        pageUrl={snapshot.business.page_url}
+                        photo={content.facebook.photos !== false ? socialPhoto : null}
+                        post={campaign.posts.facebook}
+                        blocked={shareBlocked}
+                        viewOnly={viewOnly}
+                        onChange={setCampaign}
+                    />
                 </section>
                 <section aria-labelledby="whatsapp-heading" className="rounded-xl border border-line bg-surface p-5 shadow-card">
                     <div className="flex flex-wrap items-center justify-between gap-2">
                         <h2 id="whatsapp-heading" className="flex items-center gap-2 font-semibold">
-                            WhatsApp message <span className="rounded-full bg-sponsor-bg px-2 py-0.5 text-[0.6875rem] font-medium text-sponsor-ink">Preview only</span>
+                            WhatsApp message <span className="rounded-full bg-surface-2 px-2 py-0.5 text-[0.6875rem] font-medium text-muted">You post this</span>
                         </h2>
                         {socialPhoto && (
                             <PhotoSwitch
@@ -421,13 +486,18 @@ export function CampaignEditor({ vendorId, initial, readOnly: viewOnly }: { vend
                             </p>
                         </div>
                     </div>
-                    <p className="mt-3 flex gap-2 text-xs text-muted">
-                        <Info className="mt-0.5 size-3.5 shrink-0" aria-hidden />
-                        <span>
-                            This is a preview of how it could look. Posting to WhatsApp from Shaheb Bazar comes in a later release; for now
-                            you can copy the text and post it yourself.
-                        </span>
-                    </p>
+                    <ShareKit
+                        vendorId={vendorId}
+                        campaignId={campaign.campaign_id}
+                        channel="whatsapp"
+                        text={content.whatsapp.text}
+                        pageUrl={snapshot.business.page_url}
+                        photo={content.whatsapp.photos !== false ? socialPhoto : null}
+                        post={campaign.posts.whatsapp}
+                        blocked={shareBlocked}
+                        viewOnly={viewOnly}
+                        onChange={setCampaign}
+                    />
                 </section>
             </div>
 
@@ -459,7 +529,7 @@ export function CampaignEditor({ vendorId, initial, readOnly: viewOnly }: { vend
                             {message.text}
                         </span>
                     )}
-                    {["draft", "approved"].includes(campaign.status) && (
+                    {["draft", "approved"].includes(campaign.status) && !posted && (
                         <button
                             type="button"
                             onClick={() => setAsking("delete")}

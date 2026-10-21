@@ -8,6 +8,7 @@ import {
     verifyCode,
 } from "@/lib/auth-client";
 import { localeHref, type Locale } from "@/lib/i18n";
+import { safeNext } from "@/lib/safeNext";
 
 type LoginAudience =
     | "customer"
@@ -17,6 +18,8 @@ type LoginAudience =
 type PhoneVerificationFormProps = {
     locale: Locale;
     audience: LoginAudience;
+    /** A path on this site to go to after logging in (checked with safeNext), instead of the account's home. */
+    next?: string | null;
 };
 
 type Stage = "phone" | "code";
@@ -73,6 +76,7 @@ type AuthCopy = (typeof copy)[Locale];
 export function PhoneVerificationForm({
     locale,
     audience,
+    next,
 }: PhoneVerificationFormProps) {
     const router = useRouter();
     const text: AuthCopy = copy[locale];
@@ -144,8 +148,11 @@ export function PhoneVerificationForm({
                 ? "/account"
                 : destinationByRole[result.user.user_role];
 
+        // Back to where they were going (e.g. messaging a business from an email), except for admins.
+        const back = audience !== "admin" && result.user.user_role !== "admin" ? safeNext(next) : null;
+
         router.replace(
-            localeHref(destination, locale)
+            back ?? localeHref(destination, locale)
         );
     }
 

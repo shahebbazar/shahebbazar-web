@@ -29,6 +29,26 @@ test("a customer signs in with a code and signs out @phone", async ({ page }) =>
     await expect(page).toHaveURL(/\/login/);
 });
 
+test("the Reply button in an offer email logs a signed-out customer in, then opens a message to the business @phone", async ({ page, context }) => {
+    await page.goto("/message/rajshahi-mango-traders");
+    await expect(page).toHaveURL(/\/login\?next=%2Faccount%2Fmessages%2Fnew%3Fvendor%3Drajshahi-mango-traders$/);
+    // Rumana Akter, one of Rajshahi Mango Traders' email subscribers (her own phone, so the code limit isn't shared).
+    await requestAndEnterCode(page, "customer", "+8801722000003");
+    await expect(page).toHaveURL(/\/account\/messages\/new\?vendor=rajshahi-mango-traders$/);
+    await expect(page.getByText("Rajshahi Mango Traders", { exact: true })).toBeVisible();
+
+    // Signed in, it goes straight there.
+    await page.goto("/message/rajshahi-mango-traders");
+    await expect(page).toHaveURL(/\/account\/messages\/new\?vendor=rajshahi-mango-traders$/);
+    await context.clearCookies();
+});
+
+test("login only returns to a page on this site", async ({ page }) => {
+    await page.goto("/login?next=//evil.example/x");
+    await requestAndEnterCode(page, "customer", "+8801722000004"); // Sajid Rahman
+    await expect(page).toHaveURL(/\/account$/);
+});
+
 test("a business owner signs in to their dashboard", async ({ page }) => {
     await page.goto("/login");
     await page.getByRole("tab", { name: "Business owner" }).click();

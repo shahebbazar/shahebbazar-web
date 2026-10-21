@@ -1,11 +1,12 @@
 import type { Metadata } from "next";
 import Link from "next/link";
 import { notFound, redirect } from "next/navigation";
-import { CheckCircle2, ChevronRight, Circle, Megaphone, Plus, Sparkles } from "lucide-react";
+import { AlertTriangle, CheckCircle2, ChevronRight, Circle, Megaphone, Plus, Sparkles } from "lucide-react";
 import { authenticatedApiGet, getViewer } from "@/lib/auth-server";
 import { ProviderShell, parseVendorParam, providerHref } from "@/components/provider/ProviderShell";
-import type { MarketingWorkspace, VendorSummary } from "@/lib/types";
+import type { MarketingResults, MarketingWorkspace, VendorSummary } from "@/lib/types";
 import { DeleteCampaignButton } from "./DeleteCampaignButton";
+import { MarketingResultsPanel } from "./MarketingResultsPanel";
 import { STATUS, couponState, formatDay, formatWhen, goalLabel } from "./labels";
 
 export const metadata: Metadata = {
@@ -70,13 +71,48 @@ function FreePlan({ workspace }: { workspace: MarketingWorkspace }) {
 }
 
 // The business's Marketing workspace (KAN-285): pass, readiness and campaigns.
-export default async function MarketingPage({ searchParams }: { searchParams: Promise<{ vendor?: string }> }) {
-    const vendorId = parseVendorParam((await searchParams).vendor);
+/** Asks a business whose pass has ended, or is about to, to renew. Results and campaigns stay either way. */
+function RenewBanner({ workspace }: { workspace: MarketingWorkspace }) {
+    const { pass } = workspace;
+    if (!pass) return null;
+    const ended = workspace.plan === "ended";
+    const ending = workspace.plan === "pass" && pass.status === "active" && pass.days_left <= 7;
+    if (!ended && !ending) return null;
+    return (
+        <div role="status" className="mt-4 flex flex-wrap items-center gap-x-3 gap-y-1 rounded-xl border border-sponsor-ink/30 bg-sponsor-bg p-4 text-sm text-sponsor-ink">
+            <AlertTriangle className="size-4 shrink-0" aria-hidden />
+            <span className="min-w-0 flex-1">
+                {ended ? (
+                    <>
+                        <span className="font-semibold">Your Marketing pass ended {formatDay(pass.ends_at)}.</span> You&apos;re no longer in the
+                        Sponsored results, and you can send {workspace.ended_emails_per_week} email campaign a week. Your campaigns and results stay here.
+                    </>
+                ) : (
+                    <>
+                        <span className="font-semibold">
+                            Your Marketing pass ends in {pass.days_left} day{pass.days_left === 1 ? "" : "s"}, on {formatDay(pass.ends_at)}.
+                        </span>{" "}
+                        Renew to stay in the Sponsored results and keep your email campaigns.
+                    </>
+                )}
+            </span>
+            <Link href="/about#contact" className="font-semibold underline hover:no-underline">
+                Renew: contact Shahebbazar
+            </Link>
+        </div>
+    );
+}
+
+export default async function MarketingPage({ searchParams }: { searchParams: Promise<{ vendor?: string; days?: string }> }) {
+    const query = await searchParams;
+    const vendorId = parseVendorParam(query.vendor);
     if (vendorId === null) redirect("/vendors/dashboard");
-    const [vendor, workspace, viewer] = await Promise.all([
+    const days = [7, 30, 90].find((p) => p === Number(query.days)) ?? 30;
+    const [vendor, workspace, viewer, results] = await Promise.all([
         authenticatedApiGet<VendorSummary>(`/vendors/${vendorId}/summary`),
         authenticatedApiGet<MarketingWorkspace>(`/vendors/${vendorId}/marketing/workspace`),
         getViewer(),
+        authenticatedApiGet<MarketingResults>(`/vendors/${vendorId}/marketing/results?days=${days}`),
     ]);
     if (!vendor) notFound();
     const adminView = viewer?.user_role === "admin";
@@ -118,6 +154,8 @@ export default async function MarketingPage({ searchParams }: { searchParams: Pr
                         <span className="max-w-xs text-right text-[0.8125rem] text-muted">{workspace.cannot_create_reason}</span>
                     ))}
             </div>
+
+            <RenewBanner workspace={workspace} />
 
             <div className="mt-6 grid gap-4 lg:grid-cols-2">
                 <section aria-labelledby="pass-heading" className="rounded-xl border border-line bg-surface p-5 shadow-card">
@@ -200,6 +238,8 @@ export default async function MarketingPage({ searchParams }: { searchParams: Pr
                 </section>
             </div>
 
+            {results && <MarketingResultsPanel vendorId={vendorId} results={results} />}
+
             <section aria-labelledby="campaigns-heading" className="mt-6">
                 <h2 id="campaigns-heading" className="text-[1.0625rem] font-semibold">Campaigns</h2>
                 {campaigns.length === 0 ? (
@@ -225,6 +265,9 @@ export default async function MarketingPage({ searchParams }: { searchParams: Pr
                                             {goalLabel(c.campaign_goal)} · {c.campaign_language === "bn" ? "Bangla" : "English"} · version{" "}
                                             {c.versions} · updated {formatWhen(c.campaign_updated_at)}
                                             {c.coupon ? ` · coupon ${c.coupon.code}, ${couponState(c.coupon).label.toLowerCase()}` : ""}
+                                            {c.posted_on.length > 0
+                                                ? ` · posted on ${c.posted_on.map((p) => (p === "facebook" ? "Facebook" : "WhatsApp")).join(" and ")}`
+                                                : ""}
                                         </span>
                                     </span>
                                     <span className={`rounded-full px-2.5 py-0.5 text-xs font-medium ${STATUS[c.campaign_status].className}`}>
@@ -232,7 +275,7 @@ export default async function MarketingPage({ searchParams }: { searchParams: Pr
                                     </span>
                                     <ChevronRight className="size-4 shrink-0 text-soft" aria-hidden />
                                 </Link>
-                                {!adminView && ["draft", "approved"].includes(c.campaign_status) && (
+                                {!adminView && ["draft", "approved"].includes(c.campaign_status) && c.posted_on.length === 0 && (
                                     <DeleteCampaignButton vendorId={vendorId} campaignId={c.campaign_id} title={c.campaign_title} />
                                 )}
                             </li>

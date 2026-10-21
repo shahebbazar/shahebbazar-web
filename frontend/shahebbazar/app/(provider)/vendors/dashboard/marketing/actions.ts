@@ -2,7 +2,7 @@
 
 import { revalidatePath } from "next/cache";
 import { authenticatedApiSend, type AuthenticatedSendResult } from "@/lib/auth-server";
-import type { CampaignContent, CampaignDetail } from "@/lib/types";
+import type { CampaignContent, CampaignDetail, PostChannel } from "@/lib/types";
 
 // The API checks the signed-in owner or manager runs the business, and the pass allows it.
 
@@ -52,6 +52,24 @@ export async function sendCampaign(
         "POST",
         `/vendors/${vendorId}/marketing/campaigns/${campaignId}/send`
     );
+    if (result.ok) refresh();
+    return result;
+}
+
+/** Marks the campaign as posted on Facebook or WhatsApp, with an optional link to the post. */
+export async function markPosted(
+    vendorId: number,
+    campaignId: number,
+    channel: PostChannel,
+    url: string
+): Promise<AuthenticatedSendResult<CampaignDetail>> {
+    const result = await authenticatedApiSend<CampaignDetail>("PUT", `/vendors/${vendorId}/marketing/campaigns/${campaignId}/posts/${channel}`, { url });
+    if (result.ok) refresh();
+    return result;
+}
+
+export async function unmarkPosted(vendorId: number, campaignId: number, channel: PostChannel): Promise<AuthenticatedSendResult<CampaignDetail>> {
+    const result = await authenticatedApiSend<CampaignDetail>("DELETE", `/vendors/${vendorId}/marketing/campaigns/${campaignId}/posts/${channel}`);
     if (result.ok) refresh();
     return result;
 }

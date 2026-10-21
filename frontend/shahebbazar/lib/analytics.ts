@@ -2,7 +2,7 @@ import { BROWSER_API_BASE } from "./apiBase";
 
 // Browser-side analytics helpers, used by the beacons in components/analytics/.
 
-export type ViewSource = "search" | "category" | "direct" | "share";
+export type ViewSource = "search" | "category" | "direct" | "share" | "sponsored";
 
 // Sends one analytics event.
 export function sendAnalytics(path: string, payload: unknown): void {

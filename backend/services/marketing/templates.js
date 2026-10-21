@@ -239,4 +239,7 @@ function placeholdersIn(content) {
     return [...new Set(texts.flatMap((t) => String(t).match(PLACEHOLDER) ?? []))];
 }
 
-module.exports = { generateDrafts, warnings, placeholdersIn };
+/** A listing's price as the drafts write it, in English or Bangla; null when it has none. */
+const listingPrice = (lang, listing) => priceText(COPY[lang === "bn" ? "bn" : "en"], listing);
+
+module.exports = { generateDrafts, warnings, placeholdersIn, listingPrice };

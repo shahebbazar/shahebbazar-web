@@ -175,8 +175,9 @@ router.post("/track/view", textBody, async (req, res) => {
 
     try {
         await pool.query(
+            // A view counts as sponsored only while the business is in the Sponsored results.
             `INSERT INTO vendor_profile_views (vendor_id, view_source, view_session_hash)
-             SELECT v.vendor_id, $2, $3
+             SELECT v.vendor_id, CASE WHEN $2 = 'sponsored' AND NOT v.vendor_is_featured THEN 'direct' ELSE $2 END, $3
              FROM vendors v
              WHERE v.vendor_slug = $1 AND v.vendor_status = 'approved'
                AND NOT EXISTS (

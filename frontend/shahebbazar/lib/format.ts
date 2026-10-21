@@ -69,6 +69,12 @@ export function localiseDigits(text: string, locale: Locale): string {
     return text.replace(/[0-9]/g, (d) => BN_DIGITS[Number(d)]);
 }
 
+/** A stored Bangladeshi mobile number ("+8801712345678") as people write it: "01712-345678". Anything else is shown as stored. */
+export function formatPhone(phone: string): string {
+    const local = /^\+880(1\d{3})(\d{6})$/.exec(phone.replace(/[\s-]/g, ""));
+    return local ? `0${local[1]}-${local[2]}` : phone;
+}
+
 // Formats a timestamp as a short date and time in Dhaka time.
 export function formatDateTime(iso: string): string {
     return new Date(iso).toLocaleString("en-GB", {

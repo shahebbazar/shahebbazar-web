@@ -2388,7 +2388,6 @@ CREATE TABLE public.marketing_campaigns (
     campaign_approved_version_id integer,
     campaign_approved_at timestamp with time zone,
     campaign_approved_by integer REFERENCES public.users(user_id) ON DELETE SET NULL,
-    campaign_posted_url text,
     campaign_created_by integer REFERENCES public.users(user_id) ON DELETE SET NULL,
     campaign_created_at timestamp with time zone DEFAULT now() NOT NULL,
     campaign_updated_at timestamp with time zone DEFAULT now() NOT NULL,
@@ -2449,6 +2448,29 @@ CREATE TABLE public.marketing_sends (
 
 CREATE INDEX idx_marketing_sends_campaign ON public.marketing_sends (campaign_id);
 CREATE INDEX idx_marketing_sends_vendor ON public.marketing_sends (vendor_id, send_created_at DESC);
+
+--
+-- Facebook and WhatsApp posts (KAN-287). Also in database/migrations/006_marketing_posts.sql.
+-- The owner posts a campaign themselves and marks it as posted, with a link if they have one.
+-- One row per campaign and channel, recording which version was posted.
+--
+
+CREATE TABLE public.marketing_campaign_posts (
+    post_id serial PRIMARY KEY,
+    campaign_id integer NOT NULL REFERENCES public.marketing_campaigns(campaign_id) ON DELETE CASCADE,
+    vendor_id integer NOT NULL REFERENCES public.vendors(vendor_id) ON DELETE CASCADE,
+    post_channel character varying(10) NOT NULL,
+    post_url character varying(500),
+    post_version_id integer REFERENCES public.marketing_campaign_versions(version_id) ON DELETE SET NULL,
+    post_marked_by integer REFERENCES public.users(user_id) ON DELETE SET NULL,
+    post_marked_at timestamp with time zone DEFAULT now() NOT NULL,
+    CONSTRAINT marketing_campaign_posts_channel_check CHECK (post_channel IN ('facebook', 'whatsapp')),
+    CONSTRAINT marketing_campaign_posts_url_check CHECK (post_url IS NULL OR post_url ~ '^https?://'),
+    CONSTRAINT marketing_campaign_posts_channel_key UNIQUE (campaign_id, post_channel)
+);
+
+CREATE INDEX idx_marketing_campaign_posts_vendor
+    ON public.marketing_campaign_posts (vendor_id, post_marked_at DESC);
 
 
 --

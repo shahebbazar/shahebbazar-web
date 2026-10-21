@@ -31,6 +31,8 @@ const REQUIRED_OBJECTS = Object.fromEntries(
         "marketing_campaigns", "marketing_campaign_versions",
         // Marketing email sends (also database/migrations/005_marketing_sends.sql)
         "marketing_sends",
+        // Facebook and WhatsApp posts (also database/migrations/006_marketing_posts.sql)
+        "marketing_campaign_posts",
         // Views
         "v_business_cards", "v_moderation_queue", "v_search_trends_daily", "v_active_users_daily",
     ].map((name) => [name, SCHEMA_FILE])
