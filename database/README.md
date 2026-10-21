@@ -45,7 +45,7 @@ concern, but each one must suit the business or listing it illustrates.
 >   one, save the file and add the slug to the "Business photos" list in `baseline/seed.sql`.
 >   Still without one: `shaheb-bazar-cloth-store` (pending).
 > - **Listings** (`seed-listing-*.jpg`) are each listing's main photo, mapped in the "Listing
->   photos" block at the end of `baseline/seed.sql`; one file can serve several listings. Six
+>   photos" block at the end of `baseline/seed.sql`; one file can serve several listings. Eight
 >   listings have one so far.
 >
 > Run `npm run db:reset` after adding photos.

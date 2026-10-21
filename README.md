@@ -90,7 +90,7 @@ sign-in codes or session tokens.
 | `UPLOAD_DIR` | Where uploaded images are stored | unset (`backend/uploads`) |
 | `TRUST_PROXY` | Set behind a reverse proxy so visitor IPs are correct | unset |
 | `NOTIFY_DELAY_MINUTES` | Wait before an unread message triggers an SMS/email alert | unset (5) |
-| `MARKETING_WORKSPACE_ENABLED` | `true` shows the business owner's Marketing pages and routes. Admin pass management is always on | `false` |
+| `MARKETING_WORKSPACE_ENABLED` | Shows the business owner's Marketing pages and routes; `false` hides them. Admin pass management is always on | `true` |
 | `MARKETING_EXPIRED_EMAILS_PER_WEEK` | Free emails a business may still send after its pass ends | unset (1) |
 
 The frontend runs locally with no configuration. For other environments, set
@@ -329,7 +329,7 @@ products or services need approval before they appear (KAN-293, client feedback 
 ## Marketing passes
 
 The vendor marketing package (KAN-242/243) is being built in six stages
-(KAN-283 to KAN-288); see the delivery plan. Stages 1 and 2 are in place.
+(KAN-283 to KAN-288); see the delivery plan. Stages 1 to 3 are in place.
 
 **Stage 1, passes (KAN-283)**
 
@@ -366,6 +366,40 @@ The vendor marketing package (KAN-242/243) is being built in six stages
 - Existing databases: run `database/migrations/002_marketing_consents.sql`, or
   `npm run db:reset`.
 
+**Stage 3, campaign workspace (KAN-285)**
+
+- Business owners and managers get **Marketing** in their dashboard
+  (`/vendors/dashboard/marketing`): pass and allowance left, a readiness checklist, and
+  their campaigns. On by default; `MARKETING_WORKSPACE_ENABLED=false` in `backend/.env` hides it.
+- **New campaign** is one page: what it's for (new stock, offer, event, reminder), 1 to 3
+  approved products, an optional offer and dates, the call to action, and English or Bangla.
+- `services/marketing/templates.js` writes email, Facebook and WhatsApp drafts **only from
+  saved facts**: the business details and chosen products as they are now (stored with the
+  campaign, so later edits don't change it) and the owner's own offer text. A product
+  without a price gets none; anything a goal needs but is missing becomes a `[[placeholder]]`,
+  which blocks approval until replaced.
+- The editor shows each channel beside a preview. Every save is a new version; versions
+  are never changed. Approving locks the latest version (audited as `campaign.approve`);
+  editing afterwards makes a new version that needs approving again. Drafting spends no
+  allowance; sending (Stage 4) will. Drafts and approved campaigns can be deleted from the
+  campaign list or the editor (after a confirmation); sent ones are kept as a record.
+- In the previews, parts taken from the saved business and product details (names, prices,
+  address, phone, page, coupon) are marked blue, with a note: if one is wrong, fix it in
+  Products & Services or My Business and start a new campaign.
+- Each channel has an **Include photos** switch (on by default): the email shows the products'
+  photos, Facebook and WhatsApp the first product photo (or the business cover). The choice is
+  saved with the wording, so changing it makes a new version to approve.
+- **Coupons:** an offer can carry a code (3 to 20 letters, numbers or dashes; "Make one for
+  me" suggests one). It is valid for the offer's dates and stops after the last day, so a
+  coupon needs one. The drafts say "Use code X when you visit or order, until <last day>."
+  The editor and campaign list show it as starting, valid until, or expired.
+- **Free plan:** every approved business can write campaigns, with or without a pass, and
+  gets 1 free email campaign a month (1 a week after a pass ends), so non-paying businesses
+  see what Marketing does. Sponsored placement, more emails and AI drafting need a pass.
+  Only a suspended pass blocks drafting. Sending and counting the free email come in Stage 4.
+- Existing databases: run `database/migrations/004_marketing_campaigns.sql`, or
+  `npm run db:reset`.
+
 ---
 
 ## Testing
@@ -378,7 +412,7 @@ This creates a throwaway `<PGDATABASE>_test` database from the baseline, starts
 the real API against it, signs in through the normal code flow as each role,
 runs the tests, and drops the database. Your development data is not touched.
 
-About 470 tests across 15 suites. Every API route is called by at least one test.
+About 490 API tests across 16 suites, plus 41 browser tests. Every API route is called by at least one test.
 
 | Suite | Covers |
 | --- | --- |
@@ -396,6 +430,7 @@ About 470 tests across 15 suites. Every API route is called by at least one test
 | `backend/test/uploads.test.js` | `npm run uploads:check` |
 | `backend/test/marketing.test.js` | Marketing passes: activation and management, sponsored placement ending with the pass, allowances |
 | `backend/test/settings.test.js` | Approval settings: admin-only, audited, businesses and listings public at once when approval is off; registration without an NID |
+| `backend/test/campaigns.test.js` | Marketing workspace: drafts from saved facts only (prices, Bangla, frozen snapshot), brief checks, versions, approval, deleting, access |
 | `backend/test/consent.test.js` | Offers consent: saving never consents, choices and their record, the audience a business may send to, My details (name and email), unsubscribe links |
 
 **Browser tests** (`e2e/`, Playwright) click through the built site as visitors, customers,

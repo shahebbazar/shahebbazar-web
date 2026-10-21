@@ -3,7 +3,7 @@
 import { useState, useTransition } from "react";
 import { Loader2 } from "lucide-react";
 import type { SendResult } from "@/lib/api";
-import { ConfirmDialog } from "./ConfirmDialog";
+import { ConfirmDialog } from "@/components/shared/ConfirmDialog";
 
 const TONES = {
     primary: "bg-brand-600 text-white hover:bg-brand-700",

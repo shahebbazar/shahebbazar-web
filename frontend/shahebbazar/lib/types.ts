@@ -671,3 +671,131 @@ export interface AdminMarketing {
     passes: MarketingPassRow[];
     businesses: { vendor_id: number; vendor_name: string; has_active_pass: boolean }[];
 }
+
+// Marketing workspace (KAN-285): GET /api/vendors/:id/marketing/workspace and the campaign routes.
+
+export interface PassAllowance {
+    limit: number;
+    used: number;
+    left: number;
+}
+
+export interface MarketingPassSummary {
+    subscription_id: number;
+    status: "pending" | "active" | "expired" | "suspended" | "cancelled";
+    package: { package_id: number; name: string; duration_days: number };
+    starts_at: string | null;
+    ends_at: string | null;
+    days_left: number;
+    reason: string | null;
+    allowances: { email_campaign: PassAllowance; ai_action: PassAllowance; sms: PassAllowance };
+}
+
+export interface ReadinessCheck {
+    key: string;
+    label: string;
+    done: boolean;
+    fix: "dashboard" | "listings" | "business";
+}
+
+export type CampaignGoal = "new_stock" | "offer" | "event" | "reminder";
+export type CampaignCta = "visit" | "call" | "message" | "order";
+export type CampaignStatus = "draft" | "approved" | "sending" | "sent" | "failed";
+
+// An offer's coupon code. Valid for the offer's dates (from when the campaign was made if there is
+// no start day) and expired after the last day; the API works out the status from today in Bangladesh.
+export type CampaignCoupon = { code: string; starts_on: string | null; ends_on: string; status: "upcoming" | "active" | "expired" };
+
+export interface PromotableListing {
+    listing_id: number;
+    listing_title: string;
+    listing_title_bn: string | null;
+    listing_price: string | null;
+    listing_price_max: string | null;
+    listing_price_unit: string | null;
+    photo_url: string | null;
+}
+
+export interface CampaignListRow {
+    campaign_id: number;
+    campaign_title: string;
+    campaign_goal: CampaignGoal;
+    campaign_language: "en" | "bn";
+    campaign_status: CampaignStatus;
+    campaign_updated_at: string;
+    versions: number;
+    coupon: CampaignCoupon | null;
+}
+
+export interface MarketingWorkspace {
+    pass: MarketingPassSummary | null;
+    // free: never paid (or cancelled); ended: the pass ran out; suspended: blocked by an admin.
+    plan: "pass" | "free" | "ended" | "suspended";
+    free_emails_per_month: number;
+    ended_emails_per_week: number;
+    readiness: { checks: ReadinessCheck[]; can_start: boolean; approved_listings: number };
+    can_create: boolean;
+    cannot_create_reason: string | null;
+    max_listings: number;
+    listings: PromotableListing[];
+    campaigns: CampaignListRow[];
+}
+
+// photos: whether the channel goes out with photos. Missing (versions saved before the switch) means on.
+export interface CampaignContent {
+    email: { subject: string; body: string; photos?: boolean };
+    facebook: { text: string; photos?: boolean };
+    whatsapp: { text: string; photos?: boolean };
+}
+
+export interface CampaignVersion {
+    version_id: number;
+    version_number: number;
+    version_content: CampaignContent;
+    version_method: "template" | "manual" | "ai";
+    version_created_at: string;
+    created_by: string | null;
+}
+
+export interface CampaignSnapshot {
+    taken_at: string;
+    business: {
+        name: string;
+        name_bn: string | null;
+        slug: string;
+        phone: string | null;
+        address: string | null;
+        area: string | null;
+        area_bn: string | null;
+        logo_url: string | null;
+        cover_url: string | null;
+        page_url: string;
+    };
+    listings: { listing_id: number; title: string; title_bn: string | null; price: number | null; photo_url: string | null }[];
+}
+
+export interface CampaignDetail {
+    campaign_id: number;
+    title: string;
+    status: CampaignStatus;
+    brief: {
+        goal: CampaignGoal;
+        language: "en" | "bn";
+        call_to_action: CampaignCta;
+        offer: string | null;
+        coupon_code: string | null;
+        starts_on: string | null;
+        ends_on: string | null;
+        listing_ids: number[];
+    };
+    snapshot: CampaignSnapshot;
+    approved_version_id: number | null;
+    approved_at: string | null;
+    created_at: string;
+    updated_at: string;
+    versions: CampaignVersion[];
+    latest_version_id: number;
+    warnings: string[];
+    placeholders: string[];
+    coupon: CampaignCoupon | null;
+}

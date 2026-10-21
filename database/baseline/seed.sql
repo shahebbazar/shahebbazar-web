@@ -945,6 +945,8 @@ ON CONFLICT (setting_key) DO NOTHING;
 INSERT INTO public.listing_photos (listing_id, photo_url, photo_alt_text, photo_sort_order, photo_is_primary)
 SELECT l.listing_id, 'uploads/' || x.file, l.listing_title, 0, TRUE
 FROM (VALUES
+    ('khirsapat-mango',        'seed-listing-khirsapat-mango.jpg'),
+    ('fazli-mango-wholesale',  'seed-listing-fazli-mango-wholesale.jpg'),
     ('katan-silk-saree',       'seed-listing-katan-silk-saree.jpg'),
     ('block-print-silk-saree', 'seed-listing-block-print-silk-saree.jpg'),
     ('mulberry-raw-silk-yarn', 'seed-listing-mulberry-raw-silk-yarn.jpg'),

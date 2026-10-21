@@ -14,8 +14,8 @@ const router = express.Router();
 const REASON_MAX = 500;
 const EXTEND_MAX_DAYS = 365;
 
-// The vendor-facing marketing pages and routes stay hidden until the workspace is ready.
-const workspaceEnabled = () => process.env.MARKETING_WORKSPACE_ENABLED === "true";
+// The vendor-facing marketing pages and routes are on unless MARKETING_WORKSPACE_ENABLED=false.
+const { workspaceEnabled } = require("../services/marketing/campaigns");
 
 function audit(db, actor, action, id, before, after) {
     return db.query(
@@ -202,7 +202,7 @@ router.post("/admin/marketing/subscriptions/:id/:action", requireFeature("admin.
 
 // ---------- business owner ----------
 
-// The business's pass, days and allowance left. Hidden while MARKETING_WORKSPACE_ENABLED is off.
+// The business's pass, days and allowance left. Hidden only if MARKETING_WORKSPACE_ENABLED=false.
 router.get("/vendors/:vendorId/marketing", requireFeature("business.marketing"), requireVendorOwnership, async (req, res) => {
     if (!workspaceEnabled()) return res.status(404).json({ error: "Not found" });
     const vendorId = parseId(req.params.vendorId);
