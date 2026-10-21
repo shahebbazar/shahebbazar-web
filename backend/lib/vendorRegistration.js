@@ -18,7 +18,7 @@ function validateVendorRegistration(body) {
     if (name.length > 255) return { error: "The business name is too long." };
     if (!text(body?.vendor_phone)) return { error: "Phone number is required" };
     const phone = normalisePhone(body.vendor_phone);
-    if (!phone) return { error: "Enter a valid phone number" };
+    if (!phone) return { error: "Enter a Bangladesh mobile number, for example 01712-345678." };
     if (email && (email.length > 255 || !EMAIL.test(email))) return { error: "Enter a valid email address." };
     // NID is no longer collected (client decision, 20 October 2026); the columns stay for later use.
     return { name, phone, email, address, city };
