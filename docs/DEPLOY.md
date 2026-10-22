@@ -140,7 +140,7 @@ The key GitHub uses can run nothing but that script. Setup, once:
    ```bash
    ssh-keygen -t ed25519 -f ~/github-deploy -N "" -C github-actions-deploy
    echo "command=\"sh /home/ubuntu/shahebbazar-web/deploy/deploy.sh\",restrict $(cat ~/github-deploy.pub)" >> ~/.ssh/authorized_keys
-   cat ~/github-deploy                                   # the private key, for DEPLOY_SSH_KEY
+   base64 -w0 ~/github-deploy; echo                      # the private key as one line, for DEPLOY_SSH_KEY
    echo "$(curl -s https://checkip.amazonaws.com) $(cut -d' ' -f1,2 /etc/ssh/ssh_host_ed25519_key.pub)"   # for DEPLOY_KNOWN_HOSTS
    ```
 
@@ -151,7 +151,7 @@ The key GitHub uses can run nothing but that script. Setup, once:
    | Kind | Name | Value |
    | --- | --- | --- |
    | Secret | `DEPLOY_HOST` | The Elastic IP, for example `13.55.1.2` |
-   | Secret | `DEPLOY_SSH_KEY` | The whole private key, including the `BEGIN` and `END` lines |
+   | Secret | `DEPLOY_SSH_KEY` | The one long line from `base64 -w0` (the key pasted as is, `BEGIN` to `END`, also works) |
    | Secret | `DEPLOY_KNOWN_HOSTS` | The line from the last command, so GitHub knows it reached the real server |
    | Variable | `TEST_SERVER_URL` | `https://13-55-1-2.sslip.io` (shown as the deployment link) |
 
