@@ -118,18 +118,63 @@ the certificate.
 - Log in as the demo business owner (01711-000005) with the demo code, send a campaign, and see the
   emails at `https://<address>/mail` (user `team` and `MAIL_UI_PASSWORD`).
 
+## 6. Automatic deploys from GitHub
+
+Once set up, every merge into `main` updates the server by itself. After the API tests, frontend
+checks and browser tests pass on `main`, the **Deploy to the test server** job in
+`.github/workflows/ci.yml` connects over SSH and runs `deploy/deploy.sh`, which:
+
+1. updates the code to the commit that passed (never an older one, never one that isn't on `main`);
+2. builds the new images while the old containers keep serving;
+3. if the update adds or changes files in `database/migrations/`, backs up and applies them;
+4. restarts what changed and checks the site answers, failing the job (and emailing whoever merged)
+   if it doesn't.
+
+The key GitHub uses can run nothing but that script. Setup, once:
+
+1. **Let GitHub reach SSH.** GitHub's machines have changing addresses, so in EC2 → Security Groups
+   → the server's group → *Edit inbound rules*, set the SSH rule's source to **Anywhere-IPv4**. The
+   server only accepts keys, never passwords.
+2. **Make the deploy key**, on the server:
+
+   ```bash
+   ssh-keygen -t ed25519 -f ~/github-deploy -N "" -C github-actions-deploy
+   echo "command=\"sh /home/ubuntu/shahebbazar-web/deploy/deploy.sh\",restrict $(cat ~/github-deploy.pub)" >> ~/.ssh/authorized_keys
+   cat ~/github-deploy                                   # the private key, for DEPLOY_SSH_KEY
+   echo "$(curl -s https://checkip.amazonaws.com) $(cut -d' ' -f1,2 /etc/ssh/ssh_host_ed25519_key.pub)"   # for DEPLOY_KNOWN_HOSTS
+   ```
+
+3. **On GitHub** (needs a repository admin): *Settings* → *Environments* → *New environment*
+   `test-server`. Under *Deployment branches and tags*, choose *Selected branches* and add `main`.
+   Then add:
+
+   | Kind | Name | Value |
+   | --- | --- | --- |
+   | Secret | `DEPLOY_HOST` | The Elastic IP, for example `13.55.1.2` |
+   | Secret | `DEPLOY_SSH_KEY` | The whole private key, including the `BEGIN` and `END` lines |
+   | Secret | `DEPLOY_KNOWN_HOSTS` | The line from the last command, so GitHub knows it reached the real server |
+   | Variable | `TEST_SERVER_URL` | `https://13-55-1-2.sslip.io` (shown as the deployment link) |
+
+4. **Remove the private key from the server:** `rm ~/github-deploy` (GitHub has it now).
+5. **Try it:** *Actions* → *CI* → *Run workflow* on `main`. The checks run, then the deploy; its log
+   shows the build and ends with "Deployed … and the site is answering".
+
+Until the secrets are set, the deploy job only notes that and passes. To undo a bad change, revert
+its pull request: the revert deploys like any other merge. To stop automatic deploys, delete the
+`DEPLOY_HOST` secret.
+
 ## Everyday use
 
 All commands run from `~/shahebbazar-web` on the server.
 
 | Task | Command |
 | --- | --- |
-| Deploy the latest `main` | `git pull && docker compose -f deploy/docker-compose.yml up -d --build` |
+| Deploy the latest `main` | Automatic after each merge (step 6). By hand: `sh deploy/deploy.sh` |
 | See what's running | `docker compose -f deploy/docker-compose.yml ps` |
 | Follow the API's log | `docker compose -f deploy/docker-compose.yml logs -f api` |
 | Restart everything | `docker compose -f deploy/docker-compose.yml restart` |
 | Reset the demo data (deletes everything) | `docker compose -f deploy/docker-compose.yml exec api node scripts/load-db.js --reset --yes` |
-| Apply a new migration | `docker compose -f deploy/docker-compose.yml exec -T db psql -U postgres -d shahebbazar < database/migrations/<file>.sql` |
+| Apply a migration by hand (deploys apply new ones) | `docker compose -f deploy/docker-compose.yml exec -T db psql -U postgres -d shahebbazar < database/migrations/<file>.sql` |
 | Stop it (keeps the data) | `docker compose -f deploy/docker-compose.yml down` |
 
 ## Backups
@@ -179,8 +224,10 @@ Same steps, with these settings in `deploy/.env`:
 
 ## Security notes
 
-- Only ports 22, 80 and 443 are open; SSH only from your IP. If your IP changes, update the security
-  group.
+- Only ports 22, 80 and 443 are open. SSH is key-only: from your IP only, or from anywhere once
+  automatic deploys are on (step 6), where GitHub's key can only run `deploy/deploy.sh`. Without
+  automatic deploys, if your IP changes, update the security group.
 - The database is not reachable from outside the server.
 - Uploads are checked by type and size in the API; Caddy also limits requests to 50 MB.
-- Secrets live only in `deploy/.env` on the server.
+- Secrets live only in `deploy/.env` on the server, and the deploy key only in the GitHub
+  environment `test-server`, which only `main` can use.

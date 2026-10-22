@@ -1,3 +1,5 @@
 # The server's settings and secrets. Only .env.example is committed.
 .env
 backups/
+# The last commit deploy.sh finished deploying.
+.deployed

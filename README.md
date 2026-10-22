@@ -542,13 +542,15 @@ pull request that has passed CI. CI is the gate, so no approval is needed to mer
    `git switch -c <name>/<type>-<task>` (for example `ari/fix-listing-photo-upload`).
 2. Start commit messages with the Jira key, for example `KAN-260 Fix listing photo upload`.
 3. Before pushing, run `npm test`, `npm run lint`, `npm run typecheck` and `npm run build`.
-4. Push and open a pull request into `main`. Fill in the template.
-5. **CI** (`.github/workflows/ci.yml`) runs the API tests against PostgreSQL, then lint,
-   typecheck and the production build. Both checks must pass before the PR can merge.
+4. Push and open a pull request into `main`.
+5. **CI** (`.github/workflows/ci.yml`) runs the API tests against PostgreSQL, lint, typecheck
+   and the production build, and the browser tests. All three must pass before the PR can merge.
 6. If `main` has moved on, update the branch (`git pull origin main`) so the checks run
    against the latest code. Turn on **auto-merge** and the PR merges itself when CI passes.
 7. Tag a teammate on the PR. They review after it merges, and any problem becomes a
    follow-up PR. Because CI is the only gate, add tests with every change.
+8. After the merge, CI runs again on `main` and then deploys it to the test server
+   ([docs/DEPLOY.md](docs/DEPLOY.md), step 6).
 
 Never commit `.env` files, sign-in codes, session tokens or files from `backend/uploads/`.
 
@@ -589,7 +591,7 @@ schema separately.
   open `/vendors/dashboard?vendor=<id>` directly.
 - **Business form feedback:** some invalid fields (categories, description,
   location, contact details) are not clearly highlighted in the form.
-- **Deployment** (KAN-254): no production configuration yet. CI checks every pull request (`.github/workflows/ci.yml`).
+- **Deployment** (KAN-254): the team test server updates itself from `main` ([docs/DEPLOY.md](docs/DEPLOY.md)). The client's server isn't set up yet, and sign-in codes aren't sent by SMS yet.
 - **Language** uses `?lang=bn`; `/en` and `/bn` URL prefixes are a future improvement.
 - **Maps** are illustrations, not a live map.
 - **Bookings and promotions** are later-phase features.
