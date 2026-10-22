@@ -1,0 +1,3 @@
+# The server's settings and secrets. Only .env.example is committed.
+.env
+backups/

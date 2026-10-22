@@ -10,6 +10,9 @@ const geistSans = Geist({
     display: "swap",
 });
 
+// The team's test server: demo data, a strip across the top saying so, and not indexed.
+const TEST_BUILD = process.env.NEXT_PUBLIC_TEST_BUILD === "true";
+
 // Site-wide metadata.
 const siteUrl =
     process.env.NEXT_PUBLIC_SITE_URL ||
@@ -33,10 +36,8 @@ export const metadata: Metadata = {
     twitter: {
         card: "summary_large_image",
     },
-    robots: {
-        index: true,
-        follow: true,
-    },
+    // A test server (NEXT_PUBLIC_TEST_BUILD) is kept out of search engines.
+    robots: TEST_BUILD ? { index: false, follow: false } : { index: true, follow: true },
 };
 
 export default function RootLayout({
@@ -60,6 +61,11 @@ export default function RootLayout({
                     disableTransitionOnChange
                 >
                     <NavigationTracker />
+                    {TEST_BUILD && (
+                        <p className="bg-sponsor-bg px-4 py-1 text-center text-xs font-medium text-sponsor-ink">
+                            Test site with demo data. Not the live Shahebbazar.
+                        </p>
+                    )}
                     {children}
                 </ThemeProvider>
             </body>

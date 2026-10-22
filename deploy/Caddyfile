@@ -1,0 +1,35 @@
+# Caddy, in front of the site (deploy/docker-compose.yml). SITE_ADDRESS is the server's host name, for
+# example 13-55-1-2.sslip.io; Caddy gets and renews its HTTPS certificate by itself.
+
+{$SITE_ADDRESS} {
+	# Compression happens here; the website's own compression is off in the server build.
+	encode zstd gzip
+
+	# Up to 8 listing photos of 5 MB each in one upload, with room to spare.
+	request_body {
+		max_size 50MB
+	}
+
+	header {
+		# A test server isn't for search engines.
+		X-Robots-Tag "noindex, nofollow"
+		Strict-Transport-Security "max-age=31536000"
+		X-Content-Type-Options "nosniff"
+		Referrer-Policy "strict-origin-when-cross-origin"
+		-Server
+	}
+
+	handle /api/* {
+		reverse_proxy api:4000
+	}
+	handle /uploads/* {
+		reverse_proxy api:4000
+	}
+	# The test inbox (Mailpit), which asks for its own password.
+	handle /mail* {
+		reverse_proxy mailpit:8025
+	}
+	handle {
+		reverse_proxy web:3000
+	}
+}

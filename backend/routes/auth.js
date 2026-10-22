@@ -51,6 +51,19 @@ function portalError(expectedRole, actualRole) {
         : "This phone number belongs to a business account. Use Business owner login.";
 }
 
+/**
+ * Test server sign-in (no SMS yet): when DEMO_LOGIN_CODE is set to six digits, every code issued is that
+ * code instead of a random one, so the team can sign in to the demo accounts. Only for a server with demo
+ * data: anyone who knows the code can sign in to any account. Unset everywhere else.
+ */
+const DEMO_LOGIN_CODE = /^\d{6}$/.test(process.env.DEMO_LOGIN_CODE ?? "") ? process.env.DEMO_LOGIN_CODE : null;
+if (process.env.DEMO_LOGIN_CODE && !DEMO_LOGIN_CODE) {
+    console.warn("DEMO_LOGIN_CODE is set but isn't six digits, so it is ignored.");
+}
+if (DEMO_LOGIN_CODE) {
+    console.warn("DEMO_LOGIN_CODE is set: every sign-in code is the demo code. Use this only on a test server with demo data.");
+}
+
 const OTP_EXPIRY_MINUTES = 5;
 const OTP_REQUEST_LIMIT = 3;
 const OTP_REQUEST_WINDOW_MINUTES = 10;
@@ -149,7 +162,7 @@ router.post("/request-verification", async (req, res) => {
             });
         }
 
-        const code = crypto
+        const code = DEMO_LOGIN_CODE ?? crypto
             .randomInt(0, 1000000)
             .toString()
             .padStart(6, "0");

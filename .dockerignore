@@ -1,0 +1,12 @@
+# The API image (backend/Dockerfile) is built from the repository root; it needs backend/ and database/.
+**/node_modules
+**/.next
+**/.next-e2e
+**/.env
+**/.env.*
+backend/uploads
+e2e
+frontend
+docs
+.git
+.github
