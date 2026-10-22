@@ -188,7 +188,17 @@ jobs:
             exit 0
           fi
           install -m 700 -d ~/.ssh
-          printf '%s\n' "$DEPLOY_SSH_KEY" > ~/.ssh/deploy_key
+          # The key as one line of base64 (base64 -w0, docs/DEPLOY.md), or pasted as is. Pasting from a
+          # terminal can add carriage returns and spaces at line ends, which ssh can't read, so those go.
+          if printf '%s' "$DEPLOY_SSH_KEY" | grep -q 'BEGIN'; then
+            printf '%s\n' "$DEPLOY_SSH_KEY" | tr -d '\r' | sed 's/^[[:space:]]*//; s/[[:space:]]*$//' > ~/.ssh/deploy_key
+          else
+            printf '%s' "$DEPLOY_SSH_KEY" | tr -d '[:space:]' | base64 -d > ~/.ssh/deploy_key
+          fi
           chmod 600 ~/.ssh/deploy_key
-          printf '%s\n' "$DEPLOY_KNOWN_HOSTS" > ~/.ssh/known_hosts
+          if ! ssh-keygen -y -f ~/.ssh/deploy_key > /dev/null; then
+            echo "::error::DEPLOY_SSH_KEY isn't a readable private key. Set it again as described in docs/DEPLOY.md step 6."
+            exit 1
+          fi
+          printf '%s\n' "$DEPLOY_KNOWN_HOSTS" | tr -d '\r' > ~/.ssh/known_hosts
           ssh -i ~/.ssh/deploy_key -o BatchMode=yes -o ServerAliveInterval=30 "ubuntu@$DEPLOY_HOST" "$GITHUB_SHA"
