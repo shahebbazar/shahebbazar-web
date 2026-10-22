@@ -20,6 +20,7 @@ their profile, listings and messages; administrators approve and moderate.
 - [API](#api)
 - [Marketing passes](#marketing-passes)
 - [Testing](#testing)
+- [Deploying to a server](docs/DEPLOY.md)
 - [Conventions](#conventions)
 - [Troubleshooting](#troubleshooting)
 - [Known gaps](#known-gaps)
@@ -583,10 +584,6 @@ schema separately.
 
 - **SMS delivery** is mocked for Phase 1. Codes print in the API terminal. An
   SMS provider must be connected before launch.
-- **Seed images:** seeded businesses and listings have no photos and show
-  placeholders until development images are chosen (`database/README.md`).
-- **One role per account:** a customer cannot also register a business with the
-  same phone number yet (KAN-249).
 - **Admin edits in the business pages** (profile, listings, payment methods) are
   not yet written to the audit log. Approved businesses have no admin link yet;
   open `/vendors/dashboard?vendor=<id>` directly.

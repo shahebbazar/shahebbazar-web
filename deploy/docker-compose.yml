@@ -1,0 +1,112 @@
+# The whole site on one server (KAN-254): see docs/DEPLOY.md.
+#
+#   cp deploy/.env.example deploy/.env      then fill it in
+#   docker compose -f deploy/docker-compose.yml up -d --build
+#
+# Only Caddy is reachable from outside (ports 80 and 443). It serves HTTPS, sends /api and /uploads to
+# the API and everything else to the website, and keeps the test inbox behind a password at /mail.
+# The database has no published port.
+
+name: shahebbazar
+
+services:
+  db:
+    image: postgres:16-alpine
+    restart: unless-stopped
+    environment:
+      POSTGRES_USER: ${PGUSER:-postgres}
+      POSTGRES_PASSWORD: ${PGPASSWORD:?Set PGPASSWORD in deploy/.env}
+      POSTGRES_DB: ${PGDATABASE:-shahebbazar}
+      # "Open now" and day boundaries are worked out in Dhaka time, as in development.
+      TZ: Asia/Dhaka
+      PGTZ: Asia/Dhaka
+    volumes:
+      - pgdata:/var/lib/postgresql/data
+    healthcheck:
+      test: ["CMD-SHELL", "pg_isready -U ${PGUSER:-postgres} -d ${PGDATABASE:-shahebbazar}"]
+      interval: 5s
+      timeout: 5s
+      retries: 20
+
+  api:
+    build:
+      context: ..
+      dockerfile: backend/Dockerfile
+    restart: unless-stopped
+    depends_on:
+      db:
+        condition: service_healthy
+    environment:
+      PGHOST: db
+      PGPORT: 5432
+      PGUSER: ${PGUSER:-postgres}
+      PGPASSWORD: ${PGPASSWORD}
+      PGDATABASE: ${PGDATABASE:-shahebbazar}
+      # Caddy is the one proxy in front; the analytics visitor hash needs the visitor's real address.
+      TRUST_PROXY: 1
+      CORS_ORIGIN: ${SITE_URL:?Set SITE_URL in deploy/.env}
+      PUBLIC_SITE_URL: ${SITE_URL}
+      PUBLIC_API_URL: ${SITE_URL}
+      OTP_HASH_SECRET: ${OTP_HASH_SECRET:?Set OTP_HASH_SECRET in deploy/.env}
+      UNSUBSCRIBE_SECRET: ${UNSUBSCRIBE_SECRET:?Set UNSUBSCRIBE_SECRET in deploy/.env}
+      ANALYTICS_SALT: ${ANALYTICS_SALT:?Set ANALYTICS_SALT in deploy/.env}
+      DEMO_LOGIN_CODE: ${DEMO_LOGIN_CODE:-}
+      MARKETING_WORKSPACE_ENABLED: "true"
+      # Campaign emails go to the test inbox (Mailpit) until the client's email provider is set up.
+      MARKETING_EMAIL_ENABLED: "true"
+      SMTP_HOST: ${SMTP_HOST:-mailpit}
+      SMTP_PORT: ${SMTP_PORT:-1025}
+      SMTP_SECURE: ${SMTP_SECURE:-false}
+      SMTP_USER: ${SMTP_USER:-}
+      SMTP_PASS: ${SMTP_PASS:-}
+      MARKETING_EMAIL_FROM: ${MARKETING_EMAIL_FROM:-offers@shahebbazar.com}
+    volumes:
+      - uploads:/data/uploads
+
+  web:
+    build:
+      context: ../frontend/shahebbazar
+      args:
+        NEXT_PUBLIC_SITE_URL: ${SITE_URL}
+        NEXT_PUBLIC_API_BASE_URL: ${SITE_URL}
+        NEXT_PUBLIC_ASSET_BASE_URL: ${SITE_URL}
+        NEXT_PUBLIC_TEST_BUILD: ${TEST_BUILD:-true}
+    restart: unless-stopped
+    depends_on:
+      - api
+    environment:
+      # The website's server talks to the API directly inside the stack.
+      API_BASE_URL: http://api:4000
+
+  # The test inbox: every campaign email lands here instead of being delivered. At <site>/mail,
+  # behind MAIL_UI_USER / MAIL_UI_PASSWORD.
+  mailpit:
+    image: axllent/mailpit:v1.31.3
+    restart: unless-stopped
+    environment:
+      MP_WEBROOT: mail
+      MP_UI_AUTH: "${MAIL_UI_USER:-team}:${MAIL_UI_PASSWORD:?Set MAIL_UI_PASSWORD in deploy/.env}"
+      MP_MAX_MESSAGES: 2000
+
+  caddy:
+    image: caddy:2.10-alpine
+    restart: unless-stopped
+    depends_on:
+      - web
+      - api
+    ports:
+      - "80:80"
+      - "443:443"
+      - "443:443/udp"
+    environment:
+      SITE_ADDRESS: ${SITE_ADDRESS:?Set SITE_ADDRESS in deploy/.env}
+    volumes:
+      - ./Caddyfile:/etc/caddy/Caddyfile:ro
+      - caddy_data:/data
+      - caddy_config:/config
+
+volumes:
+  pgdata:
+  uploads:
+  caddy_data:
+  caddy_config:

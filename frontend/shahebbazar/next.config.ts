@@ -1,9 +1,15 @@
 import path from "node:path";
 import type { NextConfig } from "next";
 
+// The server build (frontend/shahebbazar/Dockerfile sets BUILD_STANDALONE=1) runs behind Caddy, which
+// compresses responses, so it is a self-contained "standalone" app with Next's own compression off.
+const serverBuild = process.env.BUILD_STANDALONE === "1";
+
 const nextConfig: NextConfig = {
     // The browser tests build into their own folder (e2e/env.ts), so they never replace this build.
     distDir: process.env.NEXT_DIST_DIR || ".next",
+    output: serverBuild ? "standalone" : undefined,
+    compress: !serverBuild,
     turbopack: {
         // Pins the Turbopack root to this app, since the repo root has its own package-lock.json.
         root: path.resolve(__dirname),

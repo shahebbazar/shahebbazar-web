@@ -7,6 +7,10 @@ import { PhoneVerificationForm } from "@/components/auth/PhoneVerificationForm";
 
 type AccountType = "customer" | "vendor";
 
+// Local development shows where codes appear; a test server build (NEXT_PUBLIC_TEST_BUILD) points to the demo code.
+const DEVELOPMENT = process.env.NODE_ENV === "development";
+const TEST_BUILD = process.env.NEXT_PUBLIC_TEST_BUILD === "true";
+
 /** next: where to go after logging in, if the visitor was on their way somewhere (e.g. messaging a business). */
 export function LoginPanel({ next = null }: { next?: string | null }) {
     const [accountType, setAccountType] = useState<AccountType>("customer");
@@ -90,17 +94,27 @@ export function LoginPanel({ next = null }: { next?: string | null }) {
                 <PhoneVerificationForm locale="en" audience={accountType} next={next} />
             </div>
 
-            {/* Dev Disclaimer Section */}
-            <aside className="mt-6 rounded-lg border border-brand-200 bg-brand-50 p-4">
-                <h2 className="text-sm font-semibold text-brand-700">
-                    Development verification
-                </h2>
-                <p className="mt-1 text-sm leading-6 text-brand-700">
-                    A real six-digit verification code is generated, hashed and stored
-                    with an expiry time. Until SMS delivery is enabled, the code appears
-                    only in the local API terminal.
-                </p>
-            </aside>
+            {/* Local development: where the code appears. The test server: the team's demo code. Neither on the live site. */}
+            {DEVELOPMENT && (
+                <aside className="mt-6 rounded-lg border border-brand-200 bg-brand-50 p-4">
+                    <h2 className="text-sm font-semibold text-brand-700">
+                        Development verification
+                    </h2>
+                    <p className="mt-1 text-sm leading-6 text-brand-700">
+                        A real six-digit verification code is generated, hashed and stored
+                        with an expiry time. Until SMS delivery is enabled, the code appears
+                        only in the local API terminal.
+                    </p>
+                </aside>
+            )}
+            {TEST_BUILD && (
+                <aside className="mt-6 rounded-lg border border-sponsor-ink/30 bg-sponsor-bg p-4">
+                    <h2 className="text-sm font-semibold text-sponsor-ink">Test site</h2>
+                    <p className="mt-1 text-sm leading-6 text-sponsor-ink">
+                        Text messages aren&apos;t sent yet. Use the demo sign-in code the project team gave you.
+                    </p>
+                </aside>
+            )}
 
             {/* Bottom Area: Centered Administrator Link & Minimal Utility Code */}
             <div className="mt-6 flex flex-col items-center gap-2 border-t border-line pt-4 text-center">
@@ -112,6 +126,7 @@ export function LoginPanel({ next = null }: { next?: string | null }) {
                     Administrator login
                 </Link>
 
+                {DEVELOPMENT && (
                 <button
                     type="button"
                     onClick={handleCopy}
@@ -130,6 +145,7 @@ export function LoginPanel({ next = null }: { next?: string | null }) {
                         </>
                     )}
                 </button>
+                )}
             </div>
         </section>
     );

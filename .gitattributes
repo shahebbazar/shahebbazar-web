@@ -1,0 +1,2 @@
+# Scripts that run on the Linux server keep Linux line endings, even when checked out on Windows.
+*.sh text eol=lf
