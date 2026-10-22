@@ -1,6 +1,8 @@
 # Checks every pull request into main, and main itself after a merge (KAN-281).
 # Branch protection on main requires these jobs to pass before a pull request can be merged:
 # API tests, Frontend checks and Browser tests.
+# Once they pass on main, the Deploy job updates the test server (docs/DEPLOY.md).
+# Run workflow (Actions tab) on main re-runs the checks and deploys again.
 
 name: CI
 
@@ -9,10 +11,13 @@ on:
     branches: [main]
   push:
     branches: [main]
+  workflow_dispatch:
 
+# A newer push to a pull request cancels its older run. Runs on main aren't cancelled, so a deploy
+# is never stopped halfway.
 concurrency:
   group: ci-${{ github.ref }}
-  cancel-in-progress: true
+  cancel-in-progress: ${{ github.event_name == 'pull_request' }}
 
 # Runners are pinned to Ubuntu 24.04 rather than ubuntu-latest, which moves to Ubuntu 26 from
 # 19 October 2026, so the checks don't change under us. The actions are versions that run on Node 24.
@@ -154,3 +159,36 @@ jobs:
             e2e/playwright-report/
             e2e/test-results/
           retention-days: 7
+
+  # Updates the test server with main, once every check has passed. Over SSH with a key that can
+  # only run deploy/deploy.sh (docs/DEPLOY.md). Until the test-server environment's secrets are
+  # set, it notes that and passes.
+  deploy:
+    name: Deploy to the test server
+    needs: [api, web, e2e]
+    if: github.ref == 'refs/heads/main' && github.event_name != 'pull_request'
+    runs-on: ubuntu-24.04
+    timeout-minutes: 25
+    environment:
+      name: test-server
+      url: ${{ vars.TEST_SERVER_URL }}
+    concurrency:
+      group: deploy-test-server
+      cancel-in-progress: false
+
+    steps:
+      - name: Deploy
+        env:
+          DEPLOY_HOST: ${{ secrets.DEPLOY_HOST }}
+          DEPLOY_SSH_KEY: ${{ secrets.DEPLOY_SSH_KEY }}
+          DEPLOY_KNOWN_HOSTS: ${{ secrets.DEPLOY_KNOWN_HOSTS }}
+        run: |
+          if [ -z "$DEPLOY_HOST" ]; then
+            echo "::notice::The test server's secrets aren't set (docs/DEPLOY.md), so nothing was deployed."
+            exit 0
+          fi
+          install -m 700 -d ~/.ssh
+          printf '%s\n' "$DEPLOY_SSH_KEY" > ~/.ssh/deploy_key
+          chmod 600 ~/.ssh/deploy_key
+          printf '%s\n' "$DEPLOY_KNOWN_HOSTS" > ~/.ssh/known_hosts
+          ssh -i ~/.ssh/deploy_key -o BatchMode=yes -o ServerAliveInterval=30 "ubuntu@$DEPLOY_HOST" "$GITHUB_SHA"
