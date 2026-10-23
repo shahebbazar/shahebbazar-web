@@ -9,6 +9,25 @@ test("the home page shows categories and featured businesses @phone", async ({ p
     await expectNoSideScroll(page);
 });
 
+test("home page cards fit their panels at laptop widths", async ({ page }) => {
+    for (const width of [1280, 1366, 1440]) {
+        await page.setViewportSize({ width, height: 900 });
+        await page.goto("/");
+        for (const name of ["Featured Businesses", "Browse Categories"]) {
+            const clipped = await page.getByRole("region", { name }).evaluate((section) =>
+                [...section.querySelectorAll("li")].flatMap((card) => {
+                    const edge = card.getBoundingClientRect().right;
+                    return [...card.querySelectorAll("*")]
+                        .filter((el) => el.children.length === 0 && el.textContent!.trim())
+                        .filter((el) => el.getBoundingClientRect().right > edge + 1 || el.scrollWidth > el.clientWidth + 1)
+                        .map((el) => el.textContent!.trim());
+                })
+            );
+            expect(clipped, `${name} at ${width}px: text cut off or outside its card`).toEqual([]);
+        }
+    }
+});
+
 test("search finds a business and labels paid placement as Sponsored", async ({ page }) => {
     await page.goto("/search?q=mango");
     await expect(page.getByRole("link", { name: "Rajshahi Mango Traders" }).first()).toBeVisible();

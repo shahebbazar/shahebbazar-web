@@ -4,6 +4,7 @@ import { cookies } from "next/headers";
 import { notFound, redirect } from "next/navigation";
 import { ChevronRight } from "lucide-react";
 import { authenticatedApiGet } from "@/lib/auth-server";
+import type { AuthUser } from "@/lib/auth-client";
 import { ACTIVE_BUSINESS_COOKIE, switchHref } from "@/lib/activeBusiness";
 import type {
     AlertList,
@@ -13,6 +14,7 @@ import type {
 } from "@/lib/types";
 import { AlertsPanel } from "@/components/provider/AlertsPanel";
 import {
+    PickerShell,
     ProviderShell,
     businessCode,
     parseVendorParam,
@@ -65,7 +67,12 @@ export default async function ProviderDashboardPage({
             redirect(providerHref("/vendors/dashboard", remembered));
         }
 
-        return <BusinessPicker vendors={vendors} />;
+        const session = await authenticatedApiGet<{ user: AuthUser }>("/auth/me");
+        return (
+            <PickerShell userName={session?.user.user_name ?? ""}>
+                <BusinessPicker vendors={vendors} />
+            </PickerShell>
+        );
     }
     const requested = Number(query.days);
     const days = PERIODS.find((p) => p === requested) ?? 30;

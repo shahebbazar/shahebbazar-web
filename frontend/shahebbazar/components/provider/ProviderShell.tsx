@@ -16,7 +16,7 @@ import {
 import { authenticatedApiGet } from "@/lib/auth-server";
 import type { VendorPickerRow } from "@/lib/types";
 import { MobileMenu } from "../shared/MobileMenu";
-import { AccountSwitcher, AccountSwitcherList } from "../shared/AccountSwitcher";
+import { AccountSwitcher, AccountSwitcherList, type AccountSide } from "../shared/AccountSwitcher";
 import { ThemeSelector } from "@/components/theme/ThemeSelector";
 
 // Page frame for the provider area: header, navigation rail and content.
@@ -119,58 +119,18 @@ export async function ProviderShell({
 
     return (
         <div className="flex min-h-screen flex-col">
-            <header className="sticky top-0 z-40 border-b border-line bg-surface">
-                <div className="mx-auto flex h-16 max-w-[1440px] items-center gap-3 px-4 sm:px-6">
-                    <Link href="/" className="flex shrink-0 items-center gap-2">
-                        <MapPin className="size-6 fill-brand-600 text-brand-600" strokeWidth={1.5} />
-                        <span className="text-xl font-bold tracking-tight text-brand-600 sm:text-[1.35rem]">
-                            Shahebbazar
-                        </span>
-                    </Link>
-
-                        <div className="ml-auto flex min-w-0 items-center gap-3 sm:gap-4">
-                            <div className="hidden lg:block">
-                                <ThemeSelector />
-                            </div>
-
-                        <AccountSwitcher
-                            userName={vendor.vendor_name}
-                            side={{ kind: "business", vendorId: vendor.vendor_id }}
-                            businesses={businesses}
-                            businessPath={PAGE_PATHS[current]}
-                        />
-
-                        {/* Desktop logout */}
-                        <div className="hidden lg:block">
-                            <LogoutButton />
-                        </div>
-
-                        {/* Mobile navigation and logout */}
-                        <MobileMenu>
-                            <nav aria-label="Provider">
-                                {navList}
-                            </nav>
-
-                            <div className="mt-3 border-t border-line pt-3">
-                                {switcher}
-                            </div>
-
-                            <div className="mt-3 border-t border-line px-3.5 pt-3">
-                                <p className="mb-2 text-[0.75rem] font-medium text-muted">
-                                    Appearance
-                                </p>
-
-                                <ThemeSelector className="w-full" />
-                            </div>
-
-                            <div className="mt-3 border-t border-line px-3.5 pt-3">
-                                <LogoutButton />
-                            </div>
-
-                        </MobileMenu>
-                    </div>
-                </div>
-            </header>
+            <ProviderHeader
+                userName={vendor.vendor_name}
+                side={{ kind: "business", vendorId: vendor.vendor_id }}
+                businesses={businesses}
+                businessPath={PAGE_PATHS[current]}
+                mobileNav={
+                    <nav aria-label="Provider">
+                        {navList}
+                    </nav>
+                }
+                switcher={switcher}
+            />
 
             <div className="mx-auto flex w-full max-w-[1440px] flex-1 gap-6 px-4 py-6 sm:px-6">
                 <aside className="hidden w-[236px] shrink-0 lg:block">
@@ -185,6 +145,102 @@ export async function ProviderShell({
                 <main className="min-w-0 flex-1">{children}</main>
             </div>
         </div>
+    );
+}
+
+/**
+ * Page frame for "Choose a business": the same header as the dashboard, with the account menu on the
+ * owner's customer side, so they can still open a business, their account, the site or log out.
+ */
+export async function PickerShell({
+    userName,
+    children,
+}: {
+    userName: string;
+    children: React.ReactNode;
+}) {
+    const businesses = (await authenticatedApiGet<VendorPickerRow[]>("/vendor-account/businesses")) ?? [];
+    const side = { kind: "customer" } as const;
+
+    return (
+        <div className="flex min-h-screen flex-col">
+            <ProviderHeader
+                userName={userName}
+                side={side}
+                businesses={businesses}
+                businessPath={PAGE_PATHS.dashboard}
+                switcher={<AccountSwitcherList side={side} businesses={businesses} businessPath={PAGE_PATHS.dashboard} />}
+            />
+            {children}
+        </div>
+    );
+}
+
+function ProviderHeader({
+    userName,
+    side,
+    businesses,
+    businessPath,
+    mobileNav,
+    switcher,
+}: {
+    userName: string;
+    side: AccountSide;
+    businesses: VendorPickerRow[];
+    businessPath: string;
+    mobileNav?: React.ReactNode;
+    switcher: React.ReactNode;
+}) {
+    return (
+        <header className="sticky top-0 z-40 border-b border-line bg-surface">
+            <div className="mx-auto flex h-16 max-w-[1440px] items-center gap-3 px-4 sm:px-6">
+                <Link href="/" className="flex shrink-0 items-center gap-2">
+                    <MapPin className="size-6 fill-brand-600 text-brand-600" strokeWidth={1.5} />
+                    <span className="text-xl font-bold tracking-tight text-brand-600 sm:text-[1.35rem]">
+                        Shahebbazar
+                    </span>
+                </Link>
+
+                <div className="ml-auto flex min-w-0 items-center gap-3 sm:gap-4">
+                    <div className="hidden lg:block">
+                        <ThemeSelector />
+                    </div>
+
+                    <AccountSwitcher
+                        userName={userName}
+                        side={side}
+                        businesses={businesses}
+                        businessPath={businessPath}
+                    />
+
+                    {/* Desktop logout */}
+                    <div className="hidden lg:block">
+                        <LogoutButton />
+                    </div>
+
+                    {/* Mobile navigation and logout */}
+                    <MobileMenu>
+                        {mobileNav}
+
+                        <div className={mobileNav ? "mt-3 border-t border-line pt-3" : ""}>
+                            {switcher}
+                        </div>
+
+                        <div className="mt-3 border-t border-line px-3.5 pt-3">
+                            <p className="mb-2 text-[0.75rem] font-medium text-muted">
+                                Appearance
+                            </p>
+
+                            <ThemeSelector className="w-full" />
+                        </div>
+
+                        <div className="mt-3 border-t border-line px-3.5 pt-3">
+                            <LogoutButton />
+                        </div>
+                    </MobileMenu>
+                </div>
+            </div>
+        </header>
     );
 }
 

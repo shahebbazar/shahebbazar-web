@@ -31,6 +31,7 @@ export const PHONES = {
     admin: "+8801711000001",
     owner: "+8801711000005", // owns business 1, Rajshahi Mango Traders
     otherVendor: "+8801711000006",
+    twoBusinesses: "+8801711000002", // Shaheb Bazar Silk House and Cloth Store (pending)
     customer: "+8801722000001", // has an email address
     customer2: "+8801722000002", // no email address
 } as const;

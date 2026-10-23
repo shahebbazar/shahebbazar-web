@@ -13,8 +13,10 @@ export function FeaturedBusinesses({
     const copy = t(locale);
 
     return (
+        // Columns follow this panel's own width (a container query), not the window's: beside the
+        // home page's side rail the panel is narrower than the window suggests.
         <section
-            className="rounded-xl border border-line bg-surface p-5 shadow-card"
+            className="@container rounded-xl border border-line bg-surface p-5 shadow-card"
             aria-labelledby="featured-businesses"
         >
             <div className="mb-4 flex items-center justify-between gap-3">
@@ -35,7 +37,7 @@ export function FeaturedBusinesses({
             {businesses.length === 0 ? (
                 <p className="py-8 text-center text-sm text-muted">{copy.noBusinesses}</p>
             ) : (
-                <ul className="grid gap-3.5 sm:grid-cols-2 lg:grid-cols-3 xl:grid-cols-5">
+                <ul className="grid gap-3.5 @md:grid-cols-2 @2xl:grid-cols-3 @5xl:grid-cols-5">
                     {businesses.map((business) => (
                         <li key={business.vendor_id} className="h-full">
                             {/* Featured entries are paid placements and are always rendered with a label. */}

@@ -9,6 +9,7 @@ import {
 } from "@/lib/auth-client";
 import { localeHref, type Locale } from "@/lib/i18n";
 import { safeNext } from "@/lib/safeNext";
+import { CodeHint } from "./CodeHint";
 
 type LoginAudience =
     | "customer"
@@ -33,9 +34,6 @@ const copy = {
         codePlaceholder: "Enter the six-digit code",
         verify: "Verify and log in",
         changePhone: "Change phone number",
-        development:
-            "Development mode: check the API terminal for the verification code.",
-        expiry: "The code expires after five minutes.",
         requesting: "Sending code...",
         verifying: "Verifying...",
         customerRegister: "New to Shahebbazar?",
@@ -55,9 +53,6 @@ const copy = {
         codePlaceholder: "ছয় সংখ্যার কোড লিখুন",
         verify: "যাচাই করে লগ ইন করুন",
         changePhone: "ফোন নম্বর পরিবর্তন করুন",
-        development:
-            "ডেভেলপমেন্ট মোড: যাচাইকরণ কোডের জন্য API টার্মিনাল দেখুন।",
-        expiry: "কোডটি পাঁচ মিনিট পরে মেয়াদোত্তীর্ণ হবে।",
         requesting: "কোড পাঠানো হচ্ছে...",
         verifying: "যাচাই করা হচ্ছে...",
         customerRegister: "সাহেববাজারে নতুন?",
@@ -224,10 +219,7 @@ export function PhoneVerificationForm({
     return (
         <form onSubmit={handleVerify} className="space-y-4">
 
-            <div className="rounded-lg border border-brand-200 bg-brand-50 p-3 text-sm leading-6 text-brand-700">
-                <p>{text.development}</p>
-                <p>{text.expiry}</p>
-            </div>
+            <CodeHint locale={locale} />
 
             <div>
                 <label

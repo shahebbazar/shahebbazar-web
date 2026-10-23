@@ -6,6 +6,20 @@ import { BROWSER_API_BASE, browserAssetUrl } from "@/lib/apiBase";
 // drift apart. Field names match schema v2 — the earlier form posted title,
 // price and a free-text category, none of which are columns any more.
 
+// The API lists subcategories before their parents. The menu shows each main category followed by its
+// own subcategories, so the indented ones sit under the right heading.
+function categoryOptions(categories) {
+    const byName = (a, b) => a.category_name.localeCompare(b.category_name);
+    const parents = categories.filter((c) => !c.category_parent_id);
+    const parentIds = new Set(parents.map((c) => c.category_id));
+    const ordered = parents.flatMap((parent) => [
+        parent,
+        ...categories.filter((c) => c.category_parent_id === parent.category_id).sort(byName),
+    ]);
+    // Any whose parent isn't in the list still appear, at the end.
+    return [...ordered, ...categories.filter((c) => c.category_parent_id && !parentIds.has(c.category_parent_id))];
+}
+
 const EMPTY = {
     listing_title: "",
     listing_title_bn: "",
@@ -229,9 +243,10 @@ export default function ListingForm({
                 value={form.category_id}
                 onChange={handleChange}
                 className="form-input"
+                aria-label="Category"
             >
                 <option value="">Choose a category</option>
-                {categories.map((c) => (
+                {categoryOptions(categories).map((c) => (
                     <option key={c.category_id} value={c.category_id}>
                         {c.category_parent_id ? `— ${c.category_name}` : c.category_name}
                     </option>

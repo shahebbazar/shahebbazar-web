@@ -4,6 +4,7 @@ import Link from "next/link";
 import { useRouter } from "next/navigation";
 import { useState, type FormEvent } from "react";
 import { registerCustomer, requestVerification } from "@/lib/auth-client";
+import { CodeHint } from "./CodeHint";
 
 type Stage = "details" | "verification";
 
@@ -160,10 +161,7 @@ export function CustomerRegistrationForm() {
 
     return (
         <form onSubmit={handleRegistration} className="space-y-4">
-            <div className="rounded-lg border border-brand-200 bg-brand-50 p-3 text-sm leading-6 text-brand-700">
-                <p>Development mode: check the API terminal for the verification code.</p>
-                <p>The code expires after five minutes.</p>
-            </div>
+            <CodeHint />
 
             <div>
                 <label

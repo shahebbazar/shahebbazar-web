@@ -71,6 +71,33 @@ test("a wrong code is refused with a message", async ({ page, consoleErrors }) =
     await expect(page).toHaveURL(/\/login/);
 });
 
+test("the code step gives the expiry, not development instructions, outside local development", async ({ page }) => {
+    const hint = async () => {
+        await expect(page.getByText("The code expires after five minutes.")).toBeVisible();
+        await expect(page.getByText(/API terminal|Development mode/)).toHaveCount(0);
+    };
+    await page.goto("/login");
+    await page.locator("#customer-login-phone").fill(PHONES.customer2);
+    await page.getByRole("button", { name: "Send verification code" }).click();
+    await hint();
+
+    const phone = `0179${Date.now().toString().slice(-7)}`;
+    await page.goto("/register/customer");
+    await page.locator("#customer-register-name").fill("Hint Check");
+    await page.locator("#customer-register-phone").fill(phone);
+    await page.getByRole("button", { name: "Continue with phone verification" }).click();
+    await hint();
+
+    await page.goto("/vendors/register");
+    await page.getByRole("textbox", { name: "Business name" }).fill("Hint Check Stall");
+    await page.getByRole("textbox", { name: "Email address" }).fill("hint.check@example.com");
+    await page.getByRole("textbox", { name: "Phone number" }).fill(`0178${Date.now().toString().slice(-7)}`);
+    await page.getByRole("textbox", { name: "Street address" }).fill("1 Station Road");
+    await page.getByRole("textbox", { name: "City or area" }).fill("Rajshahi");
+    await page.getByRole("button", { name: "Continue with phone verification" }).click();
+    await hint();
+});
+
 test("signed-out visitors are sent to sign in from private pages", async ({ page }) => {
     for (const path of ["/account", "/vendors/dashboard", "/admin"]) {
         await page.goto(path);
