@@ -1,6 +1,6 @@
 import { createElement } from "react";
 import type { Metadata } from "next";
-import { categoryOgImage, pageMetadata } from "@/lib/seo";
+import { SITE_URL, categoryOgImage, pageMetadata } from "@/lib/seo";
 import Link from "next/link";
 import { notFound } from "next/navigation";
 import { ChevronRight } from "lucide-react";
@@ -235,17 +235,16 @@ function CategoryJsonLd({
     parent: CategoryNode | null;
     total: number;
 }) {
-    const siteUrl = process.env.NEXT_PUBLIC_SITE_URL || "http://localhost:3000";
-    const url = `${siteUrl}/categories/${category.category_slug}`;
+    const url = `${SITE_URL}/categories/${category.category_slug}`;
 
     const crumbs: { name: string; item: string }[] = [
-        { name: "Home", item: siteUrl },
-        { name: "Categories", item: `${siteUrl}/categories` },
+        { name: "Home", item: SITE_URL },
+        { name: "Categories", item: `${SITE_URL}/categories` },
     ];
     if (parent) {
         crumbs.push({
             name: parent.category_name,
-            item: `${siteUrl}/categories/${parent.category_slug}`,
+            item: `${SITE_URL}/categories/${parent.category_slug}`,
         });
     }
     crumbs.push({ name: category.category_name, item: url });

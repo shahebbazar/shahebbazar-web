@@ -1,5 +1,5 @@
 import type { Metadata } from "next";
-import { businessOgImage, pageMetadata } from "@/lib/seo";
+import { SITE_URL, businessOgImage, pageMetadata } from "@/lib/seo";
 import Link from "next/link";
 import { notFound } from "next/navigation";
 import { ChevronLeft } from "lucide-react";
@@ -117,7 +117,6 @@ function LocalBusinessJsonLd({
     paymentMethods: PaymentMethod[] | null;
 }) {
     const { business, categories, hours, photos } = detail;
-    const siteUrl = process.env.NEXT_PUBLIC_SITE_URL || "http://localhost:3000";
     const reviewCount = toNumber(business.review_count);
     const rating = toNumber(business.rating);
 
@@ -134,9 +133,9 @@ function LocalBusinessJsonLd({
     const json: Record<string, unknown> = {
         "@context": "https://schema.org",
         "@type": "LocalBusiness",
-        "@id": `${siteUrl}/business/${business.vendor_slug}#business`,
+        "@id": `${SITE_URL}/business/${business.vendor_slug}#business`,
         name: business.vendor_name,
-        url: `${siteUrl}/business/${business.vendor_slug}`,
+        url: `${SITE_URL}/business/${business.vendor_slug}`,
         telephone: business.vendor_phone,
     };
 
@@ -215,8 +214,7 @@ function LocalBusinessJsonLd({
 // One Product node per listing.
 function ProductJsonLd({ detail }: { detail: BusinessDetail }) {
     const { business, listings } = detail;
-    const siteUrl = process.env.NEXT_PUBLIC_SITE_URL || "http://localhost:3000";
-    const pageUrl = `${siteUrl}/business/${business.vendor_slug}`;
+    const pageUrl = `${SITE_URL}/business/${business.vendor_slug}`;
 
     const seller = {
         "@type": "LocalBusiness",
