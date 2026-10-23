@@ -1,6 +1,6 @@
 import { createElement } from "react";
 import type { Metadata } from "next";
-import { pageMetadata } from "@/lib/seo";
+import { SITE_URL, pageMetadata } from "@/lib/seo";
 import Link from "next/link";
 import { ChevronRight } from "lucide-react";
 import { AppShell } from "@/components/public/AppShell";
@@ -153,20 +153,19 @@ function CategoryCard({
 
 function CategoryListJsonLd({ categories }: { categories: CategoryNode[] }) {
     if (categories.length === 0) return null;
-    const siteUrl = process.env.NEXT_PUBLIC_SITE_URL || "http://localhost:3000";
 
     const json = {
         "@context": "https://schema.org",
         "@type": "CollectionPage",
         name: "All categories",
-        url: `${siteUrl}/categories`,
+        url: `${SITE_URL}/categories`,
         mainEntity: {
             "@type": "ItemList",
             itemListElement: categories.map((c, i) => ({
                 "@type": "ListItem",
                 position: i + 1,
                 name: c.category_name,
-                url: `${siteUrl}/categories/${c.category_slug}`,
+                url: `${SITE_URL}/categories/${c.category_slug}`,
             })),
         },
     };

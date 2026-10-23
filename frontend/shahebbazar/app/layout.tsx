@@ -2,6 +2,7 @@ import type { Metadata } from "next";
 import { Geist } from "next/font/google";
 import { NavigationTracker } from "@/components/analytics/NavigationTracker";
 import { ThemeProvider } from "@/components/theme/ThemeProvider";
+import { SITE_URL } from "@/lib/seo";
 import "./globals.css";
 
 const geistSans = Geist({
@@ -14,12 +15,8 @@ const geistSans = Geist({
 const TEST_BUILD = process.env.NEXT_PUBLIC_TEST_BUILD === "true";
 
 // Site-wide metadata.
-const siteUrl =
-    process.env.NEXT_PUBLIC_SITE_URL ||
-    "http://localhost:3000";
-
 export const metadata: Metadata = {
-    metadataBase: new URL(siteUrl),
+    metadataBase: new URL(SITE_URL),
     title: {
         default:
             "Shahebbazar — Rajshahi's local business directory",

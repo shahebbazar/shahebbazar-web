@@ -14,6 +14,17 @@ test("the dashboard shows the business and its figures @phone", async ({ page })
     await expectNoSideScroll(page);
 });
 
+test("switching business redirects within the site's own address", async ({ page }) => {
+    // Behind the server's proxy the website sees its internal address, so the redirect must be relative.
+    const response = await page.request.get("/vendors/switch?to=1&next=/vendors/dashboard/marketing", { maxRedirects: 0 });
+    expect(response.status()).toBe(307);
+    expect(response.headers()["location"]).toBe("/vendors/dashboard/marketing?vendor=1");
+
+    await page.goto("/vendors/switch?to=1");
+    await expect(page).toHaveURL(/\/vendors\/dashboard\?vendor=1$/);
+    await expect(page.locator("main")).toContainText("Rajshahi Mango Traders");
+});
+
 test("adding a product says it waits for approval, and it does", async ({ page }) => {
     const title = `E2E Langra Mango ${Date.now() % 100000}`;
     await page.goto("/vendors/dashboard/add-listing?vendor=1");

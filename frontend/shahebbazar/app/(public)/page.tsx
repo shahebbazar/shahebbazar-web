@@ -1,5 +1,5 @@
 import type { Metadata } from "next";
-import { pageMetadata } from "@/lib/seo";
+import { SITE_URL, pageMetadata } from "@/lib/seo";
 import { AppShell } from "@/components/public/AppShell";
 import { Hero } from "@/components/public/Hero";
 import { CategoryGrid } from "@/components/public/CategoryGrid";
@@ -53,19 +53,18 @@ export default async function HomePage({
 
 // Site-level structured data.
 function SiteJsonLd() {
-    const siteUrl = process.env.NEXT_PUBLIC_SITE_URL || "http://localhost:3000";
 
     const json = {
         "@context": "https://schema.org",
         "@type": "WebSite",
         name: "Shahebbazar",
-        url: siteUrl,
+        url: SITE_URL,
         inLanguage: ["en", "bn"],
         potentialAction: {
             "@type": "SearchAction",
             target: {
                 "@type": "EntryPoint",
-                urlTemplate: `${siteUrl}/search?q={search_term_string}`,
+                urlTemplate: `${SITE_URL}/search?q={search_term_string}`,
             },
             "query-input": "required name=search_term_string",
         },
