@@ -1,6 +1,7 @@
 "use client";
 
 import { BROWSER_API_BASE } from "@/lib/apiBase";
+import { CodeHint } from "./CodeHint";
 import { useRouter } from "next/navigation";
 import {
     useState,
@@ -209,15 +210,7 @@ export function VendorRegistrationForm({
                 onSubmit={handleRegistration}
                 className="space-y-4 rounded-xl border border-line bg-surface p-5 shadow-raised sm:p-6"
             >
-                <div className="rounded-lg border border-brand-200 bg-brand-50 p-3 text-sm leading-6 text-brand-700">
-                    <p>
-                        Development mode: check the API
-                        terminal for the verification code.
-                    </p>
-                    <p>
-                        The code expires after five minutes.
-                    </p>
-                </div>
+                <CodeHint />
 
                 <div>
                     <label

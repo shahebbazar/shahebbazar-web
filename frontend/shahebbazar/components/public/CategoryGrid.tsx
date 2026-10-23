@@ -24,8 +24,9 @@ export function CategoryGrid({
     if (categories.length === 0) return null;
 
     return (
+        // Columns follow this panel's own width (a container query); see FeaturedBusinesses.
         <section
-            className="rounded-xl border border-line bg-surface p-5 shadow-card"
+            className="@container rounded-xl border border-line bg-surface p-5 shadow-card"
             aria-labelledby="browse-categories"
         >
             <div className="mb-4 flex items-center justify-between gap-3">
@@ -43,7 +44,7 @@ export function CategoryGrid({
                 </Link>
             </div>
 
-            <ul className="grid gap-3 sm:grid-cols-2 lg:grid-cols-3 xl:grid-cols-4">
+            <ul className="grid gap-3 @md:grid-cols-2 @2xl:grid-cols-3 @4xl:grid-cols-4">
                 {categories.map((category, index) => {
                     const Icon = categoryIcon(category.category_icon);
                     const subtitle = pick(locale, category.subtitle, category.subtitle_bn);

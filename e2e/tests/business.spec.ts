@@ -14,6 +14,35 @@ test("the dashboard shows the business and its figures @phone", async ({ page })
     await expectNoSideScroll(page);
 });
 
+test("the product form lists each category followed by its own subcategories", async ({ page }) => {
+    await page.goto("/vendors/dashboard/add-listing?vendor=1");
+    const options = page.getByRole("combobox", { name: "Category" }).locator("option");
+    await expect(options).not.toHaveCount(1);
+    const labels = (await options.allTextContents()).slice(1); // after "Choose a category"
+    const parentOf = new Map(
+        (await sql<{ child: string; parent: string }>(
+            `SELECT c.category_name AS child, p.category_name AS parent
+             FROM categories c JOIN categories p ON p.category_id = c.category_parent_id`
+        )).map((r) => [r.child, r.parent])
+    );
+    let heading = "";
+    for (const label of labels) {
+        if (!label.startsWith("— ")) { heading = label; continue; }
+        expect(heading, `"${label}" sits under its own category`).toBe(parentOf.get(label.slice(2)));
+    }
+});
+
+test("an owner of two businesses can still leave the business picker", async ({ browser }) => {
+    const context = await browser.newContext();
+    await signIn(context, "twoBusinesses");
+    const page = await context.newPage();
+    await page.goto("/vendors/dashboard");
+    await expect(page.getByRole("heading", { name: "Choose a business" })).toBeVisible();
+    await expect(page.getByRole("banner").getByRole("link", { name: "Shahebbazar" })).toBeVisible();
+    await expect(page.getByRole("button", { name: /Log out/ }).filter({ visible: true }).or(page.getByRole("button", { name: /menu/i }))).toBeVisible();
+    await context.close();
+});
+
 test("switching business redirects within the site's own address", async ({ page }) => {
     // Behind the server's proxy the website sees its internal address, so the redirect must be relative.
     const response = await page.request.get("/vendors/switch?to=1&next=/vendors/dashboard/marketing", { maxRedirects: 0 });
