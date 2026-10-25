@@ -22,6 +22,14 @@ export function ThreadView({
         <div className="space-y-4">
             <div className="rounded-xl border border-line bg-surface p-4 shadow-card">
                 <p className="font-semibold">{otherName}</p>
+                {conversation.event_title && conversation.event_slug && (
+                    <p className="text-[0.8125rem] text-brand-700">
+                        Event:{" "}
+                        <Link href={`/events/${conversation.event_slug}`} className="font-medium hover:underline">
+                            {conversation.event_title}
+                        </Link>
+                    </p>
+                )}
                 {conversation.listing_title && (
                     <p className="text-[0.8125rem] text-brand-700">About: {conversation.listing_title}</p>
                 )}

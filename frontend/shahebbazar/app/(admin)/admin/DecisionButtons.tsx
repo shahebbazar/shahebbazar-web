@@ -13,7 +13,7 @@ export function DecisionButtons({
     id,
     label,
 }: {
-    kind: "vendor" | "listing";
+    kind: "vendor" | "listing" | "event";
     id: number;
     label: string;
 }) {
