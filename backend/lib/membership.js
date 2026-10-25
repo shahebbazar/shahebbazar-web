@@ -25,7 +25,8 @@ async function businessMemberIds(vendorId, db = pool) {
 /** The businesses a user runs, for the dashboard switcher. */
 async function memberBusinesses(userId, db = pool) {
     const result = await db.query(
-        `SELECT v.vendor_id, v.vendor_name, v.vendor_slug, v.vendor_status, m.member_role
+        `SELECT v.vendor_id, v.vendor_name, v.vendor_slug, v.vendor_status, m.member_role,
+                COALESCE(v.vendor_logo_url, v.vendor_cover_url) AS vendor_photo
          FROM vendor_members m
          JOIN vendors v ON v.vendor_id = m.vendor_id
          WHERE m.user_id = $1

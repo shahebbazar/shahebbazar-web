@@ -25,7 +25,7 @@ async function listConversations({ userId, vendorId, inquiriesOnly }) {
     const result = await pool.query(
         `SELECT c.conversation_id, c.conversation_status AS status,
                 c.conversation_last_message_at AS last_message_at,
-                v.vendor_id, v.vendor_name, v.vendor_slug, v.vendor_logo_url AS vendor_logo,
+                v.vendor_id, v.vendor_name, v.vendor_slug, COALESCE(v.vendor_logo_url, v.vendor_cover_url) AS vendor_logo,
                 u.user_name AS customer_name, u.user_avatar_url AS customer_avatar,
                 l.listing_id, l.listing_title, ev.event_id, ev.event_title, ev.event_slug,
                 (SELECT m.message_body FROM messages m WHERE m.conversation_id = c.conversation_id
@@ -48,7 +48,7 @@ async function listConversations({ userId, vendorId, inquiriesOnly }) {
 async function openConversation(conversationId, viewerUserId, asBusiness = false) {
     const head = await pool.query(
         `SELECT c.conversation_id, c.conversation_status AS status, c.user_id, c.vendor_id,
-                v.vendor_name, v.vendor_slug, v.vendor_logo_url AS vendor_logo,
+                v.vendor_name, v.vendor_slug, COALESCE(v.vendor_logo_url, v.vendor_cover_url) AS vendor_logo,
                 u.user_name AS customer_name, u.user_avatar_url AS customer_avatar, l.listing_id, l.listing_title,
                 ev.event_id, ev.event_title, ev.event_slug
          FROM conversations c

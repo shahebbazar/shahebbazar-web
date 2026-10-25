@@ -10,6 +10,7 @@ export function ThreadView({
     thread,
     otherName,
     otherPhoto,
+    otherHref,
     send,
     reportBackHref,
 }: {
@@ -17,6 +18,8 @@ export function ThreadView({
     otherName: string;
     /** The business's logo for the customer, the customer's photo for the business. */
     otherPhoto: string | null;
+    /** Where the other side's name and photo link to: the business's page, for the customer. */
+    otherHref?: string;
     send: (body: string) => Promise<SendResult>;
     reportBackHref?: string;
 }) {
@@ -25,10 +28,17 @@ export function ThreadView({
     return (
         <div className="space-y-4">
             <div className="rounded-xl border border-line bg-surface p-4 shadow-card">
-                <div className="flex items-center gap-3">
-                    <Avatar name={otherName} photo={otherPhoto} />
-                    <p className="font-semibold">{otherName}</p>
-                </div>
+                {otherHref ? (
+                    <Link href={otherHref} className="group flex w-fit items-center gap-3">
+                        <Avatar name={otherName} photo={otherPhoto} />
+                        <span className="font-semibold group-hover:text-brand-600 group-hover:underline">{otherName}</span>
+                    </Link>
+                ) : (
+                    <div className="flex items-center gap-3">
+                        <Avatar name={otherName} photo={otherPhoto} />
+                        <p className="font-semibold">{otherName}</p>
+                    </div>
+                )}
                 {conversation.event_title && conversation.event_slug && (
                     <p className="text-[0.8125rem] text-brand-700">
                         Event:{" "}
@@ -40,12 +50,14 @@ export function ThreadView({
                 {conversation.listing_title && (
                     <p className="text-[0.8125rem] text-brand-700">About: {conversation.listing_title}</p>
                 )}
-                <Link
-                    href={`/business/${conversation.vendor_slug}`}
-                    className="text-[0.8125rem] text-muted hover:text-brand-600 hover:underline"
-                >
-                    View {conversation.vendor_name}
-                </Link>
+                {!otherHref && (
+                    <Link
+                        href={`/business/${conversation.vendor_slug}`}
+                        className="text-[0.8125rem] text-muted hover:text-brand-600 hover:underline"
+                    >
+                        View {conversation.vendor_name}
+                    </Link>
+                )}
             </div>
 
             <ol className="space-y-3">

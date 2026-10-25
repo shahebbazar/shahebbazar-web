@@ -157,9 +157,12 @@ export async function ProviderShell({
  */
 export async function PickerShell({
     userName,
+    avatarUrl = null,
     children,
 }: {
     userName: string;
+    /** The owner's profile photo, for the customer-side account menu. */
+    avatarUrl?: string | null;
     children: React.ReactNode;
 }) {
     const businesses = (await authenticatedApiGet<VendorPickerRow[]>("/vendor-account/businesses")) ?? [];
@@ -169,10 +172,11 @@ export async function PickerShell({
         <div className="flex min-h-screen flex-col">
             <ProviderHeader
                 userName={userName}
+                avatarUrl={avatarUrl}
                 side={side}
                 businesses={businesses}
                 businessPath={PAGE_PATHS.dashboard}
-                switcher={<AccountSwitcherList side={side} businesses={businesses} businessPath={PAGE_PATHS.dashboard} />}
+                switcher={<AccountSwitcherList side={side} businesses={businesses} businessPath={PAGE_PATHS.dashboard} avatarUrl={avatarUrl} />}
             />
             {children}
         </div>
@@ -181,6 +185,7 @@ export async function PickerShell({
 
 function ProviderHeader({
     userName,
+    avatarUrl = null,
     side,
     businesses,
     businessPath,
@@ -188,6 +193,7 @@ function ProviderHeader({
     switcher,
 }: {
     userName: string;
+    avatarUrl?: string | null;
     side: AccountSide;
     businesses: VendorPickerRow[];
     businessPath: string;
@@ -208,6 +214,7 @@ function ProviderHeader({
                     {/* The theme and Log out are in the account menu. */}
                     <AccountSwitcher
                         userName={userName}
+                        avatarUrl={avatarUrl}
                         side={side}
                         businesses={businesses}
                         businessPath={businessPath}

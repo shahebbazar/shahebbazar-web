@@ -189,3 +189,24 @@ test("a business owner is told to hand over the business before deleting their a
     await expect(page.getByRole("alert").filter({ hasText: /run a business/ })).toBeVisible();
     await expect(page).toHaveURL(/\/account\/details/);
 });
+
+test("a conversation shows the business's photo, and its name opens the business page @phone", async ({ page, context }) => {
+    const [user, vendor] = [await userIdOf("customer2"), await vendorId()];
+    const [{ conversation_id: id }] = await sql<{ conversation_id: number }>(
+        `INSERT INTO conversations (user_id, vendor_id, conversation_last_message_at) VALUES ($1, $2, now()) RETURNING conversation_id`,
+        [user, vendor]
+    );
+    try {
+        await sql("INSERT INTO messages (conversation_id, sender_user_id, message_body) VALUES ($1, $2, 'Are you open today?')", [id, user]);
+        await signIn(context, "customer2");
+        await page.goto("/account/messages");
+        await expect(page.locator(`a[href$="/account/messages/${id}"] img`)).toHaveCount(1);
+        await page.goto(`/account/messages/${id}`);
+        const header = page.getByRole("link", { name: /Padma Handicrafts/ }).first();
+        await expect(header.locator("img")).toHaveCount(1);
+        await header.click();
+        await expect(page).toHaveURL(new RegExp(`/business/${SLUG}`));
+    } finally {
+        await sql("DELETE FROM conversations WHERE conversation_id = $1", [id]);
+    }
+});
