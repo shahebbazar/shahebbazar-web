@@ -86,10 +86,39 @@ export function localiseDigits(text: string, locale: Locale): string {
     return text.replace(/[0-9]/g, (d) => BN_DIGITS[Number(d)]);
 }
 
-/** A stored Bangladeshi mobile number ("+8801712345678") as people write it: "01712-345678". Anything else is shown as stored. */
+/**
+ * A stored Bangladeshi number (+880 form) in the local style: "0721-775544", "02-9123456" (or
+ * "01712-345678" for a mobile). Used for landlines; anything else is shown as stored.
+ */
+export function formatLocalPhone(phone: string): string {
+    const national = /^\+880(\d+)$/.exec(phone.replace(/[\s-]/g, ""))?.[1];
+    if (!national) return phone;
+    if (/^1\d{9}$/.test(national)) return `0${national.slice(0, 4)}-${national.slice(4)}`;
+    // Landlines: Dhaka's area code is 02; elsewhere it has three digits (Rajshahi 0721).
+    if (national.startsWith("2")) return `02-${national.slice(1)}`;
+    return `0${national.slice(0, 3)}-${national.slice(3)}`;
+}
+
+/**
+ * A Bangladeshi number typed any common way ("01811 223344", "+880 721-775544") in its stored +880
+ * form, or null when it isn't one. The same as normalisePhone in backend/lib/businessProfile.js.
+ */
+export function toStoredPhone(raw: string): string | null {
+    const compact = raw.replace(/[\s\-().]/g, "");
+    const national = /^\+880(\d+)$/.exec(compact)?.[1] ?? /^880(\d+)$/.exec(compact)?.[1] ?? /^0(\d+)$/.exec(compact)?.[1];
+    if (!national) return null;
+    if (national.startsWith("1")) return /^1[3-9]\d{8}$/.test(national) ? `+880${national}` : null;
+    return /^[2-9]\d{6,9}$/.test(national) ? `+880${national}` : null;
+}
+
+/**
+ * A main number (sign-in, business contact, WhatsApp) as shown: a mobile in full international form,
+ * "+8801712345678"; a landline in the local style, "0721-775544". backend/lib/phone.js (displayPhone)
+ * does the same for emails and campaign wording.
+ */
 export function formatPhone(phone: string): string {
-    const local = /^\+880(1\d{3})(\d{6})$/.exec(phone.replace(/[\s-]/g, ""));
-    return local ? `0${local[1]}-${local[2]}` : phone;
+    const compact = phone.replace(/[\s-]/g, "");
+    return /^\+8801\d{9}$/.test(compact) ? compact : formatLocalPhone(phone);
 }
 
 // Formats a timestamp as a short date and time in Dhaka time.

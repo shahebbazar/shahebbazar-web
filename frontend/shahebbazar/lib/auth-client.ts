@@ -15,6 +15,7 @@ export type AuthUser = {
     user_phone: string;
     user_email: string | null;
     user_role: AuthRole;
+    user_avatar_url?: string | null;
 };
 export type LogoutResult =
     | {

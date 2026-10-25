@@ -45,12 +45,13 @@ function imageUpload(field, maxBytes, maxCount, namePrefix) {
 }
 
 /**
- * Validates the id in req.params[param], runs a multer middleware, and turns its errors into
- * plain-language 400 responses. Server paths and internal errors are never sent to the browser.
+ * Validates the id in req.params[param] (skipped when param is null, for routes about the signed-in
+ * user), runs a multer middleware, and turns its errors into plain-language 400 responses. Server paths
+ * and internal errors are never sent to the browser.
  */
 function receive(middleware, limitLabel, param = "vendorId", label = "vendor") {
     return (req, res, next) => {
-        if (parseId(req.params[param]) === null) {
+        if (param !== null && parseId(req.params[param]) === null) {
             return res.status(400).json({ error: `Invalid ${label} id` });
         }
         middleware(req, res, (err) => {
@@ -126,6 +127,7 @@ async function removeUnreferencedFiles(db, storedPaths) {
              UNION ALL SELECT 1 FROM vendors WHERE vendor_logo_url = $1 OR vendor_cover_url = $1
              UNION ALL SELECT 1 FROM event_photos WHERE photo_url = $1
              UNION ALL SELECT 1 FROM events WHERE event_image_url = $1
+             UNION ALL SELECT 1 FROM users WHERE user_avatar_url = $1
              LIMIT 1`,
             [stored]
         );

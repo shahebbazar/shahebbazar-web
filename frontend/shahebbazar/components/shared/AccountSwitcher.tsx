@@ -1,6 +1,7 @@
 import Link from "next/link";
 import { ChevronDown, Plus, Store, UserRound } from "lucide-react";
 import { switchHref } from "@/lib/activeBusiness";
+import { browserAssetUrl } from "@/lib/apiBase";
 import type { VendorPickerRow } from "@/lib/types";
 
 // One account switcher for the whole site: the public header (customer side) and the business
@@ -16,6 +17,10 @@ type Props = {
     businesses: VendorPickerRow[];
     // The dashboard page to open in another business, e.g. "/vendors/dashboard/marketing".
     businessPath?: string;
+    /** The customer's profile photo, shown on the customer side in place of their first letter. */
+    avatarUrl?: string | null;
+    /** Under the account list in the dropdown: the theme choice and Log out, so the header itself stays short. */
+    extras?: React.ReactNode;
 };
 
 const ROW = "flex items-center gap-3 rounded-[10px] px-3.5 py-2.5 text-sm font-medium";
@@ -68,27 +73,37 @@ export function AccountSwitcherList({ side, businesses, businessPath = "/vendors
     );
 }
 
-/** The header button showing where you are, opening the list. On phones the list is in the menu drawer. */
+/**
+ * The header button showing where you are, opening the list with `extras` (theme and Log out) under it.
+ * From tablet width up; on phones the list is in the menu drawer.
+ */
 export function AccountSwitcher(props: Props) {
     const { name, role } = current(props);
     const initial = name.trim().charAt(0).toUpperCase() || "?";
+    const avatar = props.side.kind === "customer" ? browserAssetUrl(props.avatarUrl ?? null) : null;
     return (
         <details className="group relative min-w-0">
             <summary
                 aria-label={`${name}, ${role}. Switch account`}
                 className="flex min-w-0 cursor-pointer list-none items-center gap-2.5 rounded-[10px] px-1.5 py-1 hover:bg-surface-2 [&::-webkit-details-marker]:hidden"
             >
-                <span aria-hidden className="grid size-9 shrink-0 place-items-center rounded-full bg-brand-100 text-sm font-semibold text-brand-700">
-                    {initial}
+                <span aria-hidden className="grid size-9 shrink-0 place-items-center overflow-hidden rounded-full bg-brand-100 text-sm font-semibold text-brand-700">
+                    {avatar ? (
+                        // eslint-disable-next-line @next/next/no-img-element
+                        <img src={avatar} alt="" className="size-full object-cover" />
+                    ) : (
+                        initial
+                    )}
                 </span>
                 <span className="hidden min-w-0 leading-tight min-[420px]:block">
                     <span className="block max-w-44 truncate text-sm font-semibold">{name}</span>
                     <span className="block text-[0.75rem] text-muted">{role}</span>
                 </span>
-                <ChevronDown className="hidden size-4 shrink-0 text-soft transition-transform group-open:rotate-180 lg:block" aria-hidden />
+                <ChevronDown className="hidden size-4 shrink-0 text-soft transition-transform group-open:rotate-180 md:block" aria-hidden />
             </summary>
-            <div className="absolute right-0 z-50 mt-2 hidden w-72 rounded-xl border border-line bg-surface p-2 shadow-raised lg:block">
+            <div className="absolute right-0 z-50 mt-2 hidden w-72 rounded-xl border border-line bg-surface p-2 shadow-raised md:block">
                 <AccountSwitcherList side={props.side} businesses={props.businesses} businessPath={props.businessPath} />
+                {props.extras && <div className="mt-2 space-y-2 border-t border-line px-1.5 pt-3 pb-1">{props.extras}</div>}
             </div>
         </details>
     );

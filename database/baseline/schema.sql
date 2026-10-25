@@ -632,6 +632,8 @@ CREATE TABLE public.users (
     user_status character varying(20) DEFAULT 'active'::character varying NOT NULL,
     user_created_at timestamp with time zone DEFAULT now() NOT NULL,
     user_updated_at timestamp with time zone DEFAULT now() NOT NULL,
+    user_avatar_url character varying(500),
+    location_id integer,
     CONSTRAINT users_user_role_check CHECK (((user_role)::text = ANY ((ARRAY['customer'::character varying, 'vendor'::character varying, 'admin'::character varying])::text[]))),
     CONSTRAINT users_user_status_check CHECK (((user_status)::text = ANY ((ARRAY['active'::character varying, 'suspended'::character varying, 'deleted'::character varying])::text[])))
 );
@@ -2194,6 +2196,14 @@ ALTER TABLE ONLY public.vendor_social_links
 
 ALTER TABLE ONLY public.vendors
     ADD CONSTRAINT vendors_location_id_fkey FOREIGN KEY (location_id) REFERENCES public.locations(location_id) ON DELETE SET NULL;
+
+
+--
+-- Name: users users_location_id_fkey; Type: FK CONSTRAINT; Schema: public; Owner: -
+--
+
+ALTER TABLE ONLY public.users
+    ADD CONSTRAINT users_location_id_fkey FOREIGN KEY (location_id) REFERENCES public.locations(location_id) ON DELETE SET NULL;
 
 
 --

@@ -21,9 +21,11 @@ test("a customer signs in with a code and signs out @phone", async ({ page }) =>
     await expect(page.getByRole("heading", { name: "Hello, Imran Chowdhury" })).toBeVisible();
 
     await page.goto("/");
-    const logOut = page.getByRole("button", { name: /Log out/ });
-    if (!(await logOut.isVisible())) await page.getByRole("button", { name: /menu/i }).click(); // phone: inside the menu
-    await logOut.click();
+    // Log out is in the account menu (opened from your name in the header), or the menu drawer on a phone.
+    const menu = page.getByRole("button", { name: /menu/i });
+    if (await menu.isVisible()) await menu.click();
+    else await page.getByRole("banner").locator("summary").first().click();
+    await page.getByRole("button", { name: /Log out/ }).filter({ visible: true }).first().click();
     await expect(page).toHaveURL(/\/login/);
     await page.goto("/account"); // signed out: sent back to sign in
     await expect(page).toHaveURL(/\/login/);

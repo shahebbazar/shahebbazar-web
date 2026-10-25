@@ -2,6 +2,8 @@ import type { Metadata } from "next";
 import { CheckCircle2, Circle } from "lucide-react";
 import { AccountShell } from "@/components/customer/AccountShell";
 import { DetailsForm } from "@/components/customer/DetailsForm";
+import { ProfilePhoto } from "@/components/customer/ProfilePhoto";
+import { apiGet } from "@/lib/api";
 import { authenticatedApiGet } from "@/lib/auth-server";
 import type { Customer } from "@/lib/types";
 
@@ -10,7 +12,10 @@ export const metadata: Metadata = {
 };
 
 export default async function DetailsPage() {
-    const me = await authenticatedApiGet<Customer>("/me");
+    const [me, areas] = await Promise.all([
+        authenticatedApiGet<Customer>("/me"),
+        apiGet<{ id: number; name: string; city: string }[]>("/locations/areas").catch(() => []),
+    ]);
 
     if (!me) {
         return (
@@ -28,6 +33,16 @@ export default async function DetailsPage() {
             done: Boolean(me.user_email),
             label: "Email address (optional)",
             note: me.user_email ? "Businesses you allow can send you offers by email" : "Add one to get offers from businesses by email",
+        },
+        {
+            done: Boolean(me.user_avatar_url),
+            label: "Profile photo (optional)",
+            note: me.user_avatar_url ? "Shown with your name and reviews" : "Add one so your reviews show a face, not a letter",
+        },
+        {
+            done: Boolean(me.area_name),
+            label: "Your area (optional)",
+            note: me.area_name ? `Your reviews say you're from ${me.area_name}` : "Shown on your reviews, so readers can see you're local",
         },
     ];
 
@@ -50,7 +65,8 @@ export default async function DetailsPage() {
                 ))}
             </ul>
 
-            <DetailsForm me={me} />
+            <ProfilePhoto name={me.user_name} initial={me.user_avatar_url} />
+            <DetailsForm me={me} areas={areas ?? []} />
         </AccountShell>
     );
 }

@@ -3,6 +3,9 @@ const pool = require("../db");
 const { parseId, cleanText } = require("../lib/currentUser");
 const { requireFeature } = require("../lib/access");
 const { withdraw, withdrawChannelEverywhere } = require("../services/marketing/consent");
+const { imageUpload, receive, discard, storedPath, checkUploads, removeUnreferencedFiles } = require("../lib/uploads");
+
+const AVATAR_MAX_BYTES = 2 * 1024 * 1024;
 
 const EMAIL = /^[^\s@]+@[^\s@]+\.[^\s@]+$/;
 
@@ -22,14 +25,16 @@ router.get("/me", async (req, res) => {
         const userId = req.user.user_id;
         if (!userId) return res.status(404).json({ error: "No customer account exists" });
         const result = await pool.query(
-            `SELECT u.user_id, u.user_name, u.user_phone, u.user_email,
+            `SELECT u.user_id, u.user_name, u.user_phone, u.user_email, u.user_avatar_url, u.location_id,
+                    loc.location_name AS area_name, loc.location_name_bn AS area_name_bn,
                     (SELECT COUNT(*)::int FROM saved_businesses s WHERE s.user_id = u.user_id) AS saved_count,
                     (SELECT COUNT(*)::int FROM reviews r WHERE r.user_id = u.user_id) AS review_count,
                     (SELECT COUNT(DISTINCT mc.vendor_id)::int FROM marketing_consents mc
                      WHERE mc.user_id = u.user_id AND mc.consent_withdrawn_at IS NULL) AS offers_count,
                     (SELECT COUNT(*)::int FROM messages m JOIN conversations c ON c.conversation_id = m.conversation_id
                      WHERE c.user_id = u.user_id AND m.sender_user_id <> u.user_id AND m.message_read_at IS NULL) AS unread_messages
-             FROM users u WHERE u.user_id = $1`,
+             FROM users u LEFT JOIN locations loc ON loc.location_id = u.location_id
+             WHERE u.user_id = $1`,
             [userId]
         );
         res.json(result.rows[0]);
@@ -39,24 +44,30 @@ router.get("/me", async (req, res) => {
     }
 });
 
-// The customer's own details (KAN-294): { name, email }. Email is optional; an empty one removes it, which
-// also stops any offers by email, since there is nowhere to send them. The phone number is the
-// sign-in and is not changed here.
+// The customer's own details (KAN-294): { name, email, area }. Email is optional; an empty one removes it,
+// which also stops any offers by email, since there is nowhere to send them. The area (a location id,
+// or null) is optional and shows on their reviews. The phone number is the sign-in and is not changed here.
 router.put("/me/profile", async (req, res) => {
     const name = cleanText(req.body?.name) ?? "";
     const email = (cleanText(req.body?.email) || "").toLowerCase() || null;
+    const rawArea = req.body?.area;
+    const area = rawArea === null || rawArea === undefined || rawArea === "" ? null : parseId(String(rawArea));
     const errors = {};
     if (name.length < 2 || name.length > 120) errors.name = "Enter your name (2 to 120 characters).";
     if (email && (email.length > 255 || !EMAIL.test(email))) errors.email = "Enter a valid email address, or leave it empty.";
+    if (area === null && rawArea !== null && rawArea !== undefined && rawArea !== "") errors.area = "Choose an area from the list.";
     if (Object.keys(errors).length) return res.status(400).json({ error: Object.values(errors)[0], errors });
 
     const client = await pool.connect();
     try {
+        if (area !== null && (await client.query("SELECT 1 FROM locations WHERE location_id = $1", [area])).rowCount === 0) {
+            return res.status(400).json({ error: "Choose an area from the list.", errors: { area: "Choose an area from the list." } });
+        }
         await client.query("BEGIN");
         const result = await client.query(
-            `UPDATE users SET user_name = $2, user_email = $3, user_updated_at = NOW() WHERE user_id = $1
-             RETURNING user_name, user_phone, user_email`,
-            [req.user.user_id, name, email]
+            `UPDATE users SET user_name = $2, user_email = $3, location_id = $4, user_updated_at = NOW() WHERE user_id = $1
+             RETURNING user_name, user_phone, user_email, location_id`,
+            [req.user.user_id, name, email, area]
         );
         if (!email) await withdrawChannelEverywhere(client, req.user.user_id, "email", "account");
         await client.query("COMMIT");
@@ -70,6 +81,48 @@ router.put("/me/profile", async (req, res) => {
         res.status(500).json({ error: "Could not save your details. Try again." });
     } finally {
         client.release();
+    }
+});
+
+// The profile photo: shown beside the customer's name in the header and on their reviews. One at a
+// time; a new one replaces the old, whose file is then deleted.
+router.post(
+    "/me/avatar",
+    receive(imageUpload("avatar", AVATAR_MAX_BYTES, 1, (req) => `user-${req.user.user_id}`), "2 MB", null),
+    async (req, res) => {
+        if (!(await checkUploads(req, res))) return;
+        try {
+            const result = await pool.query(
+                `UPDATE users u SET user_avatar_url = $2, user_updated_at = NOW()
+                 FROM (SELECT user_avatar_url AS old_url FROM users WHERE user_id = $1) before
+                 WHERE u.user_id = $1
+                 RETURNING u.user_avatar_url, before.old_url`,
+                [req.user.user_id, storedPath(req.files[0])]
+            );
+            await removeUnreferencedFiles(pool, [result.rows[0].old_url]);
+            res.status(201).json({ avatar_url: result.rows[0].user_avatar_url });
+        } catch (err) {
+            await discard(req.files);
+            console.error("POST /api/me/avatar failed:", err);
+            res.status(500).json({ error: "Could not save your photo. Try again." });
+        }
+    }
+);
+
+router.delete("/me/avatar", async (req, res) => {
+    try {
+        const result = await pool.query(
+            `UPDATE users u SET user_avatar_url = NULL, user_updated_at = NOW()
+             FROM (SELECT user_avatar_url AS old_url FROM users WHERE user_id = $1) before
+             WHERE u.user_id = $1
+             RETURNING before.old_url`,
+            [req.user.user_id]
+        );
+        await removeUnreferencedFiles(pool, [result.rows[0]?.old_url]);
+        res.status(204).end();
+    } catch (err) {
+        console.error("DELETE /api/me/avatar failed:", err);
+        res.status(500).json({ error: "Could not remove your photo. Try again." });
     }
 });
 

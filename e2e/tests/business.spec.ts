@@ -37,7 +37,8 @@ test("an owner of two businesses can still leave the business picker @phone", as
     await page.goto("/vendors/dashboard");
     await expect(page.getByRole("heading", { name: "Choose a business" })).toBeVisible();
     await expect(page.getByRole("banner").getByRole("link", { name: "Shahebbazar" })).toBeVisible();
-    await expect(page.getByRole("button", { name: /Log out/ }).filter({ visible: true }).or(page.getByRole("button", { name: /menu/i }))).toBeVisible();
+    // The way out: the account menu in the header (with Log out in it), or the menu drawer on a phone.
+    await expect(page.getByRole("banner").locator("summary").filter({ visible: true }).or(page.getByRole("button", { name: /menu/i })).first()).toBeVisible();
     await expectNoSideScroll(page);
     await page.setViewportSize({ width: 360, height: 780 }); // narrower than the test phone, as many are
     await expectNoSideScroll(page);

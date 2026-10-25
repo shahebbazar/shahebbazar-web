@@ -3,7 +3,7 @@ import Link from "next/link";
 import { Bell, Bookmark, Building2, ChevronRight, Megaphone, MessagesSquare, Star, UserRound } from "lucide-react";
 import { AccountShell } from "@/components/customer/AccountShell";
 import { authenticatedApiGet } from "@/lib/auth-server";
-import { formatDateTime } from "@/lib/format";
+import { formatDateTime, formatPhone } from "@/lib/format";
 import type { AuthUser } from "@/lib/auth-client";
 import type { AlertList, Customer } from "@/lib/types";
 import { markMyAlertsRead } from "../actions";
@@ -38,7 +38,7 @@ export default async function AccountPage() {
     return (
         <AccountShell current="overview" title={`Hello, ${me.user_name}`}>
             <p className="text-sm text-muted">
-                {me.user_phone}
+                {formatPhone(me.user_phone)}
                 {me.user_email ? ` · ${me.user_email}` : ""}
                 {" · "}
                 <Link href="/account/details" className="font-medium text-brand-600 hover:underline">

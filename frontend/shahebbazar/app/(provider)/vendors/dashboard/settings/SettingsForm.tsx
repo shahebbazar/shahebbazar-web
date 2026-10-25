@@ -4,6 +4,7 @@ import { useState, useTransition } from "react";
 import { Loader2 } from "lucide-react";
 import type { OwnerDetails } from "@/lib/types";
 import { saveOwnerDetails } from "../owner-actions";
+import { formatPhone } from "@/lib/format";
 
 const INPUT =
     "mt-1.5 w-full rounded-[10px] border border-line-strong bg-surface px-3 py-2.5 text-sm font-normal outline-none focus:border-brand-500 focus:ring-3 focus:ring-brand-100";
@@ -35,7 +36,7 @@ export function SettingsForm({ vendorId, owner }: { vendorId: number; owner: Own
             </label>
             <div className="text-sm">
                 <p className="font-semibold">Phone</p>
-                <p className="mt-1 text-muted">{owner.user_phone}</p>
+                <p className="mt-1 text-muted">{formatPhone(owner.user_phone)}</p>
                 <p className="mt-0.5 text-xs text-soft">Your phone number is your sign-in, so it cannot be changed here.</p>
             </div>
             {message && (

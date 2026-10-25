@@ -1,6 +1,8 @@
 // A signed-in customer: saving businesses, offers, My details and unsubscribing.
 
+import path from "node:path";
 import { test, expect, signIn, sql, userIdOf, expectNoSideScroll } from "../fixtures";
+import { ROOT } from "../env";
 
 // eslint-disable-next-line @typescript-eslint/no-require-imports
 const { unsubscribeToken } = require("../../backend/services/marketing/consent");
@@ -71,6 +73,30 @@ test("My details shows what is missing and refuses an invalid email", async ({ p
     await page.getByLabel(/Email address/).fill("not-an-email");
     await page.getByRole("button", { name: "Save changes" }).click();
     await expect(page.getByRole("alert").filter({ hasText: /valid email/ })).toBeVisible();
+});
+
+test("a profile photo shows in the header, and an area can be chosen @phone", async ({ page, context }) => {
+    const user = await userIdOf("customer2");
+    try {
+        await signIn(context, "customer2");
+        await page.goto("/account/details");
+        await page.getByLabel("Choose a profile photo").setInputFiles(path.join(ROOT, "database", "seed-assets", "seed-business-rajshahi-mango-traders.jpg"));
+        await expect(page.getByRole("status").filter({ hasText: "Photo saved." })).toBeVisible();
+        await expect(page.getByRole("img", { name: "Your profile photo" })).toBeVisible();
+        if ((page.viewportSize()?.width ?? 1280) >= 1024) await expect(page.locator("header summary img")).toHaveCount(1);
+
+        const area = page.getByLabel(/Your area/);
+        await area.selectOption({ index: 1 });
+        await page.getByRole("button", { name: "Save changes" }).click();
+        await expect(page.getByRole("status").filter({ hasText: /^Saved/ })).toBeVisible();
+        expect((await sql<{ location_id: number | null }>("SELECT location_id FROM users WHERE user_id = $1", [user]))[0].location_id).not.toBeNull();
+
+        await page.getByRole("button", { name: "Remove" }).click();
+        await expect(page.getByRole("status").filter({ hasText: "Photo removed." })).toBeVisible();
+        await expectNoSideScroll(page);
+    } finally {
+        await sql("UPDATE users SET user_avatar_url = NULL, location_id = NULL WHERE user_id = $1", [user]);
+    }
 });
 
 test("an unsubscribe link asks first, then stops offers without signing in", async ({ page }) => {

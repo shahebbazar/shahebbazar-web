@@ -435,8 +435,13 @@ export function BusinessProfile({
                                         className="rounded-xl border border-line p-4"
                                     >
                                         <div className="flex items-center gap-2.5">
-                                            <span className="grid size-9 shrink-0 place-items-center rounded-full bg-brand-100 text-[0.8125rem] font-semibold text-brand-700">
-                                                {review.author.charAt(0).toUpperCase()}
+                                            <span className="grid size-9 shrink-0 place-items-center overflow-hidden rounded-full bg-brand-100 text-[0.8125rem] font-semibold text-brand-700">
+                                                {review.author_avatar ? (
+                                                    // eslint-disable-next-line @next/next/no-img-element
+                                                    <img src={assetUrl(review.author_avatar) ?? ""} alt="" className="size-full object-cover" loading="lazy" />
+                                                ) : (
+                                                    review.author.charAt(0).toUpperCase()
+                                                )}
                                             </span>
                                             <span className="min-w-0">
                                                 <span className="flex items-center gap-1.5 text-[0.875rem] font-semibold">
@@ -447,6 +452,7 @@ export function BusinessProfile({
                                                 </span>
                                                 <span className="block text-[0.75rem] text-soft">
                                                     {relativeTime(review.created_at)}
+                                                    {review.author_area && ` · ${locale === "bn" ? review.author_area_bn || review.author_area : review.author_area}`}
                                                 </span>
                                             </span>
                                             <span className="ml-auto flex shrink-0 gap-0.5">

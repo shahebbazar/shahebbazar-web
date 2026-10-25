@@ -138,6 +138,10 @@ export interface Review {
     created_at: string;
     author: string;
     author_verified: boolean;
+    /** The reviewer's profile photo and area, if they added them in My details. */
+    author_avatar?: string | null;
+    author_area?: string | null;
+    author_area_bn?: string | null;
     reply?: string | null;
     replied_at?: string | null;
 }
@@ -456,6 +460,10 @@ export interface Customer {
     user_name: string;
     user_phone: string;
     user_email: string | null;
+    user_avatar_url: string | null;
+    location_id: number | null;
+    area_name: string | null;
+    area_name_bn: string | null;
     saved_count: number;
     review_count: number;
     unread_messages: number;

@@ -4,14 +4,18 @@ import { useState, useTransition } from "react";
 import { Loader2 } from "lucide-react";
 import { saveMyDetails } from "@/app/(seeker)/actions";
 import type { Customer } from "@/lib/types";
+import { formatPhone } from "@/lib/format";
 
 const INPUT =
     "mt-1.5 w-full rounded-[10px] border border-line-strong bg-surface px-3 py-2.5 text-sm font-normal outline-none focus:border-brand-500 focus:ring-3 focus:ring-brand-100 aria-invalid:border-error-ink";
 
+type Area = { id: number; name: string; city: string };
+
 // The customer's own details on /account/details. The phone number is the sign-in, so it is shown, not edited.
-export function DetailsForm({ me }: { me: Customer }) {
+export function DetailsForm({ me, areas }: { me: Customer; areas: Area[] }) {
     const [name, setName] = useState(me.user_name);
     const [email, setEmail] = useState(me.user_email ?? "");
+    const [area, setArea] = useState(me.location_id ? String(me.location_id) : "");
     const [errors, setErrors] = useState<Record<string, string>>({});
     const [message, setMessage] = useState<{ ok: boolean; text: string } | null>(null);
     const [pending, startTransition] = useTransition();
@@ -22,7 +26,7 @@ export function DetailsForm({ me }: { me: Customer }) {
         setErrors({});
         const removingEmail = Boolean(me.user_email) && !email.trim();
         startTransition(async () => {
-            const result = await saveMyDetails(name, email);
+            const result = await saveMyDetails(name, email, area ? Number(area) : null);
             if (result.ok) {
                 setMessage({
                     ok: true,
@@ -74,9 +78,30 @@ export function DetailsForm({ me }: { me: Customer }) {
                 </span>
             </label>
 
+            <label className="block text-sm font-semibold">
+                Your area <span className="font-normal text-muted">(optional)</span>
+                <select
+                    value={area}
+                    onChange={(e) => setArea(e.target.value)}
+                    aria-invalid={Boolean(errors.area)}
+                    aria-describedby="area-help"
+                    className={INPUT}
+                >
+                    <option value="">Not shown</option>
+                    {areas.map((a) => (
+                        <option key={a.id} value={a.id}>
+                            {a.name}, {a.city}
+                        </option>
+                    ))}
+                </select>
+                <span id="area-help" className={`mt-1 block text-xs font-normal ${errors.area ? "text-error-ink" : "text-soft"}`}>
+                    {errors.area ?? "Shown with your name on your reviews, so readers can see you're local."}
+                </span>
+            </label>
+
             <div className="text-sm">
                 <p className="font-semibold">Mobile number</p>
-                <p className="mt-1 text-muted">{me.user_phone}</p>
+                <p className="mt-1 text-muted">{formatPhone(me.user_phone)}</p>
                 <p className="mt-0.5 text-xs text-soft">This is how you sign in, so it cannot be changed here.</p>
             </div>
 
