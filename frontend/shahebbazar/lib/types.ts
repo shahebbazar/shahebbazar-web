@@ -477,6 +477,8 @@ export interface Customer {
     location_id: number | null;
     area_name: string | null;
     area_name_bn: string | null;
+    /** The language they'd rather read offers in (012). */
+    user_language: "en" | "bn";
     saved_count: number;
     review_count: number;
     unread_messages: number;
@@ -560,7 +562,10 @@ export interface ConversationSummary {
     vendor_id: number;
     vendor_name: string;
     vendor_slug: string;
+    /** The business's logo and the customer's profile photo, when they've added one. */
+    vendor_logo: string | null;
     customer_name: string;
+    customer_avatar: string | null;
     listing_id: number | null;
     listing_title: string | null;
     /** Set when the business wrote about one of its events (KAN-298). */
@@ -586,7 +591,9 @@ export interface ConversationThread {
         vendor_id: number;
         vendor_name: string;
         vendor_slug: string;
+        vendor_logo: string | null;
         customer_name: string;
+        customer_avatar: string | null;
         listing_id: number | null;
         listing_title: string | null;
         event_id: number | null;
@@ -897,6 +904,8 @@ export interface MarketingWorkspace {
     ended_emails_per_week: number;
     // Customers who chose to get this business's offers by email.
     email_subscribers: number;
+    /** How many of them prefer Bangla. */
+    email_subscribers_bn: number;
     readiness: { checks: ReadinessCheck[]; can_start: boolean; approved_listings: number };
     can_create: boolean;
     cannot_create_reason: string | null;

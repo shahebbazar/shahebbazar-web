@@ -79,6 +79,8 @@ type VerifyCodeResult =
     | {
         ok: true;
         user: AuthUser;
+        /** Signing in brought back an account deleted less than 30 days ago. */
+        reactivated?: boolean;
     }
     | {
         ok: false;
@@ -204,6 +206,7 @@ export async function verifyCode(input: {
         return {
             ok: true,
             user,
+            reactivated: body.reactivated === true,
         };
     } catch (error) {
         console.error("Code verification failed:", error);

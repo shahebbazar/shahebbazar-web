@@ -144,6 +144,8 @@ router.get("/vendors/:vendorId/marketing/workspace", ...read, async (req, res) =
             free_emails_per_month: freeEmails.limit,
             free_emails: freeEmails,
             email_subscribers: subscribers.length,
+            // How many of them prefer Bangla (My details), so the new campaign starts in the language most read.
+            email_subscribers_bn: subscribers.filter((s) => s.user_language === "bn").length,
             ended_emails_per_week: EXPIRED_EMAILS_PER_WEEK,
             readiness: ready,
             can_create: ready.can_start && drafting.allowed,

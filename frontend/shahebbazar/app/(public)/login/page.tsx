@@ -11,11 +11,19 @@ export const metadata: Metadata = {
 };
 
 // ?next=/path returns the visitor there after logging in (only paths on this site).
-export default async function LoginPage({ searchParams }: { searchParams: Promise<{ next?: string }> }) {
-    const next = safeNext((await searchParams).next);
+// ?account=deleted comes from deleting an account, which can still be brought back by signing in.
+export default async function LoginPage({ searchParams }: { searchParams: Promise<{ next?: string; account?: string }> }) {
+    const params = await searchParams;
+    const next = safeNext(params.next);
     return (
         <AppShell locale="en">
-            <div className="flex min-h-[640px] items-start justify-center py-8 sm:py-12">
+            <div className="flex min-h-[640px] flex-col items-center justify-start gap-4 py-8 sm:py-12">
+                {params.account === "deleted" && (
+                    <p role="status" className="w-full max-w-xl rounded-xl bg-surface-2 p-3 text-sm text-ink">
+                        Your account is deactivated and will be deleted in 30 days. Changed your mind? Sign in below with your mobile
+                        number before then to keep it.
+                    </p>
+                )}
                 <LoginPanel next={next} />
             </div>
         </AppShell>

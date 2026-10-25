@@ -28,8 +28,13 @@ export async function setSaved(vendorId: number, saved: boolean): Promise<Authen
 }
 
 // Saves the customer's name and email address (KAN-294). An empty email removes it (and stops email offers).
-export async function saveMyDetails(name: string, email: string, area: number | null): Promise<AuthenticatedSendResult<Customer>> {
-    const result = await authenticatedApiSend<Customer>("PUT", "/me/profile", { name, email, area });
+export async function saveMyDetails(
+    name: string,
+    email: string,
+    area: number | null,
+    language: "en" | "bn"
+): Promise<AuthenticatedSendResult<Customer>> {
+    const result = await authenticatedApiSend<Customer>("PUT", "/me/profile", { name, email, area, language });
     revalidatePath("/account", "layout");
     return result;
 }

@@ -78,7 +78,9 @@ describe("sending a campaign by email", () => {
     it("before sending, the editor is told who it goes to and that the pass covers it", async () => {
         campaign = await approvedCampaign(MANGO, "owner", "Mango season");
         assert.deepEqual(campaign.send, { audience: 3, plan: "active", left_after: campaign.send.left_after, can_send: true, reason: null });
-        assert.equal((await call("GET", path(MANGO, "/workspace"), { as: "owner" })).data.email_subscribers, 3);
+        const workspace = (await call("GET", path(MANGO, "/workspace"), { as: "owner" })).data;
+        assert.equal(workspace.email_subscribers, 3);
+        assert.equal(workspace.email_subscribers_bn, 1, "Rumana prefers Bangla in the seed");
     });
 
     it("goes once to each customer who chose email offers, uses one email campaign, and is recorded", async () => {

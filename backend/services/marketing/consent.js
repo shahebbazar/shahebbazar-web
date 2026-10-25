@@ -70,7 +70,7 @@ async function setChannels(db, userId, vendorId, channels, source) {
 async function audienceFor(db, vendorId, channel) {
     if (!CHANNELS.includes(channel)) throw new Error(`Unknown channel "${channel}"`);
     const result = await db.query(
-        `SELECT u.user_id, u.user_name,
+        `SELECT u.user_id, u.user_name, u.user_language,
                 CASE WHEN $2 = 'email' THEN u.user_email ELSE u.user_phone END AS address
          FROM marketing_consents c
          JOIN users u ON u.user_id = c.user_id
