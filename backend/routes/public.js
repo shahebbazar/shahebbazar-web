@@ -318,7 +318,7 @@ router.get("/businesses/:slug", async (req, res) => {
         const [extra, categories, hours, photos, listings, facts, reviews, distribution, similar, social] =
             await Promise.all([
                 pool.query(
-                    `SELECT vendor_address, vendor_phone, vendor_whatsapp, vendor_email,
+                    `SELECT vendor_address, vendor_phone, vendor_whatsapp, vendor_phone_alt, vendor_phone_alt_type, vendor_email,
                             vendor_website, vendor_lat, vendor_lng, vendor_created_at
                      FROM vendors WHERE vendor_id = $1`,
                     [id]

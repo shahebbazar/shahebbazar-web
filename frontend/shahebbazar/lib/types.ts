@@ -176,10 +176,16 @@ export interface VendorPaymentMethods {
     methods: PaymentMethod[];
 }
 
+/** What a business's second number is: an office landline, a mobile, or a WhatsApp number. */
+export type PhoneType = "landline" | "mobile" | "whatsapp";
+
 export interface BusinessDetail {
     business: BusinessCard & {
         vendor_phone: string;
         vendor_whatsapp: string | null;
+        /** A second number and its type (an office landline, or a mobile). */
+        vendor_phone_alt?: string | null;
+        vendor_phone_alt_type?: PhoneType | null;
         vendor_email: string | null;
         vendor_website: string | null;
         vendor_lat: string | null;
@@ -318,6 +324,10 @@ export interface VendorProfile {
         vendor_description: string | null;
         vendor_phone: string;
         vendor_whatsapp: string | null;
+        vendor_phone_alt: string | null;
+        vendor_phone_alt_type: PhoneType | null;
+        /** The owner's sign-in mobile, which is the contact number. */
+        owner_phone: string | null;
         vendor_email: string | null;
         vendor_website: string | null;
         vendor_address: string | null;
@@ -368,7 +378,8 @@ export interface VendorProfileInput {
     location_id: number | null;
     address: string;
     phone: string;
-    whatsapp: string;
+    alt_phone: string;
+    alt_phone_type: PhoneType;
     description: string;
     email: string;
     website: string;
@@ -394,6 +405,8 @@ export interface PendingBusiness {
     vendor_description: string | null;
     vendor_phone: string;
     vendor_whatsapp: string | null;
+    vendor_phone_alt?: string | null;
+    vendor_phone_alt_type?: PhoneType | null;
     vendor_email: string | null;
     vendor_website: string | null;
     vendor_address: string | null;

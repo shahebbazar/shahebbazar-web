@@ -96,7 +96,7 @@ INSERT INTO vendors (
     vendor_verified_at, vendor_is_featured
 )
 SELECT u.user_id, v.name, v.name_bn, v.slug, v.descr,
-       v.phone, v.phone, v.address, l.location_id,
+       v.phone, NULL, v.address, l.location_id,
        v.lat, v.lng, v.btype, v.status,
        CASE WHEN v.status = 'approved' THEN NOW() END,
        v.featured
@@ -437,12 +437,13 @@ INSERT INTO users (user_phone, user_email, user_name, user_role, user_phone_veri
 -- Featured businesses shown on the home page
 INSERT INTO vendors (
     user_id, vendor_name, vendor_name_bn, vendor_slug, vendor_description,
-    vendor_phone, vendor_whatsapp, vendor_address, location_id,
+    vendor_phone, vendor_whatsapp, vendor_phone_alt, vendor_phone_alt_type, vendor_address, location_id,
     vendor_lat, vendor_lng, vendor_business_type, vendor_status,
     vendor_verified_at, vendor_is_featured, vendor_featured_until
 )
+-- The contact number is the owner's sign-in mobile; each also has a second mobile.
 SELECT u.user_id, v.name, v.name_bn, v.slug, v.descr,
-       v.phone, v.phone, v.address, l.location_id,
+       v.owner_phone, NULL, v.phone, 'mobile', v.address, l.location_id,
        v.lat, v.lng, 'b2c', 'approved', NOW(), TRUE, NOW() + INTERVAL '60 days'
 FROM (VALUES
     ('+8801711000010', 'Rajshahi Medical Centre', 'রাজশাহী মেডিকেল সেন্টার', 'rajshahi-medical-centre',
@@ -467,6 +468,10 @@ FROM (VALUES
 ) AS v(owner_phone, name, name_bn, slug, descr, phone, address, area_slug, lat, lng)
 JOIN users     u ON u.user_phone    = v.owner_phone
 JOIN locations l ON l.location_slug = v.area_slug;
+
+-- The demo business also has an office landline, its second number.
+UPDATE vendors SET vendor_phone_alt = '+880721775544', vendor_phone_alt_type = 'landline'
+WHERE vendor_slug = 'rajshahi-mango-traders';
 
 UPDATE vendors v SET vendor_verified_by = (SELECT user_id FROM users WHERE user_role = 'admin')
 WHERE v.vendor_verified_by IS NULL AND v.vendor_status = 'approved';

@@ -21,9 +21,11 @@ function parseId(raw) {
 async function loadProfile(db, vendorId) {
     const vendor = await db.query(
         `SELECT vendor_id, vendor_slug, vendor_name, vendor_name_bn, vendor_description,
-                vendor_phone, vendor_whatsapp, vendor_email, vendor_website, vendor_address,
+                vendor_phone, vendor_whatsapp, vendor_phone_alt, vendor_phone_alt_type, vendor_email, vendor_website, vendor_address,
                 location_id, vendor_logo_url, vendor_cover_url, vendor_status,
-                vendor_rejection_reason
+                vendor_rejection_reason,
+                -- The contact number, shown read-only: the owner's sign-in mobile.
+                (SELECT u.user_phone FROM users u WHERE u.user_id = vendors.user_id) AS owner_phone
          FROM vendors WHERE vendor_id = $1`,
         [vendorId]
     );
@@ -156,7 +158,12 @@ router.put(
                 : req.vendor.vendor_id;
         if (vendorId === null) return res.status(400).json({ error: "Invalid vendor id" });
 
-        const { errors, value } = validateProfile(req.body);
+        // The contact number is always the owner's sign-in mobile; whatever the form sent is ignored.
+        const owner = await pool.query(
+            "SELECT u.user_phone FROM vendors v JOIN users u ON u.user_id = v.user_id WHERE v.vendor_id = $1",
+            [vendorId]
+        );
+        const { errors, value } = validateProfile({ ...req.body, phone: owner.rows[0]?.user_phone ?? req.body?.phone });
 
         const client = await pool.connect();
         try {
@@ -206,7 +213,7 @@ router.put(
                 `UPDATE vendors SET
                  vendor_name = $2, vendor_name_bn = $3, location_id = $4, vendor_address = $5,
                  vendor_phone = $6, vendor_whatsapp = $7, vendor_description = $8,
-                 vendor_email = $9, vendor_website = $10,
+                 vendor_email = $9, vendor_website = $10, vendor_phone_alt = $13, vendor_phone_alt_type = $14,
                  vendor_status = CASE WHEN $11 THEN $12::text ELSE vendor_status END,
                  vendor_verified_at = CASE WHEN $11 AND $12::text = 'approved' THEN NOW() ELSE vendor_verified_at END,
                  vendor_rejection_reason = CASE WHEN $11 THEN NULL ELSE vendor_rejection_reason END,
@@ -215,7 +222,7 @@ router.put(
                 [
                     vendorId, value.name, value.nameBn, value.locationId, value.address,
                     value.phone, value.whatsapp, value.description, value.email, value.website,
-                    submitting, submittedStatus,
+                    submitting, submittedStatus, value.altPhone, value.altPhoneType,
                 ]
             );
 

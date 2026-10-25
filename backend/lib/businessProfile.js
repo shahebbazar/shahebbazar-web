@@ -24,6 +24,8 @@ const SOCIAL_PLATFORMS = {
 };
 
 const HOURS_MODES = new Set(["open", "closed", "24h"]);
+// What a business's second number is (vendors.vendor_phone_alt_type).
+const ALT_PHONE_TYPES = ["landline", "mobile", "whatsapp"];
 
 // Normalises a Bangladeshi phone number to +880 form.
 function normalisePhone(raw) {
@@ -122,14 +124,27 @@ function validateProfile(body) {
     if (address.length < 5) errors.address = "Enter the full address so customers can find you.";
     else if (address.length > LIMITS.addressMax) errors.address = `Keep the address under ${LIMITS.addressMax} characters.`;
 
+    // The contact number is the owner's sign-in mobile, which the save route passes in (it can't be
+    // changed in the form). One mobile per account; any other number is the second number.
     const phone = normalisePhone(input.phone);
-    if (!phone) errors.phone = "Enter a Bangladeshi number, e.g. 01712-345678.";
+    if (!phone) errors.phone = "Enter a Bangladeshi mobile number, e.g. +8801712345678.";
+    else if (!phone.startsWith("+8801")) errors.phone = "This must be a mobile number. Add a landline as the Second Number instead.";
 
-    let whatsapp = null;
-    if (text(input.whatsapp)) {
-        whatsapp = normalisePhone(input.whatsapp);
-        if (!whatsapp) errors.whatsapp = "Enter a Bangladeshi number, or leave it empty.";
+    // A second number, optional, with its type: an office landline (0721-775544), or a mobile or
+    // WhatsApp number (+8801712345678).
+    let altPhone = null;
+    let altPhoneType = null;
+    if (text(input.alt_phone)) {
+        altPhoneType = ALT_PHONE_TYPES.includes(input.alt_phone_type) ? input.alt_phone_type : "landline";
+        altPhone = normalisePhone(input.alt_phone);
+        const isMobile = /^\+8801/.test(altPhone ?? "");
+        if (!altPhone) errors.alt_phone = "Enter a Bangladeshi number, or leave it empty.";
+        else if (altPhoneType !== "landline" && !isMobile) errors.alt_phone = "That's a landline number. Choose Landline, or enter a mobile number such as +8801712345678.";
+        else if (altPhoneType === "landline" && isMobile) errors.alt_phone = "That's a mobile number. Choose Mobile or WhatsApp, or enter a landline such as 0721-775544.";
+        else if (altPhone === phone) errors.alt_phone = "This is the same as your contact number; leave it empty.";
     }
+    // The WhatsApp number, kept for anything that reads it: the second number when it is one.
+    const whatsapp = altPhoneType === "whatsapp" ? altPhone : null;
 
     const description = text(input.description);
     if (description.length < LIMITS.descriptionMin)
@@ -223,6 +238,8 @@ function validateProfile(body) {
             address,
             phone,
             whatsapp,
+            altPhone,
+            altPhoneType,
             description,
             email,
             website,
