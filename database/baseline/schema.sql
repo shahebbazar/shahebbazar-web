@@ -2419,7 +2419,8 @@ CREATE TABLE public.marketing_campaigns (
     CONSTRAINT marketing_campaigns_status_check CHECK (campaign_status IN ('draft', 'approved', 'sending', 'sent', 'failed')),
     CONSTRAINT marketing_campaigns_dates_check CHECK (
         campaign_ends_on IS NULL OR campaign_starts_on IS NULL OR campaign_ends_on >= campaign_starts_on),
-    CONSTRAINT marketing_campaigns_listings_check CHECK (cardinality(campaign_listing_ids) BETWEEN 1 AND 3),
+    -- 0 for a campaign about one of the business's events (KAN-298, migration 009); the API asks for 1 otherwise.
+    CONSTRAINT marketing_campaigns_listings_check CHECK (cardinality(campaign_listing_ids) BETWEEN 0 AND 3),
     -- An offer's coupon is valid for the offer's dates, so it needs a last day.
     CONSTRAINT marketing_campaigns_coupon_check CHECK (campaign_coupon_code IS NULL OR (
         campaign_goal = 'offer' AND campaign_ends_on IS NOT NULL AND campaign_coupon_code ~ '^[A-Z0-9-]{3,20}$'))

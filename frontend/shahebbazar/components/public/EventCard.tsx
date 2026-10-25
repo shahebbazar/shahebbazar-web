@@ -3,7 +3,7 @@ import { CalendarDays, Globe, MapPin, Users } from "lucide-react";
 import { assetUrl } from "@/lib/api";
 import { fill, localeHref, pick, type Dictionary, type Locale } from "@/lib/i18n";
 import { formatEventDate, formatEventWhen, localiseDigits } from "@/lib/format";
-import { eventPrice, eventTypeLabel } from "@/lib/events";
+import { eventPrice, eventTypeLabel, venueAndArea } from "@/lib/events";
 import type { EventDetail } from "@/lib/types";
 
 // An event in a grid: cover photo with the date, type, time, place and how many are going (KAN-298).
@@ -66,7 +66,7 @@ export function EventCard({
                         </>
                     ) : (
                         <>
-                            <MapPin className="mt-0.5 size-3.5 shrink-0" /> {[event.event_venue, event.area_name].filter(Boolean).join(", ")}
+                            <MapPin className="mt-0.5 size-3.5 shrink-0" /> {venueAndArea(event.event_venue, event.area_name)}
                         </>
                     )}
                 </p>

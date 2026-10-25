@@ -29,6 +29,12 @@ export function eventPrice(
     return price === null || !Number.isFinite(price) ? words.ticketed : `৳${price.toLocaleString("en-IN")}`;
 }
 
+/** "Venue, Area", without the area when the venue already names it. */
+export function venueAndArea(venue: string | null, area: string | null): string {
+    if (!venue) return area ?? "";
+    return area && !venue.toLowerCase().includes(area.toLowerCase()) ? `${venue}, ${area}` : venue;
+}
+
 const googleDate = (iso: string) => new Date(iso).toISOString().replace(/[-:]/g, "").replace(/\.\d{3}/, "");
 
 /** A link that opens Google Calendar with the event filled in. */

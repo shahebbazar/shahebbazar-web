@@ -63,15 +63,25 @@ function validateBrief(body, today = todayInDhaka()) {
     const endsOn = body?.ends_on || null;
     const listingIds = Array.isArray(body?.listing_ids) ? body.listing_ids.map(Number) : null;
     const coupon = (cleanText(body?.coupon_code) || "").toUpperCase() || null;
+    // One of the business's own events (KAN-298), for an event campaign. Its name, time and place come
+    // from the event, and every link goes to the event's page.
+    const rawEvent = body?.event_id;
+    const eventId = rawEvent === undefined || rawEvent === null || rawEvent === "" ? null : Number(rawEvent);
 
     if (!GOALS.includes(goal)) errors.goal = "Choose what the campaign is for.";
     if (!LANGUAGES.includes(language)) errors.language = "Choose English or Bangla.";
     if (!CALLS_TO_ACTION.includes(cta)) errors.call_to_action = "Choose what customers should do.";
     if (title.length > LIMITS.title) errors.title = `Keep the name under ${LIMITS.title} characters.`;
     if (offer && offer.length > LIMITS.offer) errors.offer = `Keep the offer under ${LIMITS.offer} characters.`;
-    if (!listingIds || listingIds.length === 0 || listingIds.length > MAX_LISTINGS || listingIds.some((id) => !Number.isSafeInteger(id) || id <= 0)
+    if (eventId !== null && (!Number.isSafeInteger(eventId) || eventId <= 0)) errors.event_id = "Choose one of your events.";
+    else if (eventId !== null && goal !== "event") errors.event_id = "Only an event campaign can be about one of your events.";
+    // A campaign for one of the business's events can go without products; every other needs at least one.
+    const fewest = goal === "event" && eventId !== null ? 0 : 1;
+    if (!listingIds || listingIds.length < fewest || listingIds.length > MAX_LISTINGS || listingIds.some((id) => !Number.isSafeInteger(id) || id <= 0)
         || new Set(listingIds).size !== listingIds.length) {
-        errors.listing_ids = `Choose 1 to ${MAX_LISTINGS} of your products or services.`;
+        errors.listing_ids = fewest === 0
+            ? `Choose up to ${MAX_LISTINGS} of your products or services.`
+            : `Choose 1 to ${MAX_LISTINGS} of your products or services.`;
     }
     if (startsOn && !validDate(startsOn)) errors.starts_on = "Enter a valid start date.";
     if (endsOn && !validDate(endsOn)) errors.ends_on = "Enter a valid end date.";
@@ -82,7 +92,12 @@ function validateBrief(body, today = todayInDhaka()) {
     else if (coupon && !errors.ends_on && endsOn < today) errors.ends_on = "That day has passed. Choose today or a later day for the coupon to end.";
 
     if (Object.keys(errors).length) return { errors };
-    return { brief: { goal, language, call_to_action: cta, title, offer, starts_on: startsOn, ends_on: endsOn, listing_ids: listingIds, coupon_code: coupon } };
+    return {
+        brief: {
+            goal, language, call_to_action: cta, title, offer, starts_on: startsOn, ends_on: endsOn, listing_ids: listingIds,
+            coupon_code: coupon, event_id: eventId,
+        },
+    };
 }
 
 /** Checks edited wording. Returns { errors } or { content }. */
@@ -107,11 +122,15 @@ function validateContent(body) {
     return Object.keys(errors).length ? { errors } : { content };
 }
 
+/** A date in Bangladesh, as YYYY-MM-DD. */
+const dhakaDay = (date) => new Intl.DateTimeFormat("en-CA", { timeZone: "Asia/Dhaka" }).format(new Date(date));
+
 /**
- * The facts a campaign is written from, frozen when it is created: the business and the chosen
- * listings as they are now. Returns null if any listing isn't one of this business's approved ones.
+ * The facts a campaign is written from, frozen when it is created: the business, the chosen listings
+ * and, for an event campaign, the event, as they are now. Returns { error } if a listing isn't one of
+ * the business's approved ones, or the event isn't one of its live, upcoming events.
  */
-async function buildSnapshot(db, vendorId, listingIds) {
+async function buildSnapshot(db, vendorId, listingIds, eventId = null) {
     const business = (await db.query(
         `SELECT v.vendor_name, v.vendor_name_bn, v.vendor_slug, v.vendor_phone, v.vendor_whatsapp, v.vendor_address,
                 v.vendor_logo_url, v.vendor_cover_url, loc.location_name, loc.location_name_bn
@@ -128,37 +147,74 @@ async function buildSnapshot(db, vendorId, listingIds) {
          WHERE l.vendor_id = $1 AND l.listing_status = 'approved' AND l.listing_id = ANY($2::int[])`,
         [vendorId, listingIds]
     )).rows;
-    if (!business || listings.length !== listingIds.length) return null;
+    if (!business || listings.length !== listingIds.length) {
+        return { error: { listing_ids: "Choose only your own approved products or services." } };
+    }
+    let event = null;
+    if (eventId !== null) {
+        const row = (await db.query(
+            `SELECT e.event_id, e.event_title, e.event_title_bn, e.event_slug, e.event_starts_at, e.event_ends_at,
+                    e.event_venue, e.event_is_online, e.event_online_url, e.event_price_type, e.event_price_bdt,
+                    e.event_ticket_url, e.event_image_url, loc.location_name, loc.location_name_bn
+             FROM events e LEFT JOIN locations loc ON loc.location_id = e.location_id
+             WHERE e.event_id = $1 AND e.vendor_id = $2 AND e.event_status = 'published'
+               AND COALESCE(e.event_ends_at, e.event_starts_at) >= NOW()`,
+            [eventId, vendorId]
+        )).rows[0];
+        if (!row) return { error: { event_id: "Choose one of your live events that hasn't happened yet." } };
+        event = {
+            event_id: row.event_id,
+            title: row.event_title,
+            title_bn: row.event_title_bn,
+            slug: row.event_slug,
+            starts_at: new Date(row.event_starts_at).toISOString(),
+            ends_at: row.event_ends_at ? new Date(row.event_ends_at).toISOString() : null,
+            venue: row.event_venue,
+            area: row.location_name,
+            area_bn: row.location_name_bn,
+            is_online: row.event_is_online,
+            online_url: row.event_online_url,
+            price_type: row.event_price_type,
+            price: row.event_price_bdt == null ? null : Number(row.event_price_bdt),
+            ticket_url: row.event_ticket_url,
+            cover_url: row.event_image_url,
+            page_url: `${siteUrl()}/events/${row.event_slug}`,
+        };
+    }
     const byId = new Map(listings.map((l) => [l.listing_id, l]));
     return {
-        taken_at: new Date().toISOString(),
-        business: {
-            name: business.vendor_name,
-            name_bn: business.vendor_name_bn,
-            slug: business.vendor_slug,
-            phone: business.vendor_phone,
-            whatsapp: business.vendor_whatsapp,
-            address: business.vendor_address,
-            area: business.location_name,
-            area_bn: business.location_name_bn,
-            logo_url: business.vendor_logo_url,
-            cover_url: business.vendor_cover_url,
-            page_url: `${siteUrl()}/business/${business.vendor_slug}`,
+        snapshot: {
+            taken_at: new Date().toISOString(),
+            business: {
+                name: business.vendor_name,
+                name_bn: business.vendor_name_bn,
+                slug: business.vendor_slug,
+                phone: business.vendor_phone,
+                whatsapp: business.vendor_whatsapp,
+                address: business.vendor_address,
+                area: business.location_name,
+                area_bn: business.location_name_bn,
+                logo_url: business.vendor_logo_url,
+                cover_url: business.vendor_cover_url,
+                page_url: `${siteUrl()}/business/${business.vendor_slug}`,
+            },
+            // In the order the owner chose them.
+            listings: listingIds.map((id) => {
+                const l = byId.get(id);
+                return {
+                    listing_id: l.listing_id,
+                    title: l.listing_title,
+                    title_bn: l.listing_title_bn,
+                    description: l.listing_description,
+                    price: l.listing_price == null ? null : Number(l.listing_price),
+                    price_max: l.listing_price_max == null ? null : Number(l.listing_price_max),
+                    price_unit: l.listing_price_unit,
+                    photo_url: l.photo_url,
+                };
+            }),
+            // Only for a campaign about one of the business's events (KAN-298).
+            ...(event ? { event } : {}),
         },
-        // In the order the owner chose them.
-        listings: listingIds.map((id) => {
-            const l = byId.get(id);
-            return {
-                listing_id: l.listing_id,
-                title: l.listing_title,
-                title_bn: l.listing_title_bn,
-                description: l.listing_description,
-                price: l.listing_price == null ? null : Number(l.listing_price),
-                price_max: l.listing_price_max == null ? null : Number(l.listing_price_max),
-                price_unit: l.listing_price_unit,
-                photo_url: l.photo_url,
-            };
-        }),
     };
 }
 
@@ -184,4 +240,4 @@ async function readiness(db, vendorId) {
     return { checks, can_start: canStart, approved_listings: row.approved_listings };
 }
 
-module.exports = { todayInDhaka, couponOf, workspaceEnabled, planOf, draftingCheck, GOALS, LANGUAGES, CALLS_TO_ACTION, MAX_LISTINGS, LIMITS, validateBrief, validateContent, buildSnapshot, readiness };
+module.exports = { dhakaDay, todayInDhaka, couponOf, workspaceEnabled, planOf, draftingCheck, GOALS, LANGUAGES, CALLS_TO_ACTION, MAX_LISTINGS, LIMITS, validateBrief, validateContent, buildSnapshot, readiness };

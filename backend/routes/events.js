@@ -232,8 +232,14 @@ const DHAKA_WHEN = new Intl.DateTimeFormat("en-GB", {
     weekday: "short", day: "numeric", month: "short", hour: "numeric", minute: "2-digit", hour12: true, timeZone: "Asia/Dhaka",
 });
 
+/** "Venue, Area", without the area when the venue already names it (KAN-298). */
+function venueAndArea(venue, area) {
+    if (!venue) return area ?? "";
+    return area && !venue.toLowerCase().includes(area.toLowerCase()) ? `${venue}, ${area}` : venue;
+}
+
 function eventPlace(event) {
-    return event.event_is_online ? "online" : [event.event_venue, event.area_name].filter(Boolean).join(", ");
+    return event.event_is_online ? "online" : venueAndArea(event.event_venue, event.area_name);
 }
 
 /**
@@ -393,7 +399,7 @@ router.get("/events/:slug/calendar.ics", async (req, res) => {
         const page = `${siteUrl()}/events/${event.event_slug}`;
         const place = event.event_is_online
             ? event.event_online_url
-            : [event.event_venue, event.area_name, "Rajshahi"].filter(Boolean).join(", ");
+            : [venueAndArea(event.event_venue, event.area_name), "Rajshahi"].filter(Boolean).join(", ");
         const lines = [
             "BEGIN:VCALENDAR",
             "VERSION:2.0",
@@ -876,3 +882,4 @@ router.delete("/events/:eventId/photos/:photoId", ...eventAccess, async (req, re
 
 module.exports = router;
 module.exports.EVENT_TYPES = EVENT_TYPES;
+module.exports.venueAndArea = venueAndArea;

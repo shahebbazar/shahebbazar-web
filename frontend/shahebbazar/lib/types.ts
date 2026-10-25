@@ -936,6 +936,17 @@ export interface CampaignSnapshot {
         price_unit?: string | null;
         photo_url: string | null;
     }[];
+    /** For a campaign about one of the business's events (KAN-298): links go to its page. */
+    event?: {
+        event_id: number;
+        title: string;
+        title_bn: string | null;
+        slug: string;
+        starts_at: string;
+        ends_at: string | null;
+        cover_url: string | null;
+        page_url: string;
+    };
 }
 
 export interface CampaignDetail {

@@ -4,7 +4,8 @@ import { useState, useTransition } from "react";
 import { useRouter } from "next/navigation";
 import { Loader2 } from "lucide-react";
 import { browserAssetUrl } from "@/lib/apiBase";
-import type { PromotableListing } from "@/lib/types";
+import { formatEventWhen } from "@/lib/format";
+import type { PromotableListing, VendorEvent } from "@/lib/types";
 import { createCampaign } from "../actions";
 import { CTAS, GOALS } from "../labels";
 
@@ -33,9 +34,23 @@ const DETAIL: Record<string, { label: string; note: string; placeholder: string 
 };
 
 // The campaign brief on one page. Business details come from the profile, so nothing is typed twice.
-export function NewCampaignForm({ vendorId, listings, maxListings }: { vendorId: number; listings: PromotableListing[]; maxListings: number }) {
+export function NewCampaignForm({
+    vendorId,
+    listings,
+    maxListings,
+    events,
+}: {
+    vendorId: number;
+    listings: PromotableListing[];
+    maxListings: number;
+    /** The business's live, upcoming events (KAN-298). */
+    events: VendorEvent[];
+}) {
     const router = useRouter();
     const [goal, setGoal] = useState("new_stock");
+    // The event this campaign is about; null for one described in the owner's own words.
+    const [eventId, setEventId] = useState<number | null>(events[0]?.event_id ?? null);
+    const linkedEvent = goal === "event" ? events.find((e) => e.event_id === eventId) ?? null : null;
     const [chosen, setChosen] = useState<number[]>(listings.length === 1 ? [listings[0].listing_id] : []);
     const [coupon, setCoupon] = useState("");
     const [errors, setErrors] = useState<Record<string, string>>({});
@@ -59,10 +74,11 @@ export function NewCampaignForm({ vendorId, listings, maxListings }: { vendorId:
                 language: text("language"),
                 call_to_action: text("call_to_action"),
                 offer: text("offer"),
-                starts_on: text("starts_on"),
-                ends_on: text("ends_on"),
+                starts_on: linkedEvent ? "" : text("starts_on"),
+                ends_on: linkedEvent ? "" : text("ends_on"),
                 listing_ids: chosen,
                 coupon_code: goal === "offer" ? coupon : "",
+                event_id: linkedEvent?.event_id ?? null,
             });
             if (result.ok) {
                 router.push(`/vendors/dashboard/marketing/${result.data.campaign_id}?vendor=${vendorId}`);
@@ -106,12 +122,84 @@ export function NewCampaignForm({ vendorId, listings, maxListings }: { vendorId:
                     ))}
                 </div>
                 {fieldError("goal")}
+                {goal === "event" && (
+                    <div className="mt-4 border-t border-line pt-4">
+                        <p className="text-sm font-semibold">Which event?</p>
+                        {events.length === 0 ? (
+                            <p className="mt-1 text-xs text-muted">
+                                You have no upcoming events. Add one under{" "}
+                                <a href={`/vendors/dashboard/events/new?vendor=${vendorId}`} className="font-medium text-brand-600 hover:underline">
+                                    Events
+                                </a>{" "}
+                                and its photo, time and place are filled in for you, or describe it below.
+                            </p>
+                        ) : (
+                            <p className="mt-1 text-xs text-muted">
+                                Its name, time, place and photo are filled in, and every link goes to the event&apos;s page.
+                            </p>
+                        )}
+                        <ul className="mt-2 grid gap-2 sm:grid-cols-2">
+                            {events.map((e) => {
+                                const photo = browserAssetUrl(e.event_image_url);
+                                const on = eventId === e.event_id;
+                                return (
+                                    <li key={e.event_id}>
+                                        <label
+                                            className={`flex cursor-pointer items-center gap-3 rounded-lg border p-2.5 text-sm ${on ? "border-brand-600 bg-brand-50" : "border-line hover:border-brand-200"}`}
+                                        >
+                                            <input
+                                                type="radio"
+                                                name="event_id"
+                                                checked={on}
+                                                onChange={() => setEventId(e.event_id)}
+                                                className="accent-brand-600"
+                                            />
+                                            {photo ? (
+                                                // eslint-disable-next-line @next/next/no-img-element
+                                                <img src={photo} alt="" className="size-10 shrink-0 rounded-md object-cover" />
+                                            ) : (
+                                                <span className="grid size-10 shrink-0 place-items-center rounded-md bg-brand-50 text-xs text-brand-600">—</span>
+                                            )}
+                                            <span className="min-w-0">
+                                                <span className="block truncate font-medium">{e.event_title}</span>
+                                                <span className="block text-xs text-muted">{formatEventWhen(e.event_starts_at, e.event_ends_at)}</span>
+                                            </span>
+                                        </label>
+                                    </li>
+                                );
+                            })}
+                            {events.length > 0 && (
+                                <li>
+                                    <label
+                                        className={`flex h-full cursor-pointer items-center gap-3 rounded-lg border p-2.5 text-sm ${eventId === null ? "border-brand-600 bg-brand-50" : "border-line hover:border-brand-200"}`}
+                                    >
+                                        <input type="radio" name="event_id" checked={eventId === null} onChange={() => setEventId(null)} className="accent-brand-600" />
+                                        <span className="font-medium">Not listed on the Events page: describe it below</span>
+                                    </label>
+                                </li>
+                            )}
+                        </ul>
+                        {events.length > 0 && eventId === null && (
+                            <p className="mt-2 text-xs text-muted">
+                                This only writes the campaign; it doesn&apos;t add an event. To list it on the Events page, so customers can
+                                say they&apos;re going and add it to their calendar, add it under{" "}
+                                <a href={`/vendors/dashboard/events/new?vendor=${vendorId}`} className="font-medium text-brand-600 hover:underline">
+                                    Events
+                                </a>{" "}
+                                first, then choose it here.
+                            </p>
+                        )}
+                        {fieldError("event_id")}
+                    </div>
+                )}
             </fieldset>
 
             <fieldset className="rounded-xl border border-line bg-surface p-5 shadow-card">
                 <legend className="px-1 font-semibold">2. Which products or services?</legend>
                 <p className="text-xs text-muted">
-                    Choose up to {maxListings}. Their names, prices and photos are copied in as they are now.
+                    {linkedEvent
+                        ? `Optional for an event: choose up to ${maxListings} to feature. Their names, prices and photos are copied in as they are now.`
+                        : `Choose up to ${maxListings}. Their names, prices and photos are copied in as they are now.`}
                 </p>
                 <ul className="mt-3 grid gap-2 sm:grid-cols-2">
                     {listings.map((l) => {
@@ -151,8 +239,14 @@ export function NewCampaignForm({ vendorId, listings, maxListings }: { vendorId:
                 <legend className="px-1 font-semibold">3. Details</legend>
                 <div className="grid gap-4 sm:grid-cols-2">
                     <label className="block text-sm font-semibold sm:col-span-2">
-                        {DETAIL[goal].label} <span className="font-normal text-muted">({DETAIL[goal].note})</span>
-                        <input name="offer" maxLength={200} placeholder={DETAIL[goal].placeholder} className={INPUT} />
+                        {linkedEvent ? "Anything to add?" : DETAIL[goal].label}{" "}
+                        <span className="font-normal text-muted">({linkedEvent ? "optional" : DETAIL[goal].note})</span>
+                        <input
+                            name="offer"
+                            maxLength={200}
+                            placeholder={linkedEvent ? "For example: free tasting for the first 50 visitors" : DETAIL[goal].placeholder}
+                            className={INPUT}
+                        />
                         {fieldError("offer")}
                     </label>
                     {goal === "offer" && (
@@ -181,18 +275,27 @@ export function NewCampaignForm({ vendorId, listings, maxListings }: { vendorId:
                             {fieldError("coupon_code")}
                         </div>
                     )}
-                    <label className="block text-sm font-semibold">
-                        {goal === "event" ? "Date" : "Starts"}{" "}
-                        <span className="font-normal text-muted">({goal === "event" ? "needed for an event" : "optional"})</span>
-                        <input type="date" name="starts_on" className={INPUT} />
-                        {fieldError("starts_on")}
-                    </label>
-                    <label className="block text-sm font-semibold">
-                        {goal === "event" ? "Last day" : "Ends"}{" "}
-                        <span className="font-normal text-muted">({goal === "offer" && coupon ? "needed: the coupon ends after this day" : "optional"})</span>
-                        <input type="date" name="ends_on" required={goal === "offer" && coupon !== ""} className={INPUT} />
-                        {fieldError("ends_on")}
-                    </label>
+                    {linkedEvent ? (
+                        <p className="text-sm text-muted sm:col-span-2">
+                            <span className="font-semibold text-ink">When:</span> {formatEventWhen(linkedEvent.event_starts_at, linkedEvent.event_ends_at)}, from
+                            the event.
+                        </p>
+                    ) : (
+                        <>
+                            <label className="block text-sm font-semibold">
+                                {goal === "event" ? "Date" : "Starts"}{" "}
+                                <span className="font-normal text-muted">({goal === "event" ? "needed for an event" : "optional"})</span>
+                                <input type="date" name="starts_on" className={INPUT} />
+                                {fieldError("starts_on")}
+                            </label>
+                            <label className="block text-sm font-semibold">
+                                {goal === "event" ? "Last day" : "Ends"}{" "}
+                                <span className="font-normal text-muted">({goal === "offer" && coupon ? "needed: the coupon ends after this day" : "optional"})</span>
+                                <input type="date" name="ends_on" required={goal === "offer" && coupon !== ""} className={INPUT} />
+                                {fieldError("ends_on")}
+                            </label>
+                        </>
+                    )}
                     <label className="block text-sm font-semibold">
                         What should customers do?
                         <select name="call_to_action" defaultValue="visit" className={INPUT}>

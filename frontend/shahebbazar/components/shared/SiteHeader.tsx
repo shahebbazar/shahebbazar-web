@@ -9,10 +9,12 @@ import { MobileMenu } from "./MobileMenu";
 type SiteHeaderProps = {
     locale: Locale;
     current?: string;
+    /** The visitor runs a business, so the menu links to it (from AppShell). */
+    runsBusiness?: boolean;
 };
 
 // Site header: brand, global search, language toggle and account actions.
-export function SiteHeader({ locale, current }: SiteHeaderProps) {
+export function SiteHeader({ locale, current, runsBusiness = false }: SiteHeaderProps) {
     const copy = t(locale);
 
     return (
@@ -118,7 +120,7 @@ export function SiteHeader({ locale, current }: SiteHeaderProps) {
                         </form>
 
                         <nav aria-label="Main" className="mt-3">
-                            <MainNavList locale={locale} current={current} />
+                            <MainNavList locale={locale} current={current} runsBusiness={runsBusiness} />
                         </nav>
 
                         <section className="mt-3 border-t border-line pt-3">

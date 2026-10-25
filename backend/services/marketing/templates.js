@@ -7,6 +7,8 @@
 // typed (the offer or event details). Nothing is invented: a listing without a price shows no price,
 // and anything a goal needs but the owner did not give becomes a [[placeholder]] that blocks approval.
 
+const { venueAndArea } = require("../../routes/events");
+
 const PLACEHOLDER = /\[\[[^\]]+\]\]/g;
 
 const BN_DIGITS = "০১২৩৪৫৬৭৮৯";
@@ -39,6 +41,8 @@ const COPY = {
                 intro: (b, detail) => `${b} invites you to ${detail}.`,
                 when: (range) => `When: ${range}`,
                 where: (address) => `Where: ${address}`,
+                entry: (text) => `Entry: ${text}`,
+                tickets: (url) => `Tickets: ${url}`,
                 itemsHeading: "Featuring:",
                 closing: "We'd love to see you there.",
             },
@@ -69,7 +73,10 @@ const COPY = {
             phone: "[[Add your phone number in My Business]]",
         },
         fmtDate: (d) => new Intl.DateTimeFormat("en-GB", { day: "numeric", month: "long", timeZone: "Asia/Dhaka" }).format(d),
+        fmtTime: (d) => new Intl.DateTimeFormat("en-US", { hour: "numeric", minute: "2-digit", timeZone: "Asia/Dhaka" }).format(d),
         money: (n) => `৳${Number(n).toLocaleString("en-US", { maximumFractionDigits: 2 })}`,
+        free: "Free",
+        online: "Online",
     },
     bn: {
         hello: "প্রিয় গ্রাহক,",
@@ -97,6 +104,8 @@ const COPY = {
                 intro: (b, detail) => `${b} আপনাকে ${detail}-এ আমন্ত্রণ জানাচ্ছে।`,
                 when: (range) => `কবে: ${range}`,
                 where: (address) => `কোথায়: ${address}`,
+                entry: (text) => `প্রবেশ: ${text}`,
+                tickets: (url) => `টিকিট: ${url}`,
                 itemsHeading: "থাকছে:",
                 closing: "আপনাকে দেখার অপেক্ষায় রইলাম।",
             },
@@ -127,7 +136,10 @@ const COPY = {
             phone: "[[My Business-এ আপনার ফোন নম্বর যোগ করুন]]",
         },
         fmtDate: (d) => new Intl.DateTimeFormat("bn-BD", { day: "numeric", month: "long", timeZone: "Asia/Dhaka" }).format(d),
+        fmtTime: (d) => new Intl.DateTimeFormat("bn-BD", { hour: "numeric", minute: "2-digit", timeZone: "Asia/Dhaka" }).format(d),
         money: (n) => `৳${bnDigits(Number(n).toLocaleString("en-US", { maximumFractionDigits: 2 }))}`,
+        free: "ফ্রি",
+        online: "অনলাইনে",
     },
 };
 
@@ -151,6 +163,17 @@ function rangeText(c, brief) {
     if (brief.starts_on) return c.range.from(d(brief.starts_on));
     if (brief.ends_on) return c.range.until(d(brief.ends_on));
     return null;
+}
+
+/** When one of the business's events happens: "8 November, 2:00 PM to 6:00 PM", or across days. */
+function eventWhen(c, event) {
+    const start = new Date(event.starts_at);
+    const at = `${c.fmtDate(start)}, ${c.fmtTime(start)}`;
+    if (!event.ends_at) return at;
+    const end = new Date(event.ends_at);
+    return c.fmtDate(start) === c.fmtDate(end)
+        ? c.range.between(at, c.fmtTime(end))
+        : c.range.between(at, `${c.fmtDate(end)}, ${c.fmtTime(end)}`);
 }
 
 /** The facts the drafts may use, with missing ones replaced by placeholders where a sentence needs them. */
@@ -177,9 +200,13 @@ function generateDrafts(snapshot, brief) {
     const lang = brief.language;
     const c = COPY[lang];
     const g = c.goals[brief.goal];
-    const f = facts(c, snapshot, lang);
+    // One of the business's own events (KAN-298): its page is where every link goes, so Facebook and
+    // WhatsApp show the event's photo, and its name, time and place come from the event.
+    const event = brief.goal === "event" ? snapshot.event ?? null : null;
+    const f = { ...facts(c, snapshot, lang), ...(event ? { page_url: event.page_url } : {}) };
     const own = brief.offer?.trim() || null;
-    const detail = brief.goal === "offer" ? own ?? c.missing.offer : brief.goal === "event" ? own ?? c.missing.event : own;
+    const eventName = event ? pick(lang, event.title, event.title_bn) : null;
+    const detail = brief.goal === "offer" ? own ?? c.missing.offer : brief.goal === "event" ? eventName ?? own ?? c.missing.event : own;
     const items = snapshot.listings.map((l) => {
         const title = pick(lang, l.title, l.title_bn);
         const price = priceText(c, l);
@@ -192,15 +219,25 @@ function generateDrafts(snapshot, brief) {
 
     // The goal-specific middle of the message.
     const middle = [];
-    if (g.itemsHeading) middle.push(g.itemsHeading);
+    if (g.itemsHeading && items.length > 0) middle.push(g.itemsHeading);
     middle.push(...items.map((i) => i.line));
     if (brief.goal === "offer" && range) middle.push("", g.dates(range));
     if (brief.goal === "offer" && brief.coupon_code) middle.push("", g.coupon(brief.coupon_code, dayText(c, brief.ends_on ?? "") ?? c.missing.date));
-    if (brief.goal === "event") middle.unshift(g.when(range ?? c.missing.date), g.where(f.address), "");
+    if (event) {
+        // The area is checked against the venue in English, as venues are written.
+        const place = event.is_online ? c.online : venueAndArea(event.venue, event.venue?.includes(event.area ?? "\u0000") ? event.area : pick(lang, event.area, event.area_bn));
+        const entry = event.price_type === "free" ? c.free : event.price != null ? c.money(event.price) : null;
+        const lines = [g.when(eventWhen(c, event)), g.where(place)];
+        if (entry) lines.push(g.entry(entry));
+        if (event.ticket_url) lines.push(g.tickets(event.ticket_url));
+        // The owner's own words, if any, follow the event's details.
+        if (own && own !== eventName) lines.push("", own);
+        middle.unshift(...lines, ...(items.length > 0 ? [""] : []));
+    } else if (brief.goal === "event") middle.unshift(g.when(range ?? c.missing.date), g.where(f.address), "");
     if ((brief.goal === "new_stock" || brief.goal === "reminder") && detail) middle.push("", g.extra(detail));
     if ((brief.goal === "new_stock" || brief.goal === "reminder") && range) middle.push("", c.datesLine(range));
 
-    const subject = g.subject(f.name, items[0].title, c.more(items.length - 1), detail);
+    const subject = g.subject(f.name, items[0]?.title ?? "", c.more(items.length - 1), detail);
     const body = [c.hello, "", g.intro(f.name, detail), "", ...middle, "", g.closing, "", ...ctaLines, c.see(f.page_url), "", f.name].join("\n");
 
     const tag = (s) => `#${s.replace(/[^\p{L}\p{N}]+/gu, "")}`;

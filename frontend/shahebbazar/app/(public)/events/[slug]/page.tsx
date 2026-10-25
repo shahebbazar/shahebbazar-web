@@ -4,6 +4,7 @@ import { notFound } from "next/navigation";
 import { AlertTriangle, CalendarDays, CalendarPlus, ChevronLeft, Globe, MapPin, Store, Ticket } from "lucide-react";
 import { AppShell } from "@/components/public/AppShell";
 import { EventResponseButtons } from "@/components/public/EventResponseButtons";
+import { ProfileViewBeacon } from "@/components/analytics/ProfileViewBeacon";
 import { apiGet, assetUrl } from "@/lib/api";
 import { BROWSER_API_BASE } from "@/lib/apiBase";
 import { authenticatedApiGet, getViewer } from "@/lib/auth-server";
@@ -11,7 +12,7 @@ import { eventOgImage, pageMetadata, SITE_URL } from "@/lib/seo";
 import { ShareMenu } from "@/components/shared/ShareMenu";
 import { resolveLocale, t, localeHref, pick } from "@/lib/i18n";
 import { formatEventRange, formatEventWhen } from "@/lib/format";
-import { eventPrice, eventTypeLabel, googleCalendarUrl } from "@/lib/events";
+import { eventPrice, eventTypeLabel, googleCalendarUrl, venueAndArea } from "@/lib/events";
 import type { EventDetail, EventResponseState } from "@/lib/types";
 
 type Params = { slug: string };
@@ -39,7 +40,10 @@ export async function generateMetadata({
                   `${title}, ${formatEventRange(event.event_starts_at, event.event_ends_at)} ${place}.`,
         locale,
         path: `/events/${event.event_slug}`,
-        image: eventOgImage(event.event_slug, event.event_title),
+        // The cover photo, as on business pages, or a generated card so the link preview is never blank.
+        image: event.event_image_url
+            ? { url: assetUrl(event.event_image_url)!, alt: title }
+            : eventOgImage(event.event_slug, event.event_title),
     });
 }
 
@@ -72,6 +76,8 @@ export default async function EventPage({
 
     return (
         <AppShell locale={locale} current="/events">
+            {/* Counts visits from the business's campaign links (KAN-298). */}
+            {event.vendor_slug && <ProfileViewBeacon slug={event.vendor_slug} markedOnly />}
             <Link href={localeHref("/events", locale)} className="inline-flex items-center gap-1 text-sm font-medium text-brand-600 hover:underline">
                 <ChevronLeft className="size-4" /> {copy.backToEvents}
             </Link>
@@ -126,7 +132,7 @@ export default async function EventPage({
                                 ) : (
                                     <>
                                         <MapPin className="mt-0.5 size-4 shrink-0 text-muted" />
-                                        {[event.event_venue, event.area_name].filter(Boolean).join(", ")}
+                                        {venueAndArea(event.event_venue, event.area_name)}
                                     </>
                                 )}
                             </li>

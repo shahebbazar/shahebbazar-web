@@ -1,7 +1,6 @@
 import Link from "next/link";
 import { LogoutButton } from "@/components/auth/LogoutButton";
 import {
-    CalendarDays,
     House,
     MapPin,
     Megaphone,
@@ -54,7 +53,6 @@ const NAV: NavItem[] = [
     { key: "reviews", label: "Reviews", Icon: Star, path: "/vendors/dashboard/reviews" },
     { key: "messages", label: "Messages", Icon: MessagesSquare, path: "/vendors/dashboard/messages" },
     { key: "events", label: "Events", Icon: Ticket, path: "/vendors/dashboard/events" },
-    { key: "bookings", label: "Bookings", Icon: CalendarDays, availability: "Later" },
     { key: "marketing", label: "Marketing", Icon: Megaphone, path: "/vendors/dashboard/marketing" },
     { key: "settings", label: "Settings", Icon: Settings, path: "/vendors/dashboard/settings" },
 ];

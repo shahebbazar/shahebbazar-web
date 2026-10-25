@@ -292,3 +292,21 @@ test("the account switcher shows which side you're on and moves between the cust
     await page.getByRole("link", { name: "Customer account" }).filter({ visible: true }).first().click();
     await expect(page).toHaveURL(/\/account$/);
 });
+
+test("an event campaign can be about one of the business's events, with no products, and its posts link to the event (KAN-298)", async ({ page }) => {
+    await page.goto(WORKSPACE);
+    await page.getByRole("link", { name: "New campaign" }).click();
+    await page.getByRole("radio", { name: /^Event/ }).check();
+    // The business's upcoming event is offered, and chosen to begin with.
+    const event = page.getByRole("radio", { name: /Mango Season Tasting Day/ });
+    await expect(event).toBeChecked();
+    await expect(page.getByText(/^Optional for an event/)).toBeVisible();
+    await expect(page.getByText(/from the event\./)).toBeVisible();
+    await page.getByRole("button", { name: "Write the drafts" }).click();
+    await expect(page).toHaveURL(/\/vendors\/dashboard\/marketing\/\d+/);
+
+    await expect(page.getByRole("textbox", { name: "Message", exact: true })).toHaveValue(/When: .+, 10:00 AM to 5:00 PM/);
+    const facebook = page.getByRole("link", { name: "Open Facebook" });
+    await expect(facebook).toHaveAttribute("href", /%2Fevents%2Fmango-season-tasting-day/);
+    await expect(page.getByRole("link", { name: "Open in WhatsApp" })).toHaveAttribute("href", /%2Fevents%2Fmango-season-tasting-day/);
+});

@@ -15,7 +15,7 @@ const { requireFeature } = require("../lib/access");
 const { passSummary, checkEntitlement, freePlanEmails, EXPIRED_EMAILS_PER_WEEK } = require("../services/marketing/entitlements");
 const { audienceFor } = require("../services/marketing/consent");
 const { sendCampaign, sendResults, statusProblem } = require("../services/marketing/sending");
-const { couponOf, workspaceEnabled, planOf, draftingCheck, validateBrief, validateContent, buildSnapshot, readiness, MAX_LISTINGS } = require("../services/marketing/campaigns");
+const { dhakaDay, couponOf, workspaceEnabled, planOf, draftingCheck, validateBrief, validateContent, buildSnapshot, readiness, MAX_LISTINGS } = require("../services/marketing/campaigns");
 const { generateDrafts, warnings, placeholdersIn } = require("../services/marketing/templates");
 const { POST_CHANNELS, validatePostUrl, postsOf } = require("../services/marketing/posts");
 const { periodOf, marketingResults, campaignVisits } = require("../services/marketing/results");
@@ -181,12 +181,18 @@ router.post("/vendors/:vendorId/marketing/campaigns", ...manage, async (req, res
                 error: drafting.allowed ? "Your business needs to be approved and have an approved product or service first." : drafting.reason,
             });
         }
-        const snapshot = await buildSnapshot(client, vendorId, brief.listing_ids);
-        if (!snapshot) {
+        const { snapshot, error: problem } = await buildSnapshot(client, vendorId, brief.listing_ids, brief.event_id);
+        if (problem) {
             await client.query("ROLLBACK");
-            return res.status(400).json({ error: "Choose only your own approved products or services.", errors: { listing_ids: "Choose only your own approved products or services." } });
+            return res.status(400).json({ error: Object.values(problem)[0], errors: problem });
         }
-        const title = brief.title || `${GOAL_NAMES[brief.goal]}: ${snapshot.listings[0].title}`.slice(0, 120);
+        // An event campaign about one of the business's events takes its dates from the event.
+        if (snapshot.event) {
+            brief.starts_on = dhakaDay(snapshot.event.starts_at);
+            brief.ends_on = snapshot.event.ends_at ? dhakaDay(snapshot.event.ends_at) : null;
+        }
+        const subject = snapshot.event?.title ?? snapshot.listings[0].title;
+        const title = brief.title || `${GOAL_NAMES[brief.goal]}: ${subject}`.slice(0, 120);
         const campaign = (await client.query(
             `INSERT INTO marketing_campaigns (vendor_id, campaign_title, campaign_goal, campaign_language, campaign_offer,
                  campaign_starts_on, campaign_ends_on, campaign_call_to_action, campaign_listing_ids, campaign_source_snapshot, campaign_created_by,

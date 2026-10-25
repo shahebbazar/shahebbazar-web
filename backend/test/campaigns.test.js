@@ -343,3 +343,63 @@ describe("deleting, sent campaigns and access", () => {
             "another business's campaign id under your own business");
     });
 });
+
+describe("a campaign about one of the business's events (KAN-298)", () => {
+    let event;
+    before(async () => {
+        [event] = await query("SELECT event_id, event_slug, event_starts_at FROM events WHERE event_slug = 'mango-season-tasting-day'");
+    });
+
+    it("takes the event's name, time, place and entry, links to its page, and needs no products", async () => {
+        const res = await create(brief({ goal: "event", listing_ids: [], event_id: event.event_id, offer: "Free tasting for the first 50 visitors" }));
+        assert.equal(res.status, 201, JSON.stringify(res.data));
+        assert.equal(res.data.title, "Event: Mango Season Tasting Day");
+        assert.equal(res.data.snapshot.event.slug, "mango-season-tasting-day");
+        assert.match(res.data.snapshot.event.page_url, /\/events\/mango-season-tasting-day$/);
+        const day = new Intl.DateTimeFormat("en-CA", { timeZone: "Asia/Dhaka" }).format(new Date(event.event_starts_at));
+        assert.equal(res.data.brief.starts_on, day, "the campaign's dates come from the event");
+
+        const { facebook, whatsapp, email } = latest(res.data).version_content;
+        assert.match(facebook.text, /^Join us for Mango Season Tasting Day at Rajshahi Mango Traders!/);
+        assert.match(facebook.text, /When: \d{1,2} \w+, 10:00 AM to 5:00 PM/);
+        assert.match(facebook.text, /Where: Rajshahi Mango Traders, Shaheb Bazar\n/, "the area is not repeated after a venue that names it");
+        assert.match(facebook.text, /Entry: Free/);
+        assert.match(facebook.text, /Free tasting for the first 50 visitors/);
+        assert.match(facebook.text, /\/events\/mango-season-tasting-day/);
+        assert.doesNotMatch(facebook.text, /\/business\/rajshahi-mango-traders/, "the link is the event's, so Facebook shows its photo");
+        assert.doesNotMatch(facebook.text, /Featuring:/, "no products, so no product list");
+        assert.match(whatsapp.text, /\/events\/mango-season-tasting-day/);
+        assert.match(email.subject, /You're invited: Mango Season Tasting Day at Rajshahi Mango Traders/);
+        assert.deepEqual(res.data.placeholders, [], "nothing left to fill in");
+    });
+
+    it("the email links to the event's page, with its cover photo", async () => {
+        const created = (await create(brief({ goal: "event", listing_ids: [khirsapat], event_id: event.event_id }))).data;
+        const [campaign] = await query("SELECT * FROM marketing_campaigns WHERE campaign_id = $1", [created.campaign_id]);
+        const { buildCampaignEmail } = require("../services/marketing/emailMessage");
+        const email = buildCampaignEmail({
+            campaign,
+            content: latest(created).version_content,
+            recipient: { user_id: await userIdOf("customer"), user_email: "c@example.com" },
+        });
+        assert.ok(email.html.includes(`/events/mango-season-tasting-day?from=email&amp;c=${created.campaign_id}"`), "links go to the event's page");
+        assert.match(email.html, /uploads\/seed-business-rajshahi-mango-traders\.jpg/);
+        assert.ok(
+            email.html.includes(`/business/rajshahi-mango-traders?from=email&amp;c=${created.campaign_id}#services`),
+            "product cards still go to the business page"
+        );
+    });
+
+    it("only the business's own live, upcoming events, and only for an event campaign", async () => {
+        const [other] = await query("SELECT event_id FROM events WHERE vendor_id IS DISTINCT FROM $1 LIMIT 1", [MANGO]);
+        const foreign = await create(brief({ goal: "event", listing_ids: [], event_id: other.event_id }));
+        assert.equal(foreign.status, 400);
+        assert.ok(foreign.data.errors.event_id);
+
+        const wrongGoal = await create(brief({ goal: "offer", offer: "10% off", event_id: event.event_id }));
+        assert.equal(wrongGoal.data.errors.event_id, "Only an event campaign can be about one of your events.");
+
+        const noProducts = await create(brief({ goal: "event", listing_ids: [], offer: "our Eid mango fair" }));
+        assert.equal(noProducts.status, 400, "an event typed in still needs a product");
+    });
+});

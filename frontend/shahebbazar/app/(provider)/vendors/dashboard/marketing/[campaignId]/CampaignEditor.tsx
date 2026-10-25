@@ -128,11 +128,15 @@ export function CampaignEditor({ vendorId, initial, readOnly: viewOnly }: { vend
     const logo = browserAssetUrl(snapshot.business.logo_url);
     const cover = browserAssetUrl(snapshot.business.cover_url);
     const photos = snapshot.listings.map((l) => browserAssetUrl(l.photo_url)).filter(Boolean) as string[];
-    // Facebook and WhatsApp carry one picture: the first product photo, or else the business's cover photo.
-    const socialPhoto = photos[0] ?? cover;
+    // A campaign about one of the business's events links to the event's page, with its cover photo.
+    const event = snapshot.event;
+    const pageUrl = event?.page_url ?? snapshot.business.page_url;
+    // Facebook and WhatsApp carry one picture: the event's cover, the first product photo, or the business's cover.
+    const socialPhoto = browserAssetUrl(event?.cover_url ?? null) ?? photos[0] ?? cover;
     // Facts copied from the business's saved details, longest first so a whole name wins over part of it.
     const facts = [
         snapshot.business.name, snapshot.business.name_bn, snapshot.business.address, snapshot.business.phone, snapshot.business.page_url,
+        event?.title, event?.title_bn, event?.page_url,
         ...snapshot.listings.flatMap((l) => [l.title, l.title_bn]),
         campaign.coupon?.code,
     ].filter((f): f is string => Boolean(f && f.length > 2)).sort((a, b) => b.length - a.length);
@@ -446,7 +450,7 @@ export function CampaignEditor({ vendorId, initial, readOnly: viewOnly }: { vend
                         campaignId={campaign.campaign_id}
                         channel="facebook"
                         text={content.facebook.text}
-                        pageUrl={snapshot.business.page_url}
+                        pageUrl={pageUrl}
                         photo={content.facebook.photos !== false ? socialPhoto : null}
                         post={campaign.posts.facebook}
                         visits={campaign.visits.facebook}
@@ -495,7 +499,7 @@ export function CampaignEditor({ vendorId, initial, readOnly: viewOnly }: { vend
                         campaignId={campaign.campaign_id}
                         channel="whatsapp"
                         text={content.whatsapp.text}
-                        pageUrl={snapshot.business.page_url}
+                        pageUrl={pageUrl}
                         photo={content.whatsapp.photos !== false ? socialPhoto : null}
                         post={campaign.posts.whatsapp}
                         visits={campaign.visits.whatsapp}

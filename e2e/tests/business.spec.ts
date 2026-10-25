@@ -81,3 +81,16 @@ test("the business details form and other dashboard pages open", async ({ page }
         await expect(page.getByRole("heading", { name: text }).first(), path).toBeVisible();
     }
 });
+
+test("someone who runs a business is sent to it, not to registering another one", async ({ page }) => {
+    await page.goto("/events");
+    const nav = page.getByRole("navigation", { name: "Main" });
+    await expect(nav.getByRole("link", { name: "My Business" })).toHaveAttribute("href", "/vendors/dashboard");
+    await expect(nav.getByRole("link", { name: "Add Business" })).toHaveCount(0);
+
+    await page.goto("/vendors/register");
+    await expect(page.getByText("You already run Rajshahi Mango Traders.")).toBeVisible();
+    await page.getByRole("link", { name: "Go to your dashboard" }).click();
+    await expect(page).toHaveURL(/\/vendors\/dashboard/);
+    await expect(page.getByRole("link", { name: "Bookings" })).toHaveCount(0);
+});

@@ -1,5 +1,6 @@
 import Link from "next/link";
 import {
+    BriefcaseBusiness,
     CalendarDays,
     Home,
     LayoutGrid,
@@ -26,12 +27,28 @@ const LINKS: NavLink[] = [
     { key: "navAddBusiness", href: "/vendors/register", Icon: SquarePlus },
 ];
 
-export function MainNavList({ locale, current = "/" }: { locale: Locale; current?: string }) {
+export function MainNavList({
+    locale,
+    current = "/",
+    runsBusiness = false,
+}: {
+    locale: Locale;
+    current?: string;
+    /** The visitor runs a business (AppShell looks this up once per page). */
+    runsBusiness?: boolean;
+}) {
     const copy = t(locale);
+    // Someone who already runs a business goes to it, rather than to registering one.
+    const links: NavLink[] =
+        runsBusiness
+            ? LINKS.map((link) =>
+                  link.key === "navAddBusiness" ? { key: "navMyBusiness", href: "/vendors/dashboard", Icon: BriefcaseBusiness } : link
+              )
+            : LINKS;
 
     return (
         <ul className="space-y-0.5">
-            {LINKS.map(({ key, href, Icon }) => {
+            {links.map(({ key, href, Icon }) => {
                 const active = href === current;
                 return (
                     <li key={href}>
@@ -54,7 +71,7 @@ export function MainNavList({ locale, current = "/" }: { locale: Locale; current
     );
 }
 
-export function SideNav({ locale, current = "/" }: { locale: Locale; current?: string }) {
+export function SideNav({ locale, current = "/", runsBusiness = false }: { locale: Locale; current?: string; runsBusiness?: boolean }) {
     const copy = t(locale);
 
     return (
@@ -63,7 +80,7 @@ export function SideNav({ locale, current = "/" }: { locale: Locale; current?: s
                 aria-label="Main"
                 className="rounded-xl border border-line bg-surface p-2 shadow-card"
             >
-                <MainNavList locale={locale} current={current} />
+                <MainNavList locale={locale} current={current} runsBusiness={runsBusiness} />
             </nav>
 
             <div className="mt-4 rounded-xl border border-line bg-surface p-5 shadow-card">

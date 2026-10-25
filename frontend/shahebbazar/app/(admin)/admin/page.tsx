@@ -6,7 +6,7 @@ import { assetUrl } from "@/lib/api";
 import { authenticatedApiGet } from "@/lib/auth-server";
 import type { AdminDecisionLog, AdminQueue, AdminSettings, PendingBusiness, PendingEvent, PendingListing } from "@/lib/types";
 import { formatEventWhen } from "@/lib/format";
-import { eventPrice, eventTypeLabel } from "@/lib/events";
+import { eventPrice, eventTypeLabel, venueAndArea } from "@/lib/events";
 import { AdminShell } from "@/components/admin/AdminShell";
 import { StatusBadge } from "@/components/provider/StatusBadge";
 import { listingPrice } from "@/components/provider/DashboardCards";
@@ -321,7 +321,7 @@ function EventCard({ e }: { e: PendingEvent }) {
                             </Row>
                         ) : (
                             <Row Icon={MapPin} label="Venue">
-                                {[e.event_venue, e.area_name].filter(Boolean).join(", ") || "—"}
+                                {venueAndArea(e.event_venue, e.area_name) || "—"}
                             </Row>
                         )}
                         <Row Icon={Ticket} label="Entry">
