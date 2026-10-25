@@ -1,6 +1,6 @@
 "use client";
 
-import { useState, useSyncExternalStore } from "react";
+import { useEffect, useRef, useState, useSyncExternalStore } from "react";
 import { Check, Link2, Share2 } from "lucide-react";
 import { SiFacebook, SiWhatsapp, SiX } from "@icons-pack/react-simple-icons";
 
@@ -31,6 +31,27 @@ export function ShareMenu({
 }) {
     const text = TEXT[locale];
     const [copied, setCopied] = useState(false);
+    const menu = useRef<HTMLDetailsElement>(null);
+
+    // Closes on a click outside or Escape, like other menus.
+    useEffect(() => {
+        const close = (event: Event) => {
+            const details = menu.current;
+            if (!details?.open) return;
+            if (event instanceof KeyboardEvent ? event.key === "Escape" : !details.contains(event.target as Node)) {
+                details.open = false;
+            }
+        };
+        document.addEventListener("click", close);
+        document.addEventListener("keydown", close);
+        return () => {
+            document.removeEventListener("click", close);
+            document.removeEventListener("keydown", close);
+        };
+    }, []);
+    const done = () => {
+        if (menu.current) menu.current.open = false;
+    };
     // False on the server, then whatever the browser supports.
     const canShare = useSyncExternalStore(
         () => () => {},
@@ -57,7 +78,7 @@ export function ShareMenu({
     }
 
     return (
-        <details className={`group relative ${className}`}>
+        <details ref={menu} className={`group relative ${className}`}>
             <summary className="inline-flex w-full cursor-pointer list-none items-center justify-center gap-2 rounded-[10px] border border-line-strong bg-surface px-3 py-2.5 text-sm font-medium text-ink transition-colors hover:border-brand-600 hover:text-brand-600 [&::-webkit-details-marker]:hidden">
                 <Share2 className="size-4" />
                 {label}
@@ -65,7 +86,7 @@ export function ShareMenu({
 
             <div className={`absolute ${align === "left" ? "left-0" : "right-0"} z-30 mt-2 w-56 rounded-xl border border-line bg-surface p-1.5 shadow-raised`}>
                 {links.map(({ name, href, Icon }) => (
-                    <a key={name} href={href} target="_blank" rel="noopener noreferrer" className={item}>
+                    <a key={name} href={href} target="_blank" rel="noopener noreferrer" className={item} onClick={done}>
                         <Icon size={16} />
                         {name}
                     </a>
@@ -75,7 +96,7 @@ export function ShareMenu({
                     {copied ? text.copied : text.copy}
                 </button>
                 {canShare && (
-                    <button type="button" onClick={() => navigator.share({ title, url }).catch(() => {})} className={item}>
+                    <button type="button" onClick={() => { done(); navigator.share({ title, url }).catch(() => {}); }} className={item}>
                         <Share2 className="size-4" />
                         {text.more}
                     </button>

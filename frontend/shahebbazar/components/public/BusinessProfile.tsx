@@ -61,8 +61,9 @@ export function BusinessProfile({
     return (
         <div className="min-w-0 space-y-5">
             {/* ---------------------------------------------- header ---- */}
-            <section className="overflow-hidden rounded-xl border border-line bg-surface shadow-card">
-                <div className="relative h-[200px] bg-gradient-to-br from-brand-100 to-brand-200 sm:h-[260px]">
+            {/* Not overflow-hidden, so the share menu can open past the card's edge; the cover clips its own corners. */}
+            <section className="rounded-xl border border-line bg-surface shadow-card">
+                <div className="relative h-[200px] overflow-hidden rounded-t-xl bg-gradient-to-br from-brand-100 to-brand-200 sm:h-[260px]">
                     {cover && (
                         // eslint-disable-next-line @next/next/no-img-element
                         <img

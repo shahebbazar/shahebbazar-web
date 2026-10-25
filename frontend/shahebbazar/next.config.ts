@@ -10,6 +10,11 @@ const nextConfig: NextConfig = {
     distDir: process.env.NEXT_DIST_DIR || ".next",
     output: serverBuild ? "standalone" : undefined,
     compress: !serverBuild,
+    // The share images read their font files at run time, so the server build must include them.
+    outputFileTracingIncludes: {
+        "/og/**": ["./assets/og-fonts/*.ttf"],
+        "/og.png": ["./assets/og-fonts/*.ttf"],
+    },
     turbopack: {
         // Pins the Turbopack root to this app, since the repo root has its own package-lock.json.
         root: path.resolve(__dirname),

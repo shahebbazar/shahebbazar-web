@@ -1,4 +1,5 @@
 import { ImageResponse } from "next/og";
+import { ogFonts } from "@/lib/ogFonts";
 
 // The site-wide share image, 1200 x 630, rendered once at build time.
 
@@ -6,7 +7,7 @@ export const dynamic = "force-static";
 
 const SECTORS = ["Silk", "Handicrafts", "Agro-supplies", "Health", "Tourism", "Services"];
 
-export function GET() {
+export async function GET() {
     return new ImageResponse(
         (
             <div
@@ -19,7 +20,7 @@ export function GET() {
                     padding: "72px 80px",
                     background: "linear-gradient(135deg, #1d4ed8 0%, #2563eb 55%, #3b82f6 100%)",
                     color: "white",
-                    fontFamily: "sans-serif",
+                    fontFamily: "Geist, sans-serif",
                 }}
             >
                 <div style={{ display: "flex", alignItems: "center", gap: 20 }}>
@@ -54,7 +55,7 @@ export function GET() {
                 </div>
             </div>
         ),
-        { width: 1200, height: 630 }
+        { width: 1200, height: 630, fonts: await ogFonts() }
     );
 }
 
