@@ -31,12 +31,22 @@ test("a business adds an event with a photo, a customer says they're going, and 
     await page.getByLabel(/^Starts/).fill(dhakaLocal(8, 14));
     await page.getByLabel(/^Ends/).fill(dhakaLocal(8, 18));
     await page.getByLabel(/^Venue or address/).fill("Shaheb Bazar Zero Point");
+    // The first photo is the cover, so it is cropped to the share-card shape; this one is usable but small.
     await page.getByLabel("Choose event photos").setInputFiles(PHOTO);
+    const crop = page.getByRole("dialog", { name: "Position your cover photo" });
+    await expect(crop.getByText(/Will look a little soft when shared/)).toBeVisible();
+    await crop.getByRole("button", { name: "Use this cover" }).click();
+    await expect(crop).toBeHidden();
     await expect(page.getByRole("img", { name: "Chosen photo 1" })).toBeVisible();
     await page.getByRole("button", { name: "Add event" }).click();
 
     await expect(page.getByText("Event added and live.")).toBeVisible();
     await expect(page.getByRole("img", { name: "Event photo 1" })).toBeVisible();
+
+    // The saved cover can be cropped again; it is replaced in place.
+    await page.getByRole("button", { name: "Crop" }).click();
+    await crop.getByRole("button", { name: "Use this cover" }).click();
+    await expect(page.getByText("Cover photo cropped.")).toBeVisible();
     const [event] = await sql<{ event_id: number; event_slug: string; event_status: string; event_image_url: string }>(
         "SELECT event_id, event_slug, event_status, event_image_url FROM events WHERE event_title = $1",
         [title]
@@ -107,6 +117,36 @@ test("with event approval switched on, a new event waits for an admin", async ({
     } finally {
         await sql("UPDATE platform_settings SET setting_value = 'false' WHERE setting_key = 'require_event_approval'");
     }
+});
+
+test("a photo too small for a cover can't be used as one", async ({ page, context }) => {
+    // A 1 x 1 PNG.
+    const tiny = Buffer.from("iVBORw0KGgoAAAANSUhEUgAAAAEAAAABCAYAAAAfFcSJAAAADUlEQVR42mP8z8BQDwAEhQGAhKmMIQAAAABJRU5ErkJggg==", "base64");
+    await signIn(context, "owner");
+    await page.goto("/vendors/dashboard/events/new?vendor=1");
+    await page.getByLabel("Choose event photos").setInputFiles({ name: "tiny.png", mimeType: "image/png", buffer: tiny });
+    const crop = page.getByRole("dialog", { name: "Position your cover photo" });
+    await expect(crop.getByText(/Too small to use as a cover/)).toBeVisible();
+    await expect(crop.getByRole("button", { name: "Use this cover" })).toBeDisabled();
+    await crop.getByRole("button", { name: "Cancel" }).click();
+    await expect(page.getByRole("img", { name: "Chosen photo 1" })).toBeHidden();
+});
+
+test("shared events get a full-size card with the cover photo, in the page's language", async ({ page, request }) => {
+    await page.goto("/events/mango-season-tasting-day?lang=bn");
+    const image = await page.locator('meta[property="og:image"]').getAttribute("content");
+    expect(image).toMatch(/\/og\/event\/mango-season-tasting-day\?lang=bn&v=/);
+    await expect(page.locator('meta[property="og:image:width"]')).toHaveAttribute("content", "1200");
+    await expect(page.locator('meta[property="og:title"]')).toHaveAttribute("content", "আমের মৌসুম স্বাদ উৎসব");
+
+    const card = await request.get(new URL(image!).pathname + new URL(image!).search);
+    expect(card.status()).toBe(200);
+    expect(card.headers()["content-type"]).toBe("image/jpeg");
+    // WhatsApp skips preview images much over 300 KB.
+    expect((await card.body()).length).toBeLessThan(300_000);
+
+    await page.goto("/events?lang=bn");
+    await expect(page.locator('meta[property="og:title"]')).toHaveAttribute("content", "রাজশাহীর ইভেন্ট");
 });
 
 test("the form says what to fix", async ({ page, context }) => {

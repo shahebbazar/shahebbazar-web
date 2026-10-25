@@ -2,8 +2,9 @@
 
 import { useEffect, useRef, useState, useTransition } from "react";
 import { useRouter } from "next/navigation";
-import { ImagePlus, Loader2, X } from "lucide-react";
+import { Crop, ImagePlus, Loader2, X } from "lucide-react";
 import { BROWSER_API_BASE } from "@/lib/apiBase";
+import { CoverCropDialog, type CropSource } from "@/components/provider/CoverCropDialog";
 import { EVENT_TYPES } from "@/lib/events";
 import type { VendorEvent } from "@/lib/types";
 import { saveEvent, type EventFormBody } from "./actions";
@@ -77,8 +78,11 @@ export function EventForm({
     }, [chosen]);
     useEffect(() => () => chosenRef.current.forEach((c) => URL.revokeObjectURL(c.url)), []);
     const files = chosen.map((c) => c.file);
+    // The cover being cropped: the first of newly chosen photos (`rest` are the others), or the current
+    // cover again (`rest` null).
+    const [cropping, setCropping] = useState<(CropSource & { rest: File[] | null }) | null>(null);
 
-    const set = <K extends keyof EventFormBody>(key: K, value: EventFormBody[K]) => setForm((f) => ({ ...f, [key]: value }));
+    const set =<K extends keyof EventFormBody>(key: K, value: EventFormBody[K]) => setForm((f) => ({ ...f, [key]: value }));
 
     function addFiles(added: File[]) {
         for (const file of added) {
@@ -89,7 +93,30 @@ export function EventForm({
             return setMessage({ type: "error", text: `Up to ${PHOTOS_MAX} photos per event.` });
         }
         setMessage(null);
+        // The first photo is the cover, so it is cropped to the share-card shape first.
+        if (chosen.length === 0) {
+            return setCropping({ src: URL.createObjectURL(added[0]), name: added[0].name, rest: added.slice(1) });
+        }
         setChosen((current) => [...current, ...added.map((file) => ({ file, url: URL.createObjectURL(file) }))]);
+    }
+
+    function closeCrop() {
+        // A re-crop shows the cover's own preview, which stays in use.
+        if (cropping?.rest) URL.revokeObjectURL(cropping.src);
+        setCropping(null);
+    }
+
+    function cropped(cover: File) {
+        if (!cropping) return;
+        const coverEntry = { file: cover, url: URL.createObjectURL(cover) };
+        if (cropping.rest) {
+            const rest = cropping.rest.map((file) => ({ file, url: URL.createObjectURL(file) }));
+            setChosen([coverEntry, ...rest]);
+        } else {
+            URL.revokeObjectURL(chosen[0].url);
+            setChosen((current) => [coverEntry, ...current.slice(1)]);
+        }
+        closeCrop();
     }
 
     function removeFile(index: number) {
@@ -391,16 +418,28 @@ export function EventForm({
                     <h2 className="text-[1.0625rem] font-semibold">
                         Photos <span className="font-normal text-muted">({files.length} of {PHOTOS_MAX})</span>
                     </h2>
-                    <p className="mt-1 text-[0.8125rem] text-muted">The first is the cover. JPG, PNG or WEBP, up to 5 MB each.</p>
+                    <p className="mt-1 text-[0.8125rem] text-muted">
+                        The first is the cover, shown when the event is shared: at least 1200 × 630 pixels looks best.
+                        JPG, PNG or WEBP, up to 5 MB each.
+                    </p>
                     <ul className="mt-3 grid grid-cols-2 gap-3 sm:grid-cols-4">
                         {chosen.map(({ url: src }, i) => (
                             <li key={src} className="relative aspect-[4/3] overflow-hidden rounded-lg border border-line bg-surface-2">
                                 {/* eslint-disable-next-line @next/next/no-img-element */}
                                 <img src={src} alt={`Chosen photo ${i + 1}`} className="size-full object-cover" />
                                 {i === 0 && (
-                                    <span className="absolute top-2 left-2 rounded-full bg-brand-600 px-2 py-0.5 text-[0.6875rem] font-semibold text-white">
-                                        Cover
-                                    </span>
+                                    <>
+                                        <span className="absolute top-2 left-2 rounded-full bg-brand-600 px-2 py-0.5 text-[0.6875rem] font-semibold text-white">
+                                            Cover
+                                        </span>
+                                        <button
+                                            type="button"
+                                            onClick={() => setCropping({ src, name: chosen[0].file.name, rest: null })}
+                                            className="absolute bottom-1.5 right-1.5 inline-flex items-center gap-1 rounded-md bg-surface/95 px-2 py-1 text-[0.6875rem] font-medium text-ink hover:bg-surface"
+                                        >
+                                            <Crop className="size-3" /> Crop
+                                        </button>
+                                    </>
                                 )}
                                 <button
                                     type="button"
@@ -434,6 +473,7 @@ export function EventForm({
                             </li>
                         )}
                     </ul>
+                    <CoverCropDialog source={cropping} onCancel={closeCrop} onCropped={cropped} />
                 </section>
             )}
 

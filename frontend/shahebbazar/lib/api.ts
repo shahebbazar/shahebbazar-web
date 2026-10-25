@@ -17,6 +17,12 @@ export function assetUrl(storedPath: string | null): string | null {
     return `${base}/${storedPath.replace(/^\/+/, "").replace(/\\/g, "/")}`;
 }
 
+/** A stored asset's address for this server to fetch itself (the API directly, not the public site). */
+export function serverAssetUrl(storedPath: string): string {
+    if (/^https?:\/\//i.test(storedPath)) return storedPath;
+    return `${API_BASE}/${storedPath.replace(/^\/+/, "").replace(/\\/g, "/")}`;
+}
+
 class ApiError extends Error {
     constructor(readonly status: number, readonly path: string) {
         super(`API ${path} responded ${status}`);

@@ -38,16 +38,19 @@ export function formatEventDate(iso: string): { month: string; day: string } {
     };
 }
 
-/** Formats an event date, or a date range when the event spans several days. */
-export function formatEventRange(startIso: string, endIso: string | null): string {
+/** Formats an event date, or a date range when the event spans several days. Bangla uses Bangla month names and digits. */
+export function formatEventRange(startIso: string, endIso: string | null, locale: Locale = "en"): string {
+    const lang = locale === "bn" ? "bn-BD" : "en-GB";
+    // Bangla's short month names are clipped ("নভে"), so it uses the full ones.
+    const month = locale === "bn" ? "long" : "short";
     const opts: Intl.DateTimeFormatOptions = {
         day: "numeric",
-        month: "short",
+        month,
         year: "numeric",
         timeZone: "Asia/Dhaka",
     };
     const start = new Date(startIso);
-    const startText = start.toLocaleDateString("en-GB", opts);
+    const startText = start.toLocaleDateString(lang, opts);
     if (!endIso) return startText;
 
     const end = new Date(endIso);
@@ -55,10 +58,10 @@ export function formatEventRange(startIso: string, endIso: string | null): strin
 
     const shortOpts: Intl.DateTimeFormatOptions = {
         day: "numeric",
-        month: "short",
+        month,
         timeZone: "Asia/Dhaka",
     };
-    return `${start.toLocaleDateString("en-GB", shortOpts)} – ${end.toLocaleDateString("en-GB", opts)}`;
+    return `${start.toLocaleDateString(lang, shortOpts)} – ${end.toLocaleDateString(lang, opts)}`;
 }
 
 const DHAKA_DAY = new Intl.DateTimeFormat("en-CA", { timeZone: "Asia/Dhaka" });

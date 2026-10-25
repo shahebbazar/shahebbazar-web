@@ -2,10 +2,15 @@
 
 import { useRef, useState } from "react";
 import { useRouter } from "next/navigation";
-import { Loader2, Star, Trash2, Upload } from "lucide-react";
+import { Crop, Loader2, Star, Trash2, Upload } from "lucide-react";
 import { BROWSER_API_BASE, browserAssetUrl } from "@/lib/apiBase";
+import { CoverCropDialog, type CropSource } from "@/components/provider/CoverCropDialog";
+import { coverQuality, type CoverQuality } from "@/lib/coverPhoto";
 import type { EventPhoto } from "@/lib/types";
 import { PHOTO_TYPES, PHOTOS_MAX, photoProblem } from "./EventForm";
+
+/** The cover being cropped: the first of a new upload, or a saved photo re-cropped in place. */
+type Cropping = CropSource & ({ kind: "upload"; rest: File[] } | { kind: "replace"; photoId: number });
 
 // A saved event's cover photo and gallery (KAN-298). Each change is saved straight away.
 export function EventPhotos({ eventId, initial }: { eventId: number; initial: EventPhoto[] }) {
@@ -13,25 +18,57 @@ export function EventPhotos({ eventId, initial }: { eventId: number; initial: Ev
     const [photos, setPhotos] = useState(initial);
     const [busy, setBusy] = useState(false);
     const [message, setMessage] = useState<{ type: "error" | "success"; text: string } | null>(null);
+    const [cropping, setCropping] = useState<Cropping | null>(null);
+    // How the cover would look when shared, measured once it has loaded.
+    const [quality, setQuality] = useState<Record<number, CoverQuality>>({});
     const input = useRef<HTMLInputElement>(null);
     const left = PHOTOS_MAX - photos.length;
 
-    async function send(method: string, path: string, body?: FormData, done?: string) {
+    /** Sends a change; true when it was saved. */
+    async function send(method: string, path: string, body?: FormData, done?: string): Promise<boolean> {
         setBusy(true);
         setMessage(null);
         try {
             const res = await fetch(`${BROWSER_API_BASE}/api/events/${eventId}/photos${path}`, { method, body, credentials: "include" });
             const data = await res.json().catch(() => null);
-            if (!res.ok) return setMessage({ type: "error", text: data?.error ?? `Something went wrong (${res.status}).` });
+            if (!res.ok) {
+                setMessage({ type: "error", text: data?.error ?? `Something went wrong (${res.status}).` });
+                return false;
+            }
             setPhotos(data.photos);
             if (done) setMessage({ type: "success", text: done });
             // The cover is also the event's image on the pages around this one.
             router.refresh();
+            return true;
         } catch {
             setMessage({ type: "error", text: "Could not reach the server. Try again." });
+            return false;
         } finally {
             setBusy(false);
         }
+    }
+
+    function closeCrop() {
+        if (cropping?.src.startsWith("blob:")) URL.revokeObjectURL(cropping.src);
+        setCropping(null);
+    }
+
+    async function cropped(file: File) {
+        if (!cropping) return;
+        if (cropping.kind === "upload") {
+            const files = [file, ...cropping.rest];
+            closeCrop();
+            return sendFiles(files);
+        }
+        const form = new FormData();
+        form.append("photo", file);
+        if (await send("PUT", `/${cropping.photoId}/file`, form, "Cover photo cropped.")) closeCrop();
+    }
+
+    function sendFiles(files: File[]) {
+        const form = new FormData();
+        for (const file of files) form.append("photos", file);
+        send("POST", "", form, `${files.length} photo${files.length === 1 ? "" : "s"} added.`);
     }
 
     function upload(files: File[]) {
@@ -42,9 +79,12 @@ export function EventPhotos({ eventId, initial }: { eventId: number; initial: Ev
             const problem = photoProblem(file);
             if (problem) return setMessage({ type: "error", text: problem });
         }
-        const form = new FormData();
-        for (const file of files) form.append("photos", file);
-        send("POST", "", form, `${files.length} photo${files.length === 1 ? "" : "s"} added.`);
+        setMessage(null);
+        // The first photo becomes the cover, so it is cropped to the share-card shape first.
+        if (photos.length === 0) {
+            return setCropping({ kind: "upload", src: URL.createObjectURL(files[0]), name: files[0].name, rest: files.slice(1) });
+        }
+        sendFiles(files);
     }
 
     return (
@@ -53,19 +93,50 @@ export function EventPhotos({ eventId, initial }: { eventId: number; initial: Ev
                 Photos <span className="font-normal text-muted">({photos.length} of {PHOTOS_MAX})</span>
             </h2>
             <p className="mt-1 text-[0.8125rem] text-muted">
-                The cover is shown on the events page and when the event is shared. JPG, PNG or WEBP, up to 5 MB each.
+                The cover is shown on the events page and when the event is shared: at least 1200 × 630 pixels looks
+                best. JPG, PNG or WEBP, up to 5 MB each.
             </p>
             <ul className="mt-3 grid grid-cols-2 gap-3 sm:grid-cols-4">
                 {photos.map((photo, i) => (
                     <li key={photo.photo_id} className="relative aspect-[4/3] overflow-hidden rounded-lg border border-line bg-surface-2">
                         {/* eslint-disable-next-line @next/next/no-img-element */}
-                        <img src={browserAssetUrl(photo.photo_url) ?? ""} alt={`Event photo ${i + 1}`} className="size-full object-cover" />
+                        <img
+                            src={browserAssetUrl(photo.photo_url) ?? ""}
+                            alt={`Event photo ${i + 1}`}
+                            className="size-full object-cover"
+                            onLoad={(e) => {
+                                const q = coverQuality(e.currentTarget.naturalWidth, e.currentTarget.naturalHeight);
+                                setQuality((current) => (current[photo.photo_id] === q ? current : { ...current, [photo.photo_id]: q }));
+                            }}
+                        />
                         {photo.photo_is_cover && (
                             <span className="absolute top-2 left-2 rounded-full bg-brand-600 px-2 py-0.5 text-[0.6875rem] font-semibold text-white">
                                 Cover
                             </span>
                         )}
+                        {photo.photo_is_cover && quality[photo.photo_id] === "small" && (
+                            <span className="absolute top-2 right-2 rounded-full bg-error-bg px-2 py-0.5 text-[0.6875rem] font-semibold text-error-ink">
+                                Too small to share well
+                            </span>
+                        )}
                         <div className="absolute inset-x-0 bottom-0 flex justify-end gap-1 bg-gradient-to-t from-ink/60 to-transparent p-1.5">
+                            {photo.photo_is_cover && (
+                                <button
+                                    type="button"
+                                    disabled={busy}
+                                    onClick={() =>
+                                        setCropping({
+                                            kind: "replace",
+                                            src: browserAssetUrl(photo.photo_url) ?? "",
+                                            name: `event-cover-${photo.photo_id}`,
+                                            photoId: photo.photo_id,
+                                        })
+                                    }
+                                    className="inline-flex items-center gap-1 rounded-md bg-surface/95 px-2 py-1 text-[0.6875rem] font-medium text-ink hover:bg-surface"
+                                >
+                                    <Crop className="size-3" /> Crop
+                                </button>
+                            )}
                             {!photo.photo_is_cover && (
                                 <button
                                     type="button"
@@ -118,6 +189,7 @@ export function EventPhotos({ eventId, initial }: { eventId: number; initial: Ev
                     if (files.length > 0) upload(files);
                 }}
             />
+            <CoverCropDialog source={cropping} busy={busy} onCancel={closeCrop} onCropped={cropped} />
             {message && (
                 <p
                     role={message.type === "error" ? "alert" : "status"}

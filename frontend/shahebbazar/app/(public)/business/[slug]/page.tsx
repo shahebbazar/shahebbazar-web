@@ -48,17 +48,13 @@ export async function generateMetadata({
             : business.vendor_description?.slice(0, 155) ??
               `${name} in ${areaName ? `${areaName}, ` : ""}Rajshahi. Contact details, opening hours and reviews on Shahebbazar.`;
 
-    const cover = assetUrl(business.vendor_cover_url);
-
-    // Uses the cover photo, or a generated name card, so the link preview is never blank.
+    // The 1200 x 630 card with the cover photo in it: a full-size preview whatever the photo's size.
     return pageMetadata({
         title,
         description,
         locale,
         path: `/business/${business.vendor_slug}`,
-        image: cover
-            ? { url: cover, alt: business.vendor_name }
-            : businessOgImage(business.vendor_slug, business.vendor_name),
+        image: businessOgImage(business.vendor_slug, name, locale, business.vendor_cover_url),
     });
 }
 

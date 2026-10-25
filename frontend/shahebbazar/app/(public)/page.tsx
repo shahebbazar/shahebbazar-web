@@ -10,16 +10,26 @@ import { resolveLocale } from "@/lib/i18n";
 
 // Home page.
 
-export const metadata: Metadata = {
-    ...pageMetadata({
-        title: "Shahebbazar — Find businesses and services in Rajshahi",
-        description:
-            "Your local directory to discover, connect and support businesses in Rajshahi. Browse medical, tourism, restaurants, shopping, education and services.",
-        path: "/",
-    }),
-    // The home page is the brand itself, so the layout's " | Shahebbazar" suffix is not added.
-    title: { absolute: "Shahebbazar — Find businesses and services in Rajshahi" },
-};
+export async function generateMetadata({ searchParams }: { searchParams: Promise<{ lang?: string }> }): Promise<Metadata> {
+    const locale = resolveLocale((await searchParams).lang);
+    const title =
+        locale === "bn"
+            ? "সাহেববাজার — রাজশাহীর ব্যবসা ও সেবা খুঁজুন"
+            : "Shahebbazar — Find businesses and services in Rajshahi";
+    return {
+        ...pageMetadata({
+            title,
+            description:
+                locale === "bn"
+                    ? "রাজশাহীর ব্যবসা খুঁজতে, যোগাযোগ করতে ও পাশে দাঁড়াতে স্থানীয় ডিরেক্টরি। চিকিৎসা, পর্যটন, রেস্টুরেন্ট, কেনাকাটা, শিক্ষা ও নানা সেবা।"
+                    : "Your local directory to discover, connect and support businesses in Rajshahi. Browse medical, tourism, restaurants, shopping, education and services.",
+            path: "/",
+            locale,
+        }),
+        // The home page is the brand itself, so the layout's " | Shahebbazar" suffix is not added.
+        title: { absolute: title },
+    };
+}
 
 export default async function HomePage({
     searchParams,

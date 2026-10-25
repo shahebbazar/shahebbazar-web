@@ -8,11 +8,19 @@ import { resolveLocale, t, localeHref, type Dictionary, type Locale } from "@/li
 import { EVENT_TYPES } from "@/lib/events";
 import type { EventDetail, EventType } from "@/lib/types";
 
-export const metadata: Metadata = pageMetadata({
-    title: "Events in Rajshahi",
-    description: "Fairs, festivals, sales and workshops from businesses around Rajshahi and Shaheb Bazar.",
-    path: "/events",
-});
+export async function generateMetadata({ searchParams }: { searchParams: Promise<{ lang?: string }> }): Promise<Metadata> {
+    const locale = resolveLocale((await searchParams).lang);
+    const copy = t(locale);
+    return pageMetadata({
+        title: copy.eventsHeading,
+        description:
+            locale === "bn"
+                ? "রাজশাহী ও সাহেববাজারের ব্যবসাগুলোর মেলা, উৎসব, সেল ও কর্মশালা।"
+                : "Fairs, festivals, sales and workshops from businesses around Rajshahi and Shaheb Bazar.",
+        path: "/events",
+        locale,
+    });
+}
 
 type Filters = { type?: EventType; price?: "free"; online?: "1" };
 

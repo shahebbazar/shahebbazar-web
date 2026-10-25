@@ -14,12 +14,18 @@ import type { CategoryNode } from "@/lib/types";
 
 type Query = { lang?: string };
 
-export const metadata: Metadata = pageMetadata({
-    title: "All categories — businesses and services in Rajshahi",
-    description:
-        "Browse every category of business and service in Rajshahi, from silk and handicrafts to health and tourism.",
-    path: "/categories",
-});
+export async function generateMetadata({ searchParams }: { searchParams: Promise<Query> }): Promise<Metadata> {
+    const locale = resolveLocale((await searchParams).lang);
+    return pageMetadata({
+        title: locale === "bn" ? "সকল বিভাগ — রাজশাহীর ব্যবসা ও সেবা" : "All categories — businesses and services in Rajshahi",
+        description:
+            locale === "bn"
+                ? "রাজশাহীর সব ব্যবসা ও সেবার বিভাগ দেখুন, রেশম ও হস্তশিল্প থেকে স্বাস্থ্য ও পর্যটন।"
+                : "Browse every category of business and service in Rajshahi, from silk and handicrafts to health and tourism.",
+        path: "/categories",
+        locale,
+    });
+}
 
 // Written in full because Tailwind resolves class names by scanning source.
 const TINTS = [

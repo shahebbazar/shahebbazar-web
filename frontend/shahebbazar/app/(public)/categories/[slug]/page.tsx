@@ -41,7 +41,7 @@ export async function generateMetadata({
                 : `Find ${name.toLowerCase()} businesses in Rajshahi. Compare ratings, opening hours and contact details on Shahebbazar.`,
         locale,
         path: `/categories/${category.category_slug}`,
-        image: categoryOgImage(category.category_slug, category.category_name),
+        image: categoryOgImage(category.category_slug, name, locale),
     });
 }
 
