@@ -7,6 +7,7 @@ const TABS = [
     { key: "saved", label: "Saved businesses", href: "/account/saved" },
     { key: "messages", label: "Messages", href: "/account/messages" },
     { key: "reviews", label: "My reviews", href: "/account/reviews" },
+    { key: "events", label: "My events", href: "/account/events" },
 ];
 
 export function AccountShell({
