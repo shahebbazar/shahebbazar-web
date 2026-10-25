@@ -1,8 +1,8 @@
 import path from "node:path";
 import type { NextConfig } from "next";
 
-// The server build (frontend/shahebbazar/Dockerfile sets BUILD_STANDALONE=1) runs behind Caddy, which
-// compresses responses, so it is a self-contained "standalone" app with Next's own compression off.
+// The server build (frontend/shahebbazar/Dockerfile sets BUILD_STANDALONE=1) runs behind a proxy (Caddy
+// or Traefik) that compresses responses, so it is a self-contained "standalone" app with Next's own compression off.
 const serverBuild = process.env.BUILD_STANDALONE === "1";
 
 const nextConfig: NextConfig = {
@@ -15,6 +15,8 @@ const nextConfig: NextConfig = {
         "/og/**": ["./assets/og-fonts/*.ttf"],
         "/og.png": ["./assets/og-fonts/*.ttf"],
     },
+    // No "X-Powered-By: Next.js" header advertising the software.
+    poweredByHeader: false,
     turbopack: {
         // Pins the Turbopack root to this app, since the repo root has its own package-lock.json.
         root: path.resolve(__dirname),

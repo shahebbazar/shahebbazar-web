@@ -32,15 +32,15 @@ test("the product form lists each category followed by its own subcategories", a
     }
 });
 
-test("an owner of two businesses can still leave the business picker", async ({ browser }) => {
-    const context = await browser.newContext();
-    await signIn(context, "twoBusinesses");
-    const page = await context.newPage();
+test("an owner of two businesses can still leave the business picker @phone", async ({ page, context }) => {
+    await signIn(context, "twoBusinesses"); // replaces the owner's session from beforeEach
     await page.goto("/vendors/dashboard");
     await expect(page.getByRole("heading", { name: "Choose a business" })).toBeVisible();
     await expect(page.getByRole("banner").getByRole("link", { name: "Shahebbazar" })).toBeVisible();
     await expect(page.getByRole("button", { name: /Log out/ }).filter({ visible: true }).or(page.getByRole("button", { name: /menu/i }))).toBeVisible();
-    await context.close();
+    await expectNoSideScroll(page);
+    await page.setViewportSize({ width: 360, height: 780 }); // narrower than the test phone, as many are
+    await expectNoSideScroll(page);
 });
 
 test("switching business redirects within the site's own address", async ({ page }) => {

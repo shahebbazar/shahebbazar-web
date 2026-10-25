@@ -211,7 +211,11 @@ credits cover. When the test server is no longer needed:
 
 ## Moving to the client's server
 
-Same steps, with these settings in `deploy/.env`:
+The client's server (Identity Umbrella) runs its own Traefik and gives developers no Docker access, so
+it has its own compose file and guide: [DEPLOY-CLIENT.md](DEPLOY-CLIENT.md).
+
+For a server like this one instead (a plain Linux server with Docker), the same steps work with these
+settings in `deploy/.env`:
 
 - `SITE_ADDRESS` / `SITE_URL`: the real domain, for example `shahebbazar.com` and
   `https://shahebbazar.com`, with its DNS A record pointing at the server.
