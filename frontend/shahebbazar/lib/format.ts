@@ -61,6 +61,20 @@ export function formatEventRange(startIso: string, endIso: string | null): strin
     return `${start.toLocaleDateString("en-GB", shortOpts)} – ${end.toLocaleDateString("en-GB", opts)}`;
 }
 
+const DHAKA_DAY = new Intl.DateTimeFormat("en-CA", { timeZone: "Asia/Dhaka" });
+const WHEN_DAY = new Intl.DateTimeFormat("en-GB", { weekday: "short", day: "numeric", month: "short", year: "numeric", timeZone: "Asia/Dhaka" });
+const WHEN_TIME = new Intl.DateTimeFormat("en-US", { hour: "numeric", minute: "2-digit", timeZone: "Asia/Dhaka" });
+
+/** An event's day and times in Dhaka time: "Sat, 2 Nov 2026, 10:00 AM – 5:00 PM", or a range of days. */
+export function formatEventWhen(startIso: string, endIso: string | null): string {
+    const start = new Date(startIso);
+    const startText = `${WHEN_DAY.format(start)}, ${WHEN_TIME.format(start)}`;
+    if (!endIso) return startText;
+    const end = new Date(endIso);
+    if (DHAKA_DAY.format(start) === DHAKA_DAY.format(end)) return `${startText} – ${WHEN_TIME.format(end)}`;
+    return `${startText} – ${WHEN_DAY.format(end)}, ${WHEN_TIME.format(end)}`;
+}
+
 const BN_DIGITS = ["০", "১", "২", "৩", "৪", "৫", "৬", "৭", "৮", "৯"];
 
 /** Converts ASCII digits to Bengali digits when the Bangla locale is active. */
