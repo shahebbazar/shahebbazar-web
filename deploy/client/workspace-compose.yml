@@ -1,0 +1,10 @@
+# Copy to /var/www/apps/shahebbazar/docker-compose.yml on the client's server (docs/DEPLOY-CLIENT.md).
+# project-ctl runs the workspace's docker-compose.yml; this one pulls in the real file from the
+# repository clone in app/, so `git pull` updates it. Settings come from the workspace's .env.
+
+# The name keeps the data volumes (shahebbazar_pgdata, shahebbazar_uploads) the same however it is run.
+name: shahebbazar
+
+include:
+  - path: app/deploy/client/docker-compose.yml
+    env_file: .env

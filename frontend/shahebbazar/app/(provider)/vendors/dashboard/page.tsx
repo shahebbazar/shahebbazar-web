@@ -230,7 +230,7 @@ function AnalyticsOverview({ data }: { data: VendorDashboard }) {
 // A simple page that lists the businesses connected to the signed-in provider account.
 function BusinessPicker({ vendors }: { vendors: VendorPickerRow[] }) {
     return (
-        <main className="mx-auto max-w-xl px-4 py-12">
+        <main className="mx-auto w-full max-w-xl px-4 py-12">
             <h1 className="text-[1.5rem] font-bold tracking-tight">
                 Choose a business
             </h1>
