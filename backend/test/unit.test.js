@@ -172,3 +172,23 @@ describe("Marketing workspace switch (KAN-285)", () => {
         assert.equal(withValue("false"), false);
     });
 });
+
+describe("campaign email text as HTML", () => {
+    const { bodyHtml } = require("../services/marketing/emailMessage");
+
+    it("shows links as words, not raw addresses, and keeps the tracked address in the link", () => {
+        const html = bodyHtml("See more: https://shahebbazar.com/business/mango?from=email&c=3", () => "our page on Shaheb Bazar");
+        assert.equal(html, 'See more: <a href="https://shahebbazar.com/business/mango?from=email&amp;c=3" style="color:#1d4ed8;font-weight:bold">our page on Shaheb Bazar</a>');
+    });
+
+    it("an address without its own words is shortened", () => {
+        assert.match(bodyHtml("Tickets: https://www.tickets.example.com/mango/?ref=1"), />tickets\.example\.com\/mango<\/a>$/);
+    });
+
+    it("makes Bangladeshi mobile numbers tap to call, but not numbers inside a link", () => {
+        const html = bodyHtml("Call us on 01711-000005 or +8801711000006. https://example.com/01711000007");
+        assert.ok(html.includes('<a href="tel:+8801711000005" style="color:#1d4ed8;font-weight:bold">01711-000005</a>'));
+        assert.ok(html.includes('<a href="tel:+8801711000006" style="color:#1d4ed8;font-weight:bold">+8801711000006</a>'));
+        assert.ok(!html.includes("tel:+8801711000007"));
+    });
+});

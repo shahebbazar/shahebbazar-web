@@ -58,11 +58,9 @@ async function main() {
   }
   await withAdminClient(async (admin) => {
     if (wantsReset) {
-      await admin.query(
-        "SELECT pg_terminate_backend(pid) FROM pg_stat_activity WHERE datname = $1 AND pid <> pg_backend_pid()",
-        [dbName]
-      );
-      await admin.query(`DROP DATABASE IF EXISTS ${quoteIdentifier(dbName)}`);
+      // FORCE closes other connections as part of the drop. Closing them first and dropping after left a
+      // gap in which a running API reconnected, so on a server the reset could stop halfway.
+      await admin.query(`DROP DATABASE IF EXISTS ${quoteIdentifier(dbName)} WITH (FORCE)`);
       console.log(`Dropped database ${dbName}`);
     }
     const exists = await admin.query("SELECT 1 FROM pg_database WHERE datname = $1", [dbName]);

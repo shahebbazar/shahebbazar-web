@@ -12,9 +12,10 @@ export const metadata = {
 };
 
 export default async function VendorRegisterPage() {
-    const [session, settings] = await Promise.all([
+    const [session, settings, businesses] = await Promise.all([
         authenticatedApiGet("/auth/me"),
         apiGet("/settings/public").catch(() => null),
+        authenticatedApiGet("/vendor-account/businesses").catch(() => null),
     ]);
     // What happens after registering depends on the admin's approval setting (KAN-293).
     const next =
@@ -42,6 +43,22 @@ export default async function VendorRegisterPage() {
                             ? `Fill in the business details below. ${next}`
                             : `Create a business account for Shahebbazar. ${next}`}
                     </p>
+
+                    {user?.user_role === "vendor" && businesses?.length > 0 && (
+                        // Someone who already runs a business most likely wants it, not a new one.
+                        <div className="mx-auto mt-5 max-w-xl rounded-xl border border-brand-200 bg-brand-50 p-4 text-left text-sm">
+                            <p className="font-semibold text-ink">
+                                You already run {businesses.map((b) => b.vendor_name).join(", ")}.
+                            </p>
+                            <p className="mt-1 text-muted">Looking for your dashboard? To add another business, fill in the form below.</p>
+                            <Link
+                                href="/vendors/dashboard"
+                                className="mt-3 inline-flex rounded-[10px] bg-brand-600 px-4 py-2 font-semibold text-white hover:bg-brand-700"
+                            >
+                                Go to your dashboard
+                            </Link>
+                        </div>
+                    )}
 
                     {!user && (
                         <p className="mt-3 text-sm text-muted">

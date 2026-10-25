@@ -16,6 +16,8 @@ export type CampaignBriefInput = {
     ends_on: string;
     listing_ids: number[];
     coupon_code: string;
+    /** One of the business's events, for an event campaign (KAN-298); null for one typed in. */
+    event_id: number | null;
 };
 
 const refresh = () => revalidatePath("/vendors/dashboard/marketing", "layout");

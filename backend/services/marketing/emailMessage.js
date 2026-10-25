@@ -18,6 +18,8 @@ const COPY = {
         reply: "Reply on Shaheb Bazar",
         replyText: (url) => `Reply on Shaheb Bazar: ${url}`,
         page: "View our page",
+        pageLink: "our page on Shaheb Bazar",
+        eventLink: "the event's page on Shaheb Bazar",
         pageText: (url) => `Our page: ${url}`,
         call: (phone) => `Call ${phone}`,
         directions: "Get directions",
@@ -34,6 +36,8 @@ const COPY = {
         reply: "সাহেব বাজারে উত্তর দিন",
         replyText: (url) => `সাহেব বাজারে উত্তর দিন: ${url}`,
         page: "আমাদের পেজ দেখুন",
+        pageLink: "সাহেব বাজারে আমাদের পেজ",
+        eventLink: "সাহেব বাজারে ইভেন্টের পেজ",
         pageText: (url) => `আমাদের পেজ: ${url}`,
         call: (phone) => `কল করুন ${phone}`,
         directions: "পথ দেখুন",
@@ -60,9 +64,28 @@ const escapeHtml = (s) => String(s).replace(/[&<>"']/g, (c) => ({ "&": "&amp;", 
  * Escaped text with web addresses made into links and line breaks kept. Paragraphs are separated by
  * a blank line (<br><br>) rather than CSS margins, which some mail apps ignore.
  */
-function bodyHtml(text) {
-    return escapeHtml(text)
-        .replace(/https?:\/\/[^\s<]+[^\s<.,;:!?)]/g, (url) => `<a href="${url}" style="color:#1d4ed8">${url}</a>`)
+const LINK = "color:#1d4ed8;font-weight:bold";
+
+/** A web address as people read it: no "https://", no "www.", no tracking marks. */
+const shortUrl = (url) => url.replace(/^https?:\/\/(www\.)?/, "").replace(/[?#].*$/, "").replace(/\/$/, "");
+
+/**
+ * The email's text as HTML. Web addresses become links with readable words (`labelFor(url)`, or the
+ * address without its "https://" and tracking marks), and Bangladeshi mobile numbers become tap-to-call
+ * links, so the email shows no raw links.
+ */
+function bodyHtml(text, labelFor = () => null) {
+    const links = [];
+    // Addresses are set aside first, so a number inside one is never turned into a phone link.
+    const withoutUrls = escapeHtml(text).replace(/https?:\/\/[^\s<]+[^\s<.,;:!?)]/g, (url) => {
+        const href = url.replace(/&amp;/g, "&");
+        links.push(`<a href="${url}" style="${LINK}">${escapeHtml(labelFor(href) ?? shortUrl(href))}</a>`);
+        return `\u0000${links.length - 1}\u0000`;
+    });
+    return withoutUrls
+        .replace(/(?<![\w+])(?:\+?880[\s-]?|0)(1\d{3})[\s-]?(\d{6})(?!\d)/g, (number, first, rest) =>
+            `<a href="tel:+880${first}${rest}" style="${LINK}">${number}</a>`)
+        .replace(/\u0000(\d+)\u0000/g, (_, i) => links[Number(i)])
         .replace(/\n/g, "<br>\n");
 }
 
@@ -162,10 +185,14 @@ function buildCampaignEmail({ campaign, content, recipient, replyTo }) {
     const name = lang === "bn" && business.name_bn ? business.name_bn : business.name;
     const unsubscribe = unsubscribeUrl(recipient.user_id, campaign.vendor_id, "email");
     const oneClick = `${apiUrl()}/api/unsubscribe/${unsubscribeToken(recipient.user_id, campaign.vendor_id, "email")}`;
-    const plainPageUrl = business.page_url || `${siteUrl()}/business/${encodeURIComponent(business.slug)}`;
-    // Every link to the business page counts its visits for this campaign's email.
+    const businessUrl = business.page_url || `${siteUrl()}/business/${encodeURIComponent(business.slug)}`;
+    // A campaign about one of the business's events (KAN-298) links to the event's page instead.
+    const event = campaign.campaign_goal === "event" ? snapshot.event ?? null : null;
+    const plainPageUrl = event?.page_url ?? businessUrl;
+    // Every link to the page counts its visits for this campaign's email.
     const pageUrl = campaignLink(plainPageUrl, "email", campaign.campaign_id);
     const body = swapPageUrl(content.email.body, plainPageUrl, pageUrl);
+    const eventCover = event && content.email.photos !== false ? assetUrl(event.cover_url) : null;
     // Opens a message to the business, after logging in if needed (frontend /message/<slug>).
     const reply = `${siteUrl()}/message/${encodeURIComponent(business.slug)}`;
     const directions = business.address
@@ -196,9 +223,10 @@ function buildCampaignEmail({ campaign, content, recipient, replyTo }) {
 <tr><td height="4" bgcolor="${BRAND}" style="font-size:0;line-height:0;border-radius:12px 12px 0 0">&nbsp;</td></tr>
 <tr><td bgcolor="#ffffff" style="padding:20px 24px;border-bottom:1px solid ${LINE}">${headerHtml(name, assetUrl(business.logo_url))}</td></tr>
 <tr><td bgcolor="#ffffff" style="padding:24px 24px 8px;${FONT};font-size:15px;line-height:1.6;color:${INK};word-wrap:break-word;word-break:break-word">
-${bodyHtml(body)}
+${bodyHtml(body, (url) => (url.startsWith(plainPageUrl) ? (event ? c.eventLink : c.pageLink) : url.startsWith(businessUrl) ? c.pageLink : null))}
 </td></tr>
-${cards.length ? `<tr><td bgcolor="#ffffff" style="padding:16px 24px 4px">${productCardsHtml(cards, lang, pageUrl, c)}</td></tr>` : ""}
+${eventCover ? `<tr><td bgcolor="#ffffff" style="padding:16px 24px 4px"><a href="${escapeHtml(pageUrl)}"><img src="${escapeHtml(eventCover)}" alt="" width="552" style="display:block;width:100%;max-width:552px;height:auto;border-radius:8px;border:0"></a></td></tr>` : ""}
+${cards.length ? `<tr><td bgcolor="#ffffff" style="padding:16px 24px 4px">${productCardsHtml(cards, lang, campaignLink(businessUrl, "email", campaign.campaign_id), c)}</td></tr>` : ""}
 ${coupon ? `<tr><td bgcolor="#ffffff" style="padding:12px 24px 4px">${couponHtml(coupon, endsOn, c)}</td></tr>` : ""}
 <tr><td bgcolor="#ffffff" style="padding:20px 24px 4px">${primaryButton(reply, c.reply)}</td></tr>
 <tr><td bgcolor="#ffffff" style="padding:12px 24px 16px">${secondary}</td></tr>

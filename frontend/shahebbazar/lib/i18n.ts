@@ -40,6 +40,7 @@ const strings = {
         navEvents: "Events",
         navBlog: "Blog",
         navAddBusiness: "Add Business",
+        navMyBusiness: "My Business",
 
         exploreTitle: "Explore Rajshahi",
         exploreBody: "Discover trusted local businesses and services around you.",
@@ -257,6 +258,7 @@ const strings = {
         navEvents: "ইভেন্ট",
         navBlog: "ব্লগ",
         navAddBusiness: "ব্যবসা যোগ করুন",
+        navMyBusiness: "আমার ব্যবসা",
 
         exploreTitle: "রাজশাহী ঘুরে দেখুন",
         exploreBody: "আপনার আশেপাশের নির্ভরযোগ্য ব্যবসা ও সেবা খুঁজে নিন।",

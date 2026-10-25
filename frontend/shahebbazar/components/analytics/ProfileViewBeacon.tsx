@@ -10,8 +10,9 @@ const MARKED: ViewSource[] = ["sponsored", "email", "facebook", "whatsapp"];
 
 // Reports one view of a business profile once it is on screen. A marked link is counted with its
 // source (and campaign), then the marks are taken out of the address, so a reload or a copied link
-// isn't counted that way again.
-export function ProfileViewBeacon({ slug }: { slug: string }) {
+// isn't counted that way again. With `markedOnly` (an event's page, KAN-298) only marked links are
+// counted, as a visit to the business that runs it, so a campaign's results include its event link.
+export function ProfileViewBeacon({ slug, markedOnly = false }: { slug: string; markedOnly?: boolean }) {
     const pathname = usePathname();
 
     useEffect(() => {
@@ -24,12 +25,13 @@ export function ProfileViewBeacon({ slug }: { slug: string }) {
             url.searchParams.delete("c");
             window.history.replaceState(window.history.state, "", url);
         }
+        if (markedOnly && !marked) return;
         sendAnalytics("/api/track/view", {
             slug,
             source: marked ?? viewSource(pathname),
             ...(marked && marked !== "sponsored" && Number.isSafeInteger(campaign) && campaign > 0 ? { campaign } : {}),
         });
-    }, [slug, pathname]);
+    }, [slug, pathname, markedOnly]);
 
     return null;
 }

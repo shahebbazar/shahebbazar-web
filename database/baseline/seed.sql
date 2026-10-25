@@ -1014,7 +1014,8 @@ INSERT INTO public.events (event_title, event_title_bn, event_slug, event_descri
 SELECT 'Mango Season Tasting Day', 'আমের মৌসুম স্বাদ উৎসব', 'mango-season-tasting-day',
        'Taste Khirsapat, Langra and Fazli straight from the orchard, meet the growers and order for the season at opening prices.',
        'Rajshahi Mango Traders, Shaheb Bazar', v.location_id, v.vendor_id,
-       date_trunc('day', NOW()) + INTERVAL '9 days 10 hours', date_trunc('day', NOW()) + INTERVAL '9 days 17 hours',
+       (date_trunc('day', NOW() AT TIME ZONE 'Asia/Dhaka') + INTERVAL '9 days 10 hours') AT TIME ZONE 'Asia/Dhaka',
+       (date_trunc('day', NOW() AT TIME ZONE 'Asia/Dhaka') + INTERVAL '9 days 17 hours') AT TIME ZONE 'Asia/Dhaka',
        'uploads/seed-business-rajshahi-mango-traders.jpg', 'market', 'free', v.user_id
 FROM public.vendors v WHERE v.vendor_slug = 'rajshahi-mango-traders';
 

@@ -29,9 +29,10 @@ test("home page cards fit their panels at laptop widths", async ({ page }) => {
 });
 
 test("share cards are 1200 x 630 images, and each page points to its own", async ({ page, request, consoleErrors }) => {
-    // A business with a cover photo shares the photo instead, so its card is only checked as an image.
+    // A business or event with a cover photo shares the photo instead, so its card is only checked as an image.
     const pages: Record<string, string | null> = {
-        "/og/event/silk-city-trade-expo": "/events/silk-city-trade-expo",
+        "/og/event/rajshahi-book-fair": "/events/rajshahi-book-fair",
+        "/og/event/silk-city-trade-expo": null,
         "/og/category/health": "/categories/health",
         "/og/business/rajshahi-mango-traders": null,
     };
@@ -46,6 +47,10 @@ test("share cards are 1200 x 630 images, and each page points to its own", async
         const png = await res.body();
         expect([png.readUInt32BE(16), png.readUInt32BE(20)], `${card} size`).toEqual([1200, 630]);
     }
+    await page.goto("/events/silk-city-trade-expo");
+    expect(await page.locator('meta[property="og:image"]').first().getAttribute("content")).toContain(
+        "/uploads/seed-business-shaheb-bazar-silk-house.jpg"
+    );
     expect((await request.get("/og.png")).status()).toBe(200);
     allowConsoleError(consoleErrors, /status of 404/);
     expect((await request.get("/og/event/no-such-event")).status()).toBe(404);

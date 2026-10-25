@@ -105,12 +105,13 @@ export function BusinessSidebar({
                                         {DAY_NAMES[row.day]}
                                         {isToday && ` (${copy.today})`}
                                     </span>
+                                    {/* Today's hours are green only while the business is open now, red once it has closed. */}
                                     <span
                                         className={
                                             row.is_closed
                                                 ? "text-shut-ink"
                                                 : isToday
-                                                  ? "font-medium text-open-ink"
+                                                  ? `font-medium ${business.open_state === "open" ? "text-open-ink" : "text-shut-ink"}`
                                                   : "text-muted"
                                         }
                                     >
