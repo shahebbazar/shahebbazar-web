@@ -2,12 +2,14 @@
 
 import { Fragment, useState, useTransition } from "react";
 import { useRouter } from "next/navigation";
-import { AlertTriangle, CheckCircle2, Info, Loader2, Mail, Send, Ticket } from "lucide-react";
+import { AlertTriangle, CheckCircle2, Info, Link2, Loader2, Mail, PenLine, RotateCcw, Send, Ticket } from "lucide-react";
 import { browserAssetUrl } from "@/lib/apiBase";
 import { ConfirmDialog } from "@/components/shared/ConfirmDialog";
+import { channelsFromMessage, messageFromFacebook } from "@/lib/campaignMessage";
 import { formatPhone, localiseDigits } from "@/lib/format";
 import type { CampaignContent, CampaignDetail, CampaignSnapshot } from "@/lib/types";
 import { deleteCampaign, saveCampaignContent, sendCampaign } from "../actions";
+import { ShareButtons } from "./ShareButtons";
 import { ShareKit } from "./ShareKit";
 import { STATUS, couponState, ctaLabel, formatDay, formatWhen, goalLabel } from "../labels";
 
@@ -52,13 +54,23 @@ function priceOf(l: CampaignSnapshot["listings"][number], bangla: boolean): stri
     return range + (l.price_unit ? (bangla ? ` (প্রতি ${l.price_unit})` : ` per ${l.price_unit}`) : "");
 }
 
-/** Content with every field present, so versions saved before the photo switch compare equal. */
+/**
+ * Content with every field present, so versions saved before the photo switch compare equal. A version
+ * saved before there was one message starts from its Facebook post without the hashtags.
+ */
 const complete = (c: CampaignContent): CampaignContent => ({
+    message: c.message ?? messageFromFacebook(c.facebook.text),
     email: { subject: c.email.subject, body: c.email.body, photos: c.email.photos !== false },
     facebook: { text: c.facebook.text, photos: c.facebook.photos !== false },
     whatsapp: { text: c.whatsapp.text, photos: c.whatsapp.photos !== false },
 });
 const sameContent = (a: CampaignContent, b: CampaignContent) => JSON.stringify(complete(a)) === JSON.stringify(complete(b));
+
+type Channel = "email" | "facebook" | "whatsapp";
+const CHANNEL_NAMES: Record<Channel, string> = { email: "the email", facebook: "Facebook", whatsapp: "WhatsApp" };
+const textOf = (c: CampaignContent, channel: Channel) => (channel === "email" ? c.email.body : c[channel].text);
+const withText = (c: CampaignContent, channel: Channel, text: string): CampaignContent =>
+    channel === "email" ? { ...c, email: { ...c.email, body: text } } : { ...c, [channel]: { ...c[channel], text } };
 
 /** The "Include photos" switch beside a channel's heading. */
 function PhotoSwitch({ label, checked, disabled, onChange }: { label: string; checked: boolean; disabled: boolean; onChange: (on: boolean) => void }) {
@@ -82,7 +94,8 @@ function PhotoSwitch({ label, checked, disabled, onChange }: { label: string; ch
     );
 }
 
-// The editor for one campaign: wording for each channel beside its preview, versions and approval.
+// The editor for one campaign: one message for all three channels, their previews (each can be changed
+// on its own), sharing, versions and sending.
 const customers = (n: number) => `${n} customer${n === 1 ? "" : "s"}`;
 
 /** Which allowance a send uses, in the owner's words. */
@@ -98,8 +111,10 @@ export function CampaignEditor({ vendorId, initial, readOnly: viewOnly }: { vend
     const [campaign, setCampaign] = useState(initial);
     const latest = campaign.versions[0];
     const [content, setContent] = useState<CampaignContent>(complete(latest.version_content));
+    // Channels whose own box the owner opened, to change that channel alone.
+    const [editing, setEditing] = useState<Record<Channel, boolean>>({ email: false, facebook: false, whatsapp: false });
     const [errors, setErrors] = useState<Record<string, string>>({});
-    const [message, setMessage] = useState<{ ok: boolean; text: string } | null>(null);
+    const [notice, setNotice] = useState<{ ok: boolean; text: string } | null>(null);
     const [asking, setAsking] = useState<"delete" | "send" | null>(null);
     const [pending, startTransition] = useTransition();
 
@@ -113,13 +128,13 @@ export function CampaignEditor({ vendorId, initial, readOnly: viewOnly }: { vend
     // No separate approval: the owner previews, then confirms the send, which approves what goes out.
     const unsent = campaign.status === "draft" || campaign.status === "approved";
     const canSend = !readOnly && unsent && "can_send" in campaign.send && campaign.send.can_send && placeholders.length === 0;
-    // Facebook and WhatsApp are posted by the owner, from saved wording with nothing left to fill in.
+    // Facebook, WhatsApp and X are posted by the owner, from saved wording with nothing left to fill in.
     const shareBlocked = !["draft", "approved", "sent"].includes(campaign.status)
-        ? "Posting tools aren't available while the campaign is being sent."
+        ? "Sharing isn't available while the campaign is being sent."
         : placeholders.length
-            ? "Replace the highlighted parts marked [[like this]] to get the tools for posting this."
+            ? "Replace the highlighted parts marked [[like this]] to get the share buttons."
             : dirty
-                ? "Save your changes first, so what you post is the saved version."
+                ? "Save your changes first, so what you share is the saved version."
                 : null;
     const posted = Boolean(campaign.posts.facebook || campaign.posts.whatsapp);
     const { snapshot } = campaign;
@@ -133,6 +148,8 @@ export function CampaignEditor({ vendorId, initial, readOnly: viewOnly }: { vend
     const pageUrl = event?.page_url ?? snapshot.business.page_url;
     // Facebook and WhatsApp carry one picture: the event's cover, the first product photo, or the business's cover.
     const socialPhoto = browserAssetUrl(event?.cover_url ?? null) ?? photos[0] ?? cover;
+    // The email's large photo under its header: the event's cover, or the business's (as in emailMessage.js).
+    const emailHero = browserAssetUrl(event?.cover_url ?? null) ?? cover;
     // Facts copied from the business's saved details, longest first so a whole name wins over part of it.
     const facts = [
         snapshot.business.name, snapshot.business.name_bn, snapshot.business.address, snapshot.business.phone, snapshot.business.page_url,
@@ -142,23 +159,42 @@ export function CampaignEditor({ vendorId, initial, readOnly: viewOnly }: { vend
     ].filter((f): f is string => Boolean(f && f.length > 2)).sort((a, b) => b.length - a.length);
     const { coupon } = campaign;
 
-    const set = (channel: "email" | "facebook" | "whatsapp", field: string, value: string | boolean) =>
-        setContent((c) => ({ ...c, [channel]: { ...c[channel], [field]: value } }));
+    // Each channel made from the one message, and whether its wording still matches.
+    const derive = (message: string) => channelsFromMessage(message, { lang: bangla ? "bn" : "en", name });
+    const made = derive(content.message ?? "");
+    const follows = (channel: Channel) => textOf(content, channel) === made[channel];
+    const savedMessage = complete(latest.version_content).message ?? "";
+    const headline = (content.message ?? "").split("\n")[0] ?? "";
+
+    /** A new message updates every channel that still matches the old one; a channel changed on its own keeps its words. */
+    function setMessage(next: string) {
+        setContent((c) => {
+            const before = derive(c.message ?? "");
+            const after = derive(next);
+            let out: CampaignContent = { ...c, message: next };
+            for (const channel of ["email", "facebook", "whatsapp"] as const) {
+                if (textOf(c, channel) === before[channel]) out = withText(out, channel, after[channel]);
+            }
+            return out;
+        });
+    }
+
+    const setPhotos = (channel: Channel, on: boolean) => setContent((c) => ({ ...c, [channel]: { ...c[channel], photos: on } }));
 
     function done(result: Awaited<ReturnType<typeof saveCampaignContent>>, okText: string) {
         if (result.ok) {
             setCampaign(result.data);
             setContent(complete(result.data.versions[0].version_content));
             setErrors({});
-            setMessage({ ok: true, text: okText });
+            setNotice({ ok: true, text: okText });
         } else {
             setErrors(result.errors ?? {});
-            setMessage({ ok: false, text: result.error });
+            setNotice({ ok: false, text: result.error });
         }
     }
 
     function save() {
-        setMessage(null);
+        setNotice(null);
         startTransition(async () => {
             const result = await saveCampaignContent(vendorId, campaign.campaign_id, content);
             done(result, result.ok ? `Saved as version ${result.data.versions[0].version_number}.` : "");
@@ -167,7 +203,7 @@ export function CampaignEditor({ vendorId, initial, readOnly: viewOnly }: { vend
 
     function send() {
         setAsking(null);
-        setMessage(null);
+        setNotice(null);
         startTransition(async () => {
             // Unsaved changes (wording or a photo switch) are saved as a new version first, so what was
             // previewed is what goes out.
@@ -184,7 +220,7 @@ export function CampaignEditor({ vendorId, initial, readOnly: viewOnly }: { vend
             if (result.ok) {
                 setCampaign(result.data.campaign);
             } else {
-                setMessage({ ok: false, text: result.error });
+                setNotice({ ok: false, text: result.error });
                 // The page's figures (audience, allowance) may have changed; reload them.
                 router.refresh();
             }
@@ -196,7 +232,7 @@ export function CampaignEditor({ vendorId, initial, readOnly: viewOnly }: { vend
         startTransition(async () => {
             const result = await deleteCampaign(vendorId, campaign.campaign_id);
             if (result.ok) router.push(`/vendors/dashboard/marketing?vendor=${vendorId}`);
-            else setMessage({ ok: false, text: result.error });
+            else setNotice({ ok: false, text: result.error });
         });
     }
 
@@ -206,6 +242,60 @@ export function CampaignEditor({ vendorId, initial, readOnly: viewOnly }: { vend
                 {errors[key]}
             </span>
         );
+
+    /**
+     * Above a channel's preview: whether it matches the message, a button to change it alone (its own
+     * box), and a way back to the message's wording.
+     */
+    function channelWording(channel: Channel, label: string, rows: number, max: number) {
+        const own = !follows(channel);
+        return (
+            <div className="mt-2">
+                <div className="flex flex-wrap items-center gap-x-3 gap-y-1 text-xs">
+                    {own ? (
+                        <span className="inline-flex items-center gap-1 font-medium text-sponsor-ink">
+                            <PenLine className="size-3.5" aria-hidden /> Changed for {CHANNEL_NAMES[channel]} only
+                        </span>
+                    ) : (
+                        <span className="inline-flex items-center gap-1 text-muted">
+                            <Link2 className="size-3.5" aria-hidden /> Made from your message
+                        </span>
+                    )}
+                    {!readOnly && !own && !editing[channel] && (
+                        <button type="button" onClick={() => setEditing((e) => ({ ...e, [channel]: true }))} className="font-medium text-brand-600 hover:underline">
+                            Change for {CHANNEL_NAMES[channel]} only
+                        </button>
+                    )}
+                    {!readOnly && own && (
+                        <button
+                            type="button"
+                            onClick={() => {
+                                setContent((c) => withText(c, channel, made[channel]));
+                                setEditing((e) => ({ ...e, [channel]: false }));
+                            }}
+                            className="inline-flex items-center gap-1 font-medium text-brand-600 hover:underline"
+                        >
+                            <RotateCcw className="size-3.5" aria-hidden /> Use my message again
+                        </button>
+                    )}
+                </div>
+                {(own || editing[channel]) && (
+                    <>
+                        <textarea
+                            aria-label={label}
+                            value={textOf(content, channel)}
+                            onChange={(e) => setContent((c) => withText(c, channel, e.target.value))}
+                            readOnly={readOnly}
+                            rows={rows}
+                            maxLength={max}
+                            className={AREA}
+                        />
+                        {fieldError(channel === "email" ? "email.body" : `${channel}.text`)}
+                    </>
+                )}
+            </div>
+        );
+    }
 
     return (
         <div className="mt-4 space-y-5">
@@ -232,15 +322,6 @@ export function CampaignEditor({ vendorId, initial, readOnly: viewOnly }: { vend
                     </span>
                 </section>
             )}
-
-            <p className="flex gap-2 text-[0.8125rem] text-muted">
-                <Info className="mt-0.5 size-4 shrink-0" aria-hidden />
-                <span>
-                    In the previews, <span className="rounded bg-blue-100 px-0.5 text-blue-900">blue</span> parts come from your saved
-                    business and product details. If something is wrong, update it in Products &amp; Services or My Business, then start
-                    a new campaign: this one keeps the details it was made with.
-                </span>
-            </p>
 
             {"results" in campaign.send ? (
                 <section aria-label="Sent" className="flex gap-2 rounded-xl border border-success-ink/30 bg-success-bg p-4 text-sm text-success-ink">
@@ -272,7 +353,7 @@ export function CampaignEditor({ vendorId, initial, readOnly: viewOnly }: { vend
                         )}
                         <p className="mt-2 text-xs text-soft">
                             Check the previews below, then use the Send button at the bottom. Sending approves the wording as it is then.
-                            Only the email is sent from here: you post Facebook and WhatsApp yourself, with the tools under each one below.
+                            Only the email is sent from here: you share on Facebook, WhatsApp and X yourself, with the buttons below.
                         </p>
                     </section>
                 )
@@ -301,112 +382,160 @@ export function CampaignEditor({ vendorId, initial, readOnly: viewOnly }: { vend
                 </div>
             )}
 
+            {/* One message, written once */}
+            <section aria-labelledby="message-heading" className="rounded-xl border border-line bg-surface p-5 shadow-card">
+                <h2 id="message-heading" className="font-semibold">Your message</h2>
+                <p className="mt-1 text-[0.8125rem] text-muted">
+                    Write it once: the email, Facebook post and WhatsApp message below are made from it as you type. The email adds a greeting
+                    and your business&apos;s name, Facebook adds hashtags, and WhatsApp makes the first line bold. If one needs different words,
+                    change it on its own under its preview.
+                </p>
+                <label className="mt-3 block text-sm font-semibold">
+                    Email subject
+                    <input
+                        value={content.email.subject}
+                        onChange={(e) => setContent((c) => ({ ...c, email: { ...c.email, subject: e.target.value } }))}
+                        readOnly={readOnly}
+                        maxLength={150}
+                        className={AREA}
+                    />
+                    {fieldError("email.subject")}
+                </label>
+                <label className="mt-3 block text-sm font-semibold">
+                    Message
+                    <textarea
+                        value={content.message ?? ""}
+                        onChange={(e) => setMessage(e.target.value)}
+                        readOnly={readOnly}
+                        rows={12}
+                        maxLength={5000}
+                        className={AREA}
+                    />
+                    {fieldError("message")}
+                </label>
+                {!readOnly && content.message !== savedMessage && (
+                    <p className="mt-1 text-xs text-soft">Not saved yet: use Save changes at the bottom.</p>
+                )}
+                <p className="mt-3 flex gap-2 text-[0.8125rem] text-muted">
+                    <Info className="mt-0.5 size-4 shrink-0" aria-hidden />
+                    <span>
+                        In the previews, <span className="rounded bg-blue-100 px-0.5 text-blue-900">blue</span> parts come from your saved
+                        business and product details. If something is wrong, update it in Products &amp; Services or My Business, then start
+                        a new campaign: this one keeps the details it was made with.
+                    </span>
+                </p>
+            </section>
+
             {/* Email */}
-            <section aria-labelledby="email-heading" className="grid gap-4 rounded-xl border border-line bg-surface p-5 shadow-card lg:grid-cols-2">
-                <div>
-                    <div className="flex flex-wrap items-center justify-between gap-2">
-                        <h2 id="email-heading" className="font-semibold">Email</h2>
-                        {photos.length > 0 && (
-                            <PhotoSwitch
-                                label="Include photos in the email"
-                                checked={content.email.photos !== false}
-                                disabled={readOnly}
-                                onChange={(on) => set("email", "photos", on)}
-                            />
-                        )}
-                    </div>
-                    <label className="mt-3 block text-sm font-semibold">
-                        Subject
-                        <input
-                            value={content.email.subject}
-                            onChange={(e) => set("email", "subject", e.target.value)}
-                            readOnly={readOnly}
-                            maxLength={150}
-                            className={AREA}
+            <section aria-labelledby="email-heading" className="rounded-xl border border-line bg-surface p-5 shadow-card">
+                <div className="flex flex-wrap items-center justify-between gap-2">
+                    <h2 id="email-heading" className="font-semibold">Email</h2>
+                    {(photos.length > 0 || emailHero) && (
+                        <PhotoSwitch
+                            label="Include photos in the email"
+                            checked={content.email.photos !== false}
+                            disabled={readOnly}
+                            onChange={(on) => setPhotos("email", on)}
                         />
-                        {fieldError("email.subject")}
-                    </label>
-                    <label className="mt-3 block text-sm font-semibold">
-                        Message
-                        <textarea
-                            value={content.email.body}
-                            onChange={(e) => set("email", "body", e.target.value)}
-                            readOnly={readOnly}
-                            rows={14}
-                            maxLength={5000}
-                            className={AREA}
-                        />
-                        {fieldError("email.body")}
-                    </label>
+                    )}
                 </div>
-                <div aria-label="Email preview" className="rounded-lg border border-line bg-white p-4 text-[0.8125rem] text-slate-800">
-                    <div className="flex items-center gap-2 border-b border-slate-200 pb-2">
+                {channelWording("email", "Email message", 14, 5000)}
+                {/* Laid out like the sent email (backend/services/marketing/emailMessage.js). */}
+                <div aria-label="Email preview" className="mx-auto mt-3 max-w-[600px] overflow-hidden rounded-xl bg-slate-200 p-3 text-[0.8125rem] text-slate-800">
+                    <div className="h-1 rounded-t-lg bg-[#2563eb]" />
+                    <div className="flex items-center gap-2.5 bg-[#0f172a] px-4 py-3">
                         {logo ? (
                             // eslint-disable-next-line @next/next/no-img-element
-                            <img src={logo} alt="" className="size-8 rounded-full object-cover" />
+                            <img src={logo} alt="" className="size-9 rounded-full object-cover" />
                         ) : (
-                            <span className="grid size-8 place-items-center rounded-full bg-blue-100 font-semibold text-blue-700">{name.charAt(0)}</span>
+                            <span className="grid size-9 place-items-center rounded-full bg-blue-100 font-semibold text-blue-700">{name.charAt(0)}</span>
                         )}
-                        <span>
-                            <span className="block font-semibold">{name} via Shaheb Bazar</span>
-                            <span className="block text-xs text-slate-500">
-                                <Marked text={content.email.subject} facts={facts} />
-                            </span>
+                        <span className="min-w-0">
+                            <span className="block font-semibold text-white">{name}</span>
+                            <span className="block text-xs text-slate-400">via Shaheb Bazar</span>
                         </span>
                     </div>
-                    {/* Laid out like the sent email (backend/services/marketing/emailMessage.js). */}
-                    <p className="mt-3 whitespace-pre-line">
-                        <Marked text={content.email.body} facts={facts} />
-                    </p>
-                    {content.email.photos !== false && (
-                        <ul className="mt-3 space-y-2">
-                            {snapshot.listings.map((l) => {
-                                const src = browserAssetUrl(l.photo_url);
-                                const price = priceOf(l, bangla);
-                                return (
-                                    <li key={l.listing_id} className="flex items-center gap-3 rounded-lg border border-slate-200 p-2">
-                                        {src && (
-                                            // eslint-disable-next-line @next/next/no-img-element
-                                            <img src={src} alt="" className="size-16 shrink-0 rounded-md object-cover" />
-                                        )}
-                                        <span className="min-w-0">
-                                            <span className="block font-semibold">{bangla && l.title_bn ? l.title_bn : l.title}</span>
-                                            {price && <span className="block font-semibold text-green-700">{price}</span>}
-                                            <span className="block text-xs font-semibold text-[#2563eb]">{bangla ? "দেখুন" : "View"} →</span>
-                                        </span>
-                                    </li>
-                                );
-                            })}
-                        </ul>
+                    {content.email.photos !== false && emailHero && (
+                        // eslint-disable-next-line @next/next/no-img-element
+                        <img src={emailHero} alt="" className="block max-h-56 w-full object-cover" />
                     )}
-                    {coupon && coupon.status !== "expired" && (
-                        <div className="mt-3 rounded-lg border-2 border-dashed border-blue-300 bg-blue-50 p-3 text-center">
-                            <span className="block text-[0.6875rem] font-semibold tracking-wider text-slate-500 uppercase">
-                                {bangla ? "আপনার কোড" : "Your code"}
-                            </span>
-                            <span className="block text-lg font-bold tracking-[0.15em] text-blue-700">{coupon.code}</span>
-                        </div>
-                    )}
-                    {/* As in the sent email: replies come to your Messages on Shaheb Bazar. */}
-                    <span className="mt-4 inline-block rounded-lg bg-[#2563eb] px-4 py-2 text-[0.8125rem] font-bold text-white">
-                        {bangla ? "সাহেব বাজারে উত্তর দিন" : "Reply on Shaheb Bazar"}
-                    </span>
-                    <span className="mt-2 flex flex-wrap gap-1.5 text-xs font-semibold">
-                        <span className="rounded-md border border-slate-300 px-2.5 py-1">{bangla ? "আমাদের পেজ দেখুন" : "View our page"}</span>
-                        {snapshot.business.phone && (
-                            <span className="rounded-md border border-slate-300 px-2.5 py-1">
-                                {bangla ? "কল করুন" : "Call"} {formatPhone(snapshot.business.phone)}
-                            </span>
+                    <div className="bg-white px-4 pt-4 pb-2">
+                        <p className="text-xs text-slate-500">
+                            Subject: <Marked text={content.email.subject} facts={facts} />
+                        </p>
+                        {follows("email") ? (
+                            <>
+                                <p className="mt-3 text-slate-500">{content.email.body.split("\n")[0]}</p>
+                                <p className="mt-2 text-lg leading-snug font-bold">
+                                    <Marked text={headline} facts={facts} />
+                                </p>
+                                <p className="mt-2 whitespace-pre-line">
+                                    <Marked text={content.email.body.split("\n").slice(3).join("\n").replace(/^\n+/, "")} facts={facts} />
+                                </p>
+                            </>
+                        ) : (
+                            <p className="mt-3 whitespace-pre-line">
+                                <Marked text={content.email.body} facts={facts} />
+                            </p>
                         )}
-                        {snapshot.business.address && (
-                            <span className="rounded-md border border-slate-300 px-2.5 py-1">{bangla ? "পথ দেখুন" : "Get directions"}</span>
+                        {content.email.photos !== false && (
+                            <ul className="mt-3 space-y-2">
+                                {snapshot.listings.map((l) => {
+                                    const src = browserAssetUrl(l.photo_url);
+                                    const price = priceOf(l, bangla);
+                                    return (
+                                        <li key={l.listing_id} className="flex items-center gap-3 rounded-lg border border-slate-200 p-2">
+                                            {src && (
+                                                // eslint-disable-next-line @next/next/no-img-element
+                                                <img src={src} alt="" className="size-16 shrink-0 rounded-md object-cover" />
+                                            )}
+                                            <span className="min-w-0">
+                                                <span className="block font-semibold">{bangla && l.title_bn ? l.title_bn : l.title}</span>
+                                                {price && <span className="block font-semibold text-green-700">{price}</span>}
+                                                <span className="block text-xs font-semibold text-[#2563eb]">{bangla ? "দেখুন" : "View"} →</span>
+                                            </span>
+                                        </li>
+                                    );
+                                })}
+                            </ul>
                         )}
-                    </span>
-                    <p className="mt-1.5 text-[0.6875rem] text-slate-500">Customers&apos; replies come to your Messages.</p>
-                    <p className="mt-4 border-t border-slate-200 pt-2 text-[0.6875rem] text-slate-500">
-                        You get this because you chose offers from {name}. An unsubscribe link is added here when it&apos;s sent.
+                        {coupon && coupon.status !== "expired" && (
+                            <div className="mt-3 rounded-lg border-2 border-dashed border-blue-300 bg-blue-50 p-3 text-center">
+                                <span className="block text-[0.6875rem] font-semibold tracking-wider text-slate-500 uppercase">
+                                    {bangla ? "আপনার কোড" : "Your code"}
+                                </span>
+                                <span className="block text-lg font-bold tracking-[0.15em] text-blue-700">{coupon.code}</span>
+                            </div>
+                        )}
+                        {/* As in the sent email: replies come to your Messages on Shaheb Bazar. */}
+                        <span className="mt-4 inline-block rounded-lg bg-[#2563eb] px-4 py-2 text-[0.8125rem] font-bold text-white">
+                            {bangla ? "সাহেব বাজারে উত্তর দিন" : "Reply on Shaheb Bazar"}
+                        </span>
+                        <span className="mt-2 flex flex-wrap gap-1.5 pb-2 text-xs font-semibold">
+                            <span className="rounded-md border border-slate-300 px-2.5 py-1">{bangla ? "আমাদের পেজ দেখুন" : "View our page"}</span>
+                            {snapshot.business.phone && (
+                                <span className="rounded-md border border-slate-300 px-2.5 py-1">
+                                    {bangla ? "কল করুন" : "Call"} {formatPhone(snapshot.business.phone)}
+                                </span>
+                            )}
+                            {snapshot.business.address && (
+                                <span className="rounded-md border border-slate-300 px-2.5 py-1">{bangla ? "পথ দেখুন" : "Get directions"}</span>
+                            )}
+                        </span>
+                    </div>
+                    <div className="flex flex-wrap items-center gap-1.5 border-t border-slate-200 bg-slate-50 px-4 py-2.5 text-xs text-slate-500">
+                        {bangla ? "পরিচিত কারও কাজে লাগবে? পাঠিয়ে দিন:" : "Know someone who'd like this? Send it on:"}
+                        <span className="rounded-full bg-green-600 px-2.5 py-0.5 font-semibold text-white">WhatsApp</span>
+                        <span className="rounded-full bg-[#1877f2] px-2.5 py-0.5 font-semibold text-white">Facebook</span>
+                    </div>
+                    <p className="rounded-b-lg bg-[#0f172a] px-4 py-3 text-[0.6875rem] text-slate-400">
+                        <span className="font-semibold text-white">{name}</span>
+                        <br />
+                        You get this because you chose offers from {name}. An unsubscribe link is added here when it&apos;s sent. In dark mode,
+                        mail apps that support it show this email in dark colours.
                     </p>
                 </div>
+                <p className="mt-1.5 text-center text-xs text-muted">Customers&apos; replies come to your Messages.</p>
             </section>
 
             {/* Facebook and WhatsApp */}
@@ -421,20 +550,11 @@ export function CampaignEditor({ vendorId, initial, readOnly: viewOnly }: { vend
                                 label="Include a photo in the Facebook post"
                                 checked={content.facebook.photos !== false}
                                 disabled={readOnly}
-                                onChange={(on) => set("facebook", "photos", on)}
+                                onChange={(on) => setPhotos("facebook", on)}
                             />
                         )}
                     </div>
-                    <textarea
-                        aria-labelledby="facebook-heading"
-                        value={content.facebook.text}
-                        onChange={(e) => set("facebook", "text", e.target.value)}
-                        readOnly={readOnly}
-                        rows={9}
-                        maxLength={2000}
-                        className={AREA}
-                    />
-                    {fieldError("facebook.text")}
+                    {channelWording("facebook", "Facebook post", 9, 2000)}
                     <div aria-label="Facebook preview" className="mt-3 overflow-hidden rounded-lg border border-line bg-white text-[0.8125rem] text-slate-800">
                         <p className="px-3 pt-3 font-semibold">{name}</p>
                         <p className="whitespace-pre-line px-3 py-2">
@@ -449,9 +569,6 @@ export function CampaignEditor({ vendorId, initial, readOnly: viewOnly }: { vend
                         vendorId={vendorId}
                         campaignId={campaign.campaign_id}
                         channel="facebook"
-                        text={content.facebook.text}
-                        pageUrl={pageUrl}
-                        photo={content.facebook.photos !== false ? socialPhoto : null}
                         post={campaign.posts.facebook}
                         visits={campaign.visits.facebook}
                         blocked={shareBlocked}
@@ -469,20 +586,11 @@ export function CampaignEditor({ vendorId, initial, readOnly: viewOnly }: { vend
                                 label="Include a photo in the WhatsApp message"
                                 checked={content.whatsapp.photos !== false}
                                 disabled={readOnly}
-                                onChange={(on) => set("whatsapp", "photos", on)}
+                                onChange={(on) => setPhotos("whatsapp", on)}
                             />
                         )}
                     </div>
-                    <textarea
-                        aria-labelledby="whatsapp-heading"
-                        value={content.whatsapp.text}
-                        onChange={(e) => set("whatsapp", "text", e.target.value)}
-                        readOnly={readOnly}
-                        rows={9}
-                        maxLength={1000}
-                        className={AREA}
-                    />
-                    {fieldError("whatsapp.text")}
+                    {channelWording("whatsapp", "WhatsApp message", 9, 1000)}
                     <div aria-label="WhatsApp preview" className="mt-3 rounded-lg bg-[#e5ddd5] p-3">
                         <div className="ml-auto max-w-[85%] overflow-hidden rounded-lg bg-[#dcf8c6] text-[0.8125rem] text-slate-800 shadow-sm">
                             {content.whatsapp.photos !== false && socialPhoto && (
@@ -498,9 +606,6 @@ export function CampaignEditor({ vendorId, initial, readOnly: viewOnly }: { vend
                         vendorId={vendorId}
                         campaignId={campaign.campaign_id}
                         channel="whatsapp"
-                        text={content.whatsapp.text}
-                        pageUrl={pageUrl}
-                        photo={content.whatsapp.photos !== false ? socialPhoto : null}
                         post={campaign.posts.whatsapp}
                         visits={campaign.visits.whatsapp}
                         blocked={shareBlocked}
@@ -509,6 +614,27 @@ export function CampaignEditor({ vendorId, initial, readOnly: viewOnly }: { vend
                     />
                 </section>
             </div>
+
+            {/* Sharing, like the share menu on business and event pages */}
+            {!viewOnly && (
+                <section aria-labelledby="share-heading" className="rounded-xl border border-line bg-surface p-5 shadow-card">
+                    <h2 id="share-heading" className="font-semibold">Share it</h2>
+                    {shareBlocked ? (
+                        <p className="mt-1.5 text-sm text-muted">{shareBlocked}</p>
+                    ) : (
+                        <div className="mt-3">
+                            <ShareButtons
+                                campaignId={campaign.campaign_id}
+                                pageUrl={pageUrl}
+                                facebook={content.facebook.text}
+                                whatsapp={content.whatsapp.text}
+                                headline={headline}
+                                photo={content.facebook.photos !== false ? socialPhoto : null}
+                            />
+                        </div>
+                    )}
+                </section>
+            )}
 
             {!readOnly && (
                 <div className="sticky bottom-0 z-10 -mx-1 flex flex-wrap items-center gap-2 rounded-xl border border-line bg-surface/95 p-3 shadow-float backdrop-blur">
@@ -533,9 +659,9 @@ export function CampaignEditor({ vendorId, initial, readOnly: viewOnly }: { vend
                             {dirty ? "Save and send" : "Send"} to {customers(campaign.send.audience)}
                         </button>
                     )}
-                    {message && (
-                        <span role={message.ok ? "status" : "alert"} className={`text-sm ${message.ok ? "text-success-ink" : "text-error-ink"}`}>
-                            {message.text}
+                    {notice && (
+                        <span role={notice.ok ? "status" : "alert"} className={`text-sm ${notice.ok ? "text-success-ink" : "text-error-ink"}`}>
+                            {notice.text}
                         </span>
                     )}
                     {["draft", "approved"].includes(campaign.status) && !posted && (

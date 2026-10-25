@@ -8,6 +8,7 @@
 // and anything a goal needs but the owner did not give becomes a [[placeholder]] that blocks approval.
 
 const { venueAndArea } = require("../../routes/events");
+const { displayPhone } = require("../../lib/phone");
 
 const PLACEHOLDER = /\[\[[^\]]+\]\]/g;
 
@@ -22,14 +23,12 @@ const COPY = {
             new_stock: {
                 subject: (b, first, more) => `Just in at ${b}: ${first}${more}`,
                 headline: (b) => `Just in at ${b}!`,
-                intro: (b) => `Fresh in at ${b}. Here's what's new:`,
                 extra: (text) => text,
                 closing: "Come and see what's new.",
             },
             offer: {
                 subject: (b, _first, _more, detail) => `${detail} at ${b}`,
                 headline: (b, detail) => `${detail} at ${b}!`,
-                intro: (b, detail) => `Good news from ${b}: ${detail}`,
                 itemsHeading: "On:",
                 dates: (range) => `Offer runs ${range}.`,
                 coupon: (code, end) => `Use code ${code} when you visit or order, until ${end}.`,
@@ -38,7 +37,6 @@ const COPY = {
             event: {
                 subject: (b, _first, _more, detail) => `You're invited: ${detail} at ${b}`,
                 headline: (b, detail) => `Join us for ${detail} at ${b}!`,
-                intro: (b, detail) => `${b} invites you to ${detail}.`,
                 when: (range) => `When: ${range}`,
                 where: (address) => `Where: ${address}`,
                 entry: (text) => `Entry: ${text}`,
@@ -49,7 +47,6 @@ const COPY = {
             reminder: {
                 subject: (b) => `${b} is here for you`,
                 headline: (b) => `${b} is here for you!`,
-                intro: (b) => `Just a reminder that ${b} is here whenever you need us.`,
                 itemsHeading: "Customer favourites:",
                 extra: (text) => text,
                 closing: "We look forward to seeing you again.",
@@ -85,14 +82,12 @@ const COPY = {
             new_stock: {
                 subject: (b, first, more) => `${b}-এ নতুন এসেছে: ${first}${more}`,
                 headline: (b) => `${b}-এ নতুন এসেছে!`,
-                intro: (b) => `${b}-এ নতুন এসেছে। দেখে নিন:`,
                 extra: (text) => text,
                 closing: "এসে দেখে যান।",
             },
             offer: {
                 subject: (b, _first, _more, detail) => `${b}-এর অফার: ${detail}`,
                 headline: (b, detail) => `${b}-এর অফার: ${detail}!`,
-                intro: (b, detail) => `${b} থেকে সুখবর: ${detail}`,
                 itemsHeading: "যেসব পণ্যে:",
                 dates: (range) => `অফার চলবে ${range}।`,
                 coupon: (code, end) => `${end} পর্যন্ত দোকানে এসে বা অর্ডারের সময় কোড ${code} বলুন।`,
@@ -101,7 +96,6 @@ const COPY = {
             event: {
                 subject: (b, _first, _more, detail) => `আমন্ত্রণ: ${b}-এ ${detail}`,
                 headline: (b, detail) => `${b}-এ ${detail}-এ আসুন!`,
-                intro: (b, detail) => `${b} আপনাকে ${detail}-এ আমন্ত্রণ জানাচ্ছে।`,
                 when: (range) => `কবে: ${range}`,
                 where: (address) => `কোথায়: ${address}`,
                 entry: (text) => `প্রবেশ: ${text}`,
@@ -112,7 +106,6 @@ const COPY = {
             reminder: {
                 subject: (b) => `${b} সবসময় আপনার পাশে`,
                 headline: (b) => `${b} সবসময় আপনার পাশে!`,
-                intro: (b) => `মনে করিয়ে দিচ্ছি, প্রয়োজনে ${b} সবসময় আছে।`,
                 itemsHeading: "গ্রাহকদের পছন্দ:",
                 extra: (text) => text,
                 closing: "আবার দেখা হওয়ার অপেক্ষায়।",
@@ -185,14 +178,35 @@ function facts(c, snapshot, lang) {
     return {
         name: pick(lang, b.name, b.name_bn),
         address: address ?? c.missing.address,
-        phone: b.phone ?? c.missing.phone,
+        // Written as people write it (01712-345678), not as stored (+8801712345678).
+        phone: b.phone ? displayPhone(b.phone) : c.missing.phone,
         page_url: b.page_url,
     };
 }
 
+const tag = (s) => `#${s.replace(/[^\p{L}\p{N}]+/gu, "")}`;
+
 /**
- * Builds the drafts for a brief. Returns { email: { subject, body, photos }, facebook: { text, photos },
- * whatsapp: { text, photos } }, with photos on for every channel.
+ * The three channels' wording from one message, so the owner writes once: the email adds a
+ * greeting and signs off with the business's name, Facebook adds hashtags, and WhatsApp makes the
+ * first line bold. frontend/shahebbazar/lib/campaignMessage.ts does the same as the owner types, and
+ * the two must stay alike.
+ */
+function channelsFromMessage(message, { lang, name }) {
+    const text = String(message).replace(/\r\n/g, "\n").trim();
+    const [first, ...rest] = text.split("\n");
+    const bold = /^\*.*\*$/.test(first.trim()) || !first.trim() ? first : `*${first.trim()}*`;
+    return {
+        email: [COPY[lang === "bn" ? "bn" : "en"].hello, "", text, "", name].join("\n"),
+        facebook: [text, "", [tag(name), "#Rajshahi", "#ShahebBazar"].join(" ")].join("\n"),
+        whatsapp: [bold, ...rest].join("\n"),
+    };
+}
+
+/**
+ * Builds the drafts for a brief. Returns { message, email: { subject, body, photos },
+ * facebook: { text, photos }, whatsapp: { text, photos } }, with photos on for every channel:
+ * one message, with each channel's wording made from it (channelsFromMessage).
  * `snapshot` is from campaigns.buildSnapshot(); `brief` is the validated brief. `brief.offer` is the
  * owner's own words: the offer, the event, or an extra line for new stock and reminders.
  */
@@ -238,23 +252,15 @@ function generateDrafts(snapshot, brief) {
     if ((brief.goal === "new_stock" || brief.goal === "reminder") && range) middle.push("", c.datesLine(range));
 
     const subject = g.subject(f.name, items[0]?.title ?? "", c.more(items.length - 1), detail);
-    const body = [c.hello, "", g.intro(f.name, detail), "", ...middle, "", g.closing, "", ...ctaLines, c.see(f.page_url), "", f.name].join("\n");
+    const message = [g.headline(f.name, detail), "", ...middle, "", g.closing, "", ...ctaLines, c.see(f.page_url)].join("\n");
+    const channels = channelsFromMessage(message, { lang, name: f.name });
 
-    const tag = (s) => `#${s.replace(/[^\p{L}\p{N}]+/gu, "")}`;
-    const facebook = [
-        g.headline(f.name, detail),
-        "",
-        ...middle,
-        "",
-        ...ctaLines,
-        f.page_url,
-        "",
-        [tag(f.name), "#Rajshahi", "#ShahebBazar"].join(" "),
-    ].join("\n");
-
-    const whatsapp = [`*${g.headline(f.name, detail)}*`, ...middle.filter(Boolean), ...ctaLines, f.page_url].join("\n");
-
-    return { email: { subject, body, photos: true }, facebook: { text: facebook, photos: true }, whatsapp: { text: whatsapp, photos: true } };
+    return {
+        message,
+        email: { subject, body: channels.email, photos: true },
+        facebook: { text: channels.facebook, photos: true },
+        whatsapp: { text: channels.whatsapp, photos: true },
+    };
 }
 
 /**
@@ -279,4 +285,4 @@ function placeholdersIn(content) {
 /** A listing's price as the drafts write it, in English or Bangla; null when it has none. */
 const listingPrice = (lang, listing) => priceText(COPY[lang === "bn" ? "bn" : "en"], listing);
 
-module.exports = { generateDrafts, warnings, placeholdersIn, listingPrice };
+module.exports = { generateDrafts, channelsFromMessage, warnings, placeholdersIn, listingPrice };

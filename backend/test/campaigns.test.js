@@ -107,6 +107,14 @@ describe("creating a campaign writes drafts from saved facts only", () => {
         assert.deepEqual(campaign.placeholders, []);
     });
 
+    it("all three are made from one message, kept with the version for the editor", async () => {
+        const { message, email, facebook, whatsapp } = latest(campaign).version_content;
+        assert.ok(message.startsWith("Just in at Rajshahi Mango Traders!"));
+        assert.equal(email.body, `Hello,\n\n${message}\n\nRajshahi Mango Traders`);
+        assert.equal(facebook.text, `${message}\n\n#RajshahiMangoTraders #Rajshahi #ShahebBazar`);
+        assert.equal(whatsapp.text, message.replace(/^(.*)/, "*$1*"));
+    });
+
     it("each goal writes a different message", async () => {
         const drafts = {};
         for (const goal of ["new_stock", "offer", "event", "reminder"]) {
@@ -116,10 +124,10 @@ describe("creating a campaign writes drafts from saved facts only", () => {
             drafts[goal] = latest(res.data).version_content.email;
         }
         assert.equal(new Set(Object.values(drafts).map((d) => d.subject)).size, 4, "four different subjects");
-        assert.match(drafts.new_stock.body, /Here's what's new:/);
+        assert.match(drafts.new_stock.body, /^Hello,\n\nJust in at Rajshahi Mango Traders!\n/);
         assert.match(drafts.new_stock.body, /\n\nour Eid mango fair\n/, "the owner's own words, with nothing put in front");
-        assert.match(drafts.offer.body, /Good news from Rajshahi Mango Traders: our Eid mango fair[\s\S]*Offer runs 1 November to 3 November\./);
-        assert.match(drafts.event.body, /invites you to our Eid mango fair\.\n\nWhen: 1 November to 3 November\nWhere: Shaheb Bazar Road, Rajshahi/);
+        assert.match(drafts.offer.body, /our Eid mango fair at Rajshahi Mango Traders![\s\S]*Offer runs 1 November to 3 November\./);
+        assert.match(drafts.event.body, /Join us for our Eid mango fair at Rajshahi Mango Traders!\n\nWhen: 1 November to 3 November\nWhere: Shaheb Bazar Road, Rajshahi/);
         assert.ok(!/Visit us at/.test(drafts.event.body), "an event doesn't repeat the address");
         assert.match(drafts.reminder.body, /Customer favourites:/);
     });

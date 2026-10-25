@@ -243,7 +243,7 @@ describe("the email itself", () => {
         const email = buildCampaignEmail({ campaign: offer("2099-11-30"), content: content(), recipient });
         assert.match(email.html, />MANGO10<\/div>/);
         assert.match(email.html, /Valid until 30 November 2099\./);
-        assert.match(email.html, /<a href="tel:\+8801711000005"[^>]*>Call 01711-000005<\/a>/);
+        assert.match(email.html, /<a href="tel:\+8801711000005"[^>]*>Call \+8801711000005<\/a>/);
         assert.match(email.html, /<a href="https:\/\/www\.google\.com\/maps\/search\/\?api=1&amp;query=Rajshahi%20Mango%20Traders%2C%20Shaheb%20Bazar%20Road%2C%20Rajshahi"[^>]*>Get directions<\/a>/);
         assert.match(email.html, />View our page<\/a>/);
         assert.doesNotMatch(buildCampaignEmail({ campaign: offer("2020-01-01"), content: content(), recipient }).html, /MANGO10/, "not once it has expired");
@@ -254,6 +254,23 @@ describe("the email itself", () => {
     it("starts with a hidden preview line, which inboxes show after the subject", () => {
         const email = buildCampaignEmail({ campaign, content: content(), recipient });
         assert.match(email.html, /<div style="display:none[^"]*">Hello &amp; welcome<\/div>/);
+    });
+
+    it("wording made from the one message leads with its first line as a heading, with share links and dark-mode colours", () => {
+        const message = "Just in at Rajshahi Mango Traders!\n\nFresh Khirsapat today.";
+        const email = buildCampaignEmail({
+            campaign: { ...campaign, campaign_id: 7 },
+            content: { message, email: { subject: "Just in", body: `Hello,\n\n${message}\n\nRajshahi Mango Traders`, photos: false } },
+            recipient,
+        });
+        assert.match(email.html, /font-size:24px[^"]*">Just in at Rajshahi Mango Traders!<\/div>/);
+        assert.match(email.html, /href="https:\/\/wa\.me\/\?text=Just%20in%20at%20Rajshahi%20Mango%20Traders!%20[^"]*from%3Dwhatsapp%26c%3D7"/);
+        assert.match(email.html, /facebook\.com\/sharer\/sharer\.php\?u=[^"]*from%3Dfacebook%26c%3D7"/);
+        assert.match(email.html, /@media \(prefers-color-scheme: dark\)/);
+        // Wording changed for the email alone shows as written.
+        const own = buildCampaignEmail({ campaign, content: { message, email: { subject: "Just in", body: "Hi there\n\nMy own words", photos: false } }, recipient });
+        assert.doesNotMatch(own.html, /font-size:24px/);
+        assert.match(own.html, /Hi there/);
     });
 
     it("writes the footer in Bangla for a Bangla campaign", () => {

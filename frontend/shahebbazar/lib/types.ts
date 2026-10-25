@@ -907,6 +907,8 @@ export type CampaignSendInfo =
     | { sent_at: string; results: { sent: number; failed: number } | null };
 
 export interface CampaignContent {
+    /** The one message the three channels are made from (lib/campaignMessage.ts); absent on older campaigns. */
+    message?: string;
     email: { subject: string; body: string; photos?: boolean };
     facebook: { text: string; photos?: boolean };
     whatsapp: { text: string; photos?: boolean };
