@@ -16,6 +16,13 @@ const SETTINGS = {
         label: "Approve new products and services before they appear",
         help: "When off, a new product or service is public straight away.",
     },
+    // KAN-298: off to begin with (decided 26 October 2026), so a business's event is public at once.
+    require_event_approval: {
+        type: "boolean",
+        default: false,
+        label: "Approve new events before they appear",
+        help: "When off, a new event is public straight away. Admins can still see every event.",
+    },
     // KAN-286: what the free plan includes (decided 21 October 2026, to confirm with the client).
     free_marketing_emails_per_month: {
         type: "integer",

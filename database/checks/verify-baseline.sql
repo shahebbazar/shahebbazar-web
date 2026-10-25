@@ -38,6 +38,8 @@ WITH required_relations(object_name, object_type) AS (
         ('marketing_campaign_versions', 'table'),
         ('marketing_sends', 'table'),
         ('marketing_campaign_posts', 'table'),
+        ('event_photos', 'table'),
+        ('event_responses', 'table'),
         ('v_business_cards', 'view'),
         ('v_search_trends_daily', 'view'),
         ('v_moderation_queue', 'view'),
@@ -54,7 +56,10 @@ WITH required_relations(object_name, object_type) AS (
         ('vendors', 'vendor_nid_status'),
         ('vendors', 'vendor_nid_submitted_at'),
         ('vendors', 'vendor_nid_verified_at'),
-        ('vendors', 'vendor_nid_verified_by')
+        ('vendors', 'vendor_nid_verified_by'),
+        ('events', 'event_type'),
+        ('events', 'event_price_type'),
+        ('conversations', 'event_id')
 ), missing_columns AS (
     SELECT 'column'::text AS object_type, c.table_name || '.' || c.column_name AS object_name
     FROM required_columns c

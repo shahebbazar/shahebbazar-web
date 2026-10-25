@@ -265,6 +265,73 @@ async function requireListingOwnership(req, res, next) {
     }
 }
 
+// Allows admins, or an owner or manager of the business running the event.
+// Sets req.event and req.vendor for the route.
+async function requireEventOwnership(req, res, next) {
+    if (!req.user) {
+        return res.status(401).json({
+            success: false,
+            error: "Authentication required"
+        });
+    }
+
+    if (req.user.user_role !== "admin" && req.user.user_role !== "vendor") {
+        return res.status(403).json({
+            success: false,
+            error: "Vendor access required"
+        });
+    }
+
+    const raw = String(req.params.eventId ?? "");
+    const eventId = /^\d{1,10}$/.test(raw) && Number(raw) <= 2147483647 ? Number(raw) : 0;
+
+    if (eventId <= 0) {
+        return res.status(400).json({
+            success: false,
+            error: "Invalid event id"
+        });
+    }
+
+    try {
+        const result = await pool.query(
+            `SELECT e.event_id, e.vendor_id, m.member_role
+             FROM events e
+             LEFT JOIN vendor_members m ON m.vendor_id = e.vendor_id AND m.user_id = $2
+             WHERE e.event_id = $1`,
+            [eventId, req.user.user_id]
+        );
+
+        if (result.rowCount === 0) {
+            return res.status(404).json({
+                success: false,
+                error: "Event not found."
+            });
+        }
+
+        const row = result.rows[0];
+
+        // Site-wide events with no business behind them can only be changed by an admin.
+        if (req.user.user_role !== "admin" && !row.member_role) {
+            return res.status(403).json({
+                success: false,
+                error: "You do not run this event"
+            });
+        }
+
+        req.event = { event_id: row.event_id, vendor_id: row.vendor_id };
+        req.vendor = { vendor_id: row.vendor_id };
+
+        return next();
+    } catch (error) {
+        console.error("Event ownership check failed:", error);
+
+        return res.status(500).json({
+            success: false,
+            error: "Unable to verify event ownership"
+        });
+    }
+}
+
 module.exports = {
     SESSION_COOKIE_NAME,
     hashSessionToken,
@@ -272,5 +339,6 @@ module.exports = {
     requireAuthenticatedUser,
     requireRole,
     requireVendorOwnership,
-    requireListingOwnership
+    requireListingOwnership,
+    requireEventOwnership
 };

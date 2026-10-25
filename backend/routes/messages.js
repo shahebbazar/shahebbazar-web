@@ -27,7 +27,7 @@ async function listConversations({ userId, vendorId, inquiriesOnly }) {
                 c.conversation_last_message_at AS last_message_at,
                 v.vendor_id, v.vendor_name, v.vendor_slug,
                 u.user_name AS customer_name,
-                l.listing_id, l.listing_title,
+                l.listing_id, l.listing_title, ev.event_id, ev.event_title, ev.event_slug,
                 (SELECT m.message_body FROM messages m WHERE m.conversation_id = c.conversation_id
                  ORDER BY m.message_created_at DESC, m.message_id DESC LIMIT 1) AS last_message,
                 (SELECT COUNT(*)::int FROM messages m WHERE m.conversation_id = c.conversation_id
@@ -36,6 +36,7 @@ async function listConversations({ userId, vendorId, inquiriesOnly }) {
          JOIN vendors v ON v.vendor_id = c.vendor_id
          JOIN users u ON u.user_id = c.user_id
          LEFT JOIN vendor_listings l ON l.listing_id = c.listing_id
+         LEFT JOIN events ev ON ev.event_id = c.event_id
          WHERE ${where} ${inquiriesOnly ? "AND c.listing_id IS NOT NULL" : ""}
          ORDER BY c.conversation_last_message_at DESC NULLS LAST, c.conversation_id DESC`,
         [vendorId ?? userId]
@@ -48,11 +49,13 @@ async function openConversation(conversationId, viewerUserId, asBusiness = false
     const head = await pool.query(
         `SELECT c.conversation_id, c.conversation_status AS status, c.user_id, c.vendor_id,
                 v.vendor_name, v.vendor_slug,
-                u.user_name AS customer_name, l.listing_id, l.listing_title
+                u.user_name AS customer_name, l.listing_id, l.listing_title,
+                ev.event_id, ev.event_title, ev.event_slug
          FROM conversations c
          JOIN vendors v ON v.vendor_id = c.vendor_id
          JOIN users u ON u.user_id = c.user_id
          LEFT JOIN vendor_listings l ON l.listing_id = c.listing_id
+         LEFT JOIN events ev ON ev.event_id = c.event_id
          WHERE c.conversation_id = $1`,
         [conversationId]
     );
@@ -165,7 +168,7 @@ router.post("/me/conversations", async (req, res) => {
 
         let found = await pool.query(
             `SELECT conversation_id FROM conversations
-             WHERE vendor_id = $1 AND user_id = $2 AND listing_id IS NOT DISTINCT FROM $3`,
+             WHERE vendor_id = $1 AND user_id = $2 AND listing_id IS NOT DISTINCT FROM $3 AND event_id IS NULL`,
             [vendorId, userId, listingId]
         );
         if (found.rowCount === 0) {

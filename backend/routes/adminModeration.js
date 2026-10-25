@@ -4,7 +4,7 @@ const { requireFeature } = require("../lib/access");
 
 const router = express.Router();
 
-// Admin approval of new businesses and listings (client requirement 2E).
+// Admin approval of new businesses, listings and events (client requirement 2E, KAN-298).
 
 const REASON_MIN = 10;
 const REASON_MAX = 500;
@@ -36,7 +36,7 @@ function parseDecision(body) {
 
 router.get("/admin/queue", requireFeature("admin.approvals"), async (req, res) => {
     try {
-        const [vendors, listings, recent] = await Promise.all([
+        const [vendors, listings, events, recent] = await Promise.all([
             // Oldest first: whoever has waited longest is reviewed first.
             pool.query(
                 `SELECT v.vendor_id, v.vendor_slug, v.vendor_name, v.vendor_name_bn,
@@ -80,23 +80,42 @@ router.get("/admin/queue", requireFeature("admin.approvals"), async (req, res) =
                  ORDER BY l.listing_created_at, l.listing_id`
             ),
             pool.query(
+                `SELECT e.event_id, e.event_title, e.event_title_bn, e.event_slug, e.event_description,
+                        e.event_type, e.event_venue, e.event_is_online, e.event_online_url,
+                        e.event_starts_at, e.event_ends_at, e.event_price_type, e.event_price_bdt,
+                        e.event_ticket_url, e.event_image_url, e.event_created_at,
+                        loc.location_name AS area_name,
+                        v.vendor_id, v.vendor_name, v.vendor_slug, v.vendor_status,
+                        (SELECT COUNT(*)::int FROM event_photos p WHERE p.event_id = e.event_id) AS photo_count,
+                        EXISTS (SELECT 1 FROM audit_logs a
+                                WHERE a.audit_target_type = 'event' AND a.audit_target_id = e.event_id
+                                  AND a.audit_action = 'event.reject') AS resubmitted
+                 FROM events e
+                 LEFT JOIN vendors v ON v.vendor_id = e.vendor_id
+                 LEFT JOIN locations loc ON loc.location_id = e.location_id
+                 WHERE e.event_status = 'pending'
+                 ORDER BY e.event_updated_at, e.event_id`
+            ),
+            pool.query(
                 `SELECT a.audit_id, a.audit_action, a.audit_target_type, a.audit_target_id,
                         a.audit_after->>'reason' AS reason, a.audit_created_at,
                         u.user_name AS actor_name,
                         CASE a.audit_target_type
                             WHEN 'vendor' THEN (SELECT vendor_name FROM vendors WHERE vendor_id = a.audit_target_id)
                             WHEN 'listing' THEN (SELECT listing_title FROM vendor_listings WHERE listing_id = a.audit_target_id)
+                            WHEN 'event' THEN (SELECT event_title FROM events WHERE event_id = a.audit_target_id)
                         END AS target_label
                  FROM audit_logs a
                  LEFT JOIN users u ON u.user_id = a.audit_actor_user_id
-                 WHERE a.audit_action IN ('vendor.approve', 'vendor.reject', 'listing.approve', 'listing.reject')
+                 WHERE a.audit_action IN ('vendor.approve', 'vendor.reject', 'listing.approve', 'listing.reject',
+                                          'event.approve', 'event.reject')
                  ORDER BY a.audit_created_at DESC, a.audit_id DESC
                  LIMIT $1`,
                 [RECENT_LIMIT]
             ),
         ]);
 
-        res.json({ vendors: vendors.rows, listings: listings.rows, recent: recent.rows });
+        res.json({ vendors: vendors.rows, listings: listings.rows, events: events.rows, recent: recent.rows });
     } catch (err) {
         console.error("GET /api/admin/queue failed:", err);
         res.status(500).json({ error: "Could not load the approval queue" });
@@ -105,11 +124,16 @@ router.get("/admin/queue", requireFeature("admin.approvals"), async (req, res) =
 
 // Decisions
 
+const TABLES = {
+    vendor: { name: "vendors", key: "vendor_id", status: "vendor_status", reason: "vendor_rejection_reason", label: "vendor_name", noun: "business" },
+    listing: { name: "vendor_listings", key: "listing_id", status: "listing_status", reason: "listing_rejection_reason", label: "listing_title", noun: "listing" },
+    event: { name: "events", key: "event_id", status: "event_status", reason: "event_rejection_reason", label: "event_title", noun: "event" },
+};
+
 // Applies one decision in a transaction: lock the row, check it is still pending, update it, audit it.
 async function decide(res, { kind, id, actor, decision, reason }) {
-    const table = kind === "vendor"
-        ? { name: "vendors", key: "vendor_id", status: "vendor_status", reason: "vendor_rejection_reason", label: "vendor_name" }
-        : { name: "vendor_listings", key: "listing_id", status: "listing_status", reason: "listing_rejection_reason", label: "listing_title" };
+    const table = TABLES[kind];
+    const Noun = table.noun[0].toUpperCase() + table.noun.slice(1);
 
     const client = await pool.connect();
     try {
@@ -123,18 +147,19 @@ async function decide(res, { kind, id, actor, decision, reason }) {
         );
         if (current.rowCount === 0) {
             await client.query("ROLLBACK");
-            return res.status(404).json({ error: `${kind === "vendor" ? "Business" : "Listing"} not found` });
+            return res.status(404).json({ error: `${Noun} not found` });
         }
         const before = current.rows[0];
         if (before.status !== "pending") {
             await client.query("ROLLBACK");
             return res.status(409).json({
-                error: `This ${kind === "vendor" ? "business" : "listing"} is no longer awaiting approval (it is ${before.status}). Reload to see the current queue.`,
+                error: `This ${table.noun} is no longer awaiting approval (it is ${before.status}). Reload to see the current queue.`,
                 status: before.status,
             });
         }
 
-        const status = decision === "approve" ? "approved" : "rejected";
+        // An approved event is published; businesses and listings are "approved".
+        const status = decision === "approve" ? (kind === "event" ? "published" : "approved") : "rejected";
 
         if (kind === "vendor") {
             await client.query(
@@ -147,11 +172,18 @@ async function decide(res, { kind, id, actor, decision, reason }) {
                  WHERE vendor_id = $1`,
                 [id, status, reason, actor]
             );
-        } else {
+        } else if (kind === "listing") {
             await client.query(
                 `UPDATE vendor_listings SET
                      listing_status = $2, listing_rejection_reason = $3, listing_updated_at = NOW()
                  WHERE listing_id = $1`,
+                [id, status, reason]
+            );
+        } else {
+            await client.query(
+                `UPDATE events SET
+                     event_status = $2, event_rejection_reason = $3, event_updated_at = NOW()
+                 WHERE event_id = $1`,
                 [id, status, reason]
             );
         }
@@ -181,7 +213,7 @@ async function decide(res, { kind, id, actor, decision, reason }) {
     }
 }
 
-for (const kind of ["vendor", "listing"]) {
+for (const kind of Object.keys(TABLES)) {
     router.post(`/admin/${kind}s/:id/decision`, requireFeature("admin.approvals"), async (req, res) => {
         const id = parseId(req.params.id);
         if (id === null) return res.status(400).json({ error: "Invalid id" });

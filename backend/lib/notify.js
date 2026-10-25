@@ -4,11 +4,11 @@ const DELAY_MINUTES = Number(process.env.NOTIFY_DELAY_MINUTES) || 5;
 const WORKER_INTERVAL_MS = 60 * 1000;
 
 // Writes an in-app alert, plus SMS and email fallbacks that go out only if the message is still unread later.
-async function notifyNewMessage(db, { userId, conversationId, messageId, from, preview }) {
+// `fallbacks` narrows them: updates about an event (KAN-298) send email only, not an SMS to everyone going.
+async function notifyNewMessage(db, { userId, conversationId, messageId, from, preview, fallbacks = ["sms", "email"] }) {
     const payload = JSON.stringify({ conversation_id: conversationId, message_id: messageId, from, preview });
     const user = await db.query("SELECT user_email FROM users WHERE user_id = $1", [userId]);
-    const channels = ["sms"];
-    if (user.rows[0]?.user_email) channels.push("email");
+    const channels = fallbacks.filter((channel) => channel !== "email" || user.rows[0]?.user_email);
 
     await db.query(
         `INSERT INTO notifications (user_id, notification_type, notification_channel, notification_payload,

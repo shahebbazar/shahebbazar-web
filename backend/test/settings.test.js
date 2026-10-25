@@ -28,9 +28,10 @@ describe("defaults", () => {
         assert.deepEqual(res.data.settings.map((s) => [s.key, s.value]), [
             ["require_business_approval", true],
             ["require_listing_approval", true],
+            ["require_event_approval", false],
             ["free_marketing_emails_per_month", 1],
         ]);
-        assert.deepEqual(res.data.settings.map((s) => s.group), ["approval", "approval", "marketing"]);
+        assert.deepEqual(res.data.settings.map((s) => s.group), ["approval", "approval", "approval", "marketing"]);
         assert.ok(res.data.settings.every((s) => s.label && s.help));
         assert.equal(typeof res.data.waiting.businesses, "number");
         assert.equal(typeof res.data.waiting.listings, "number");
@@ -38,7 +39,7 @@ describe("defaults", () => {
 
     it("the public summary says approval is needed", async () => {
         const res = await call("GET", "/settings/public");
-        assert.deepEqual(res.data, { require_business_approval: true, require_listing_approval: true });
+        assert.deepEqual(res.data, { require_business_approval: true, require_listing_approval: true, require_event_approval: false });
     });
 });
 

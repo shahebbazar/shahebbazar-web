@@ -1,4 +1,4 @@
-// Image uploads shared by the business-profile and listing routes.
+// Image uploads shared by the business-profile, listing and event routes.
 
 const crypto = require("crypto");
 const fs = require("fs");
@@ -115,7 +115,7 @@ async function checkUploads(req, res) {
 
 /**
  * Deletes the files behind stored "uploads/…" paths that no database row references any more.
- * Paths can be shared between listings, business photos, logos and covers, so each is checked first.
+ * Paths can be shared between listings, business photos, logos, covers and events, so each is checked first.
  */
 async function removeUnreferencedFiles(db, storedPaths) {
     for (const stored of new Set((storedPaths ?? []).filter(Boolean))) {
@@ -124,6 +124,8 @@ async function removeUnreferencedFiles(db, storedPaths) {
             `SELECT 1 FROM listing_photos WHERE photo_url = $1
              UNION ALL SELECT 1 FROM vendor_photos WHERE vendor_photo_url = $1
              UNION ALL SELECT 1 FROM vendors WHERE vendor_logo_url = $1 OR vendor_cover_url = $1
+             UNION ALL SELECT 1 FROM event_photos WHERE photo_url = $1
+             UNION ALL SELECT 1 FROM events WHERE event_image_url = $1
              LIMIT 1`,
             [stored]
         );
