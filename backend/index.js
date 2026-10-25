@@ -7,6 +7,7 @@ require('dotenv').config();
 const pool = require('./db');
 const { verifySchema, reportSchemaAtStartup } = require('./lib/verifySchema');
 const { UPLOAD_DIR, ensureUploadDir } = require('./lib/uploads');
+const { setupDatabase } = require('./lib/setupDatabase');
 
 const vendorsRouter = require('./routes/vendors');
 const vendorListingsRouter = require('./routes/vendorListings');
@@ -39,6 +40,7 @@ const {
 } = require("./lib/middleware/auth");
 
 const app = express();
+app.disable('x-powered-by');
 const PORT = process.env.PORT || 4000;
 
 // Behind a proxy, trust it to report the visitor's real IP; the analytics visitor hash depends on it.
@@ -155,18 +157,43 @@ function connectionHint(code) {
 // Uploads fail with ENOENT if their folder is missing, so create it before accepting requests.
 ensureUploadDir();
 
-const server = app.listen(PORT, () => {
-    console.log(`API running on http://localhost:${PORT}`);
-    reportSchemaAtStartup();
-    startNotificationWorker();
-});
-
-server.on('error', (err) => {
-    if (err.code === 'EADDRINUSE') {
-        console.error(`\n  Port ${PORT} is already in use.`);
-        console.error('  Stop the existing process and start again:\n');
-        console.error(`    npx kill-port ${PORT}\n`);
-        process.exit(1);
+// On servers where nobody can run commands in the containers, the API sets up its own database
+// (DB_AUTO_SETUP=true, lib/setupDatabase.js). The database may still be starting, so it retries.
+async function autoSetup() {
+    if (process.env.DB_AUTO_SETUP !== 'true') return;
+    for (let attempt = 1; ; attempt++) {
+        const client = await pool.connect().catch((err) => err);
+        if (!(client instanceof Error)) {
+            try {
+                await setupDatabase(client, { uploadDir: UPLOAD_DIR });
+                return;
+            } finally {
+                client.release();
+            }
+        }
+        if (attempt >= 15) throw client;
+        console.log(`Database setup: waiting for the database (${client.code || client.message})`);
+        await new Promise((resolve) => setTimeout(resolve, 2000));
     }
-    throw err;
+}
+
+autoSetup().then(() => {
+    const server = app.listen(PORT, () => {
+        console.log(`API running on http://localhost:${PORT}`);
+        reportSchemaAtStartup();
+        startNotificationWorker();
+    });
+
+    server.on('error', (err) => {
+        if (err.code === 'EADDRINUSE') {
+            console.error(`\n  Port ${PORT} is already in use.`);
+            console.error('  Stop the existing process and start again:\n');
+            console.error(`    npx kill-port ${PORT}\n`);
+            process.exit(1);
+        }
+        throw err;
+    });
+}).catch((err) => {
+    console.error('Database setup failed, so the API is not starting:', err);
+    process.exit(1);
 });

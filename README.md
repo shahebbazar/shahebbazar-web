@@ -20,7 +20,7 @@ their profile, listings and messages; administrators approve and moderate.
 - [API](#api)
 - [Marketing passes](#marketing-passes)
 - [Testing](#testing)
-- [Deploying to a server](docs/DEPLOY.md)
+- [Deploying to a server](docs/DEPLOY.md) (the team test server) and [to the client's server](docs/DEPLOY-CLIENT.md)
 - [Conventions](#conventions)
 - [Troubleshooting](#troubleshooting)
 - [Known gaps](#known-gaps)

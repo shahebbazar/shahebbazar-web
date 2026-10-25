@@ -6,12 +6,10 @@ const path = require("path");
 const readline = require("readline");
 const { Client } = require("pg");
 const { verifyDatabase } = require("./verify-db");
+const { BASELINE_FILES, DATABASE_DIR, copySeedAssets, recordBaselineMigrations } = require("../lib/setupDatabase");
 require("dotenv").config({ path: path.join(__dirname, "..", ".env") });
 
-const DATABASE_DIR = path.join(__dirname, "..", "..", "database");
-const BASELINE_FILES = ["baseline/schema.sql", "baseline/seed.sql"];
-// Images the seed references by path; copied into the upload folder so seeded listings display.
-const SEED_ASSETS_DIR = path.join(DATABASE_DIR, "seed-assets");
+// Images the seed references by path are copied into the upload folder so seeded listings display.
 const UPLOAD_DIR = process.env.UPLOAD_DIR
   ? path.resolve(process.env.UPLOAD_DIR)
   : path.join(__dirname, "..", "uploads");
@@ -46,20 +44,6 @@ async function withAdminClient(fn) {
   const client = new Client({ ...connection, database: "postgres" });
   await client.connect();
   try { return await fn(client); } finally { await client.end(); }
-}
-
-// Copies seed images into the upload folder, leaving any file that already exists untouched.
-function copySeedAssets() {
-  if (!fs.existsSync(SEED_ASSETS_DIR)) return 0;
-  fs.mkdirSync(UPLOAD_DIR, { recursive: true });
-  let copied = 0;
-  for (const name of fs.readdirSync(SEED_ASSETS_DIR)) {
-    const target = path.join(UPLOAD_DIR, name);
-    if (fs.existsSync(target)) continue;
-    fs.copyFileSync(path.join(SEED_ASSETS_DIR, name), target);
-    copied += 1;
-  }
-  return copied;
 }
 
 async function main() {
@@ -101,7 +85,9 @@ async function main() {
       await client.query(sql);
       console.log(`  applied ${file}`);
     }
-    const copied = copySeedAssets();
+    // The baseline already includes every migration file there is now.
+    await recordBaselineMigrations(client);
+    const copied = copySeedAssets(UPLOAD_DIR);
     console.log(`  copied ${copied} seed image${copied === 1 ? "" : "s"} to ${UPLOAD_DIR}`);
 
     const problems = await verifyDatabase(client);
