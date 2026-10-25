@@ -1,6 +1,7 @@
 import Link from "next/link";
 import { formatDateTime } from "@/lib/format";
 import type { ConversationSummary } from "@/lib/types";
+import { Avatar } from "./Avatar";
 
 export function ConversationList({
     conversations,
@@ -20,9 +21,10 @@ export function ConversationList({
             {conversations.map((c) => (
                 <li key={c.conversation_id}>
                     <Link href={hrefFor(c.conversation_id)} className="flex gap-3 px-4 py-3 hover:bg-surface-2">
-                        <span className="grid size-10 shrink-0 place-items-center rounded-full bg-brand-100 text-sm font-semibold text-brand-700">
-                            {(show === "business" ? c.vendor_name : c.customer_name).charAt(0).toUpperCase()}
-                        </span>
+                        <Avatar
+                            name={show === "business" ? c.vendor_name : c.customer_name}
+                            photo={show === "business" ? c.vendor_logo : c.customer_avatar}
+                        />
                         <span className="min-w-0 flex-1">
                             <span className="flex items-baseline justify-between gap-2">
                                 <span className={`truncate text-sm ${c.unread > 0 ? "font-bold" : "font-semibold"}`}>

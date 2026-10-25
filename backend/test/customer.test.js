@@ -5,7 +5,7 @@ const { describe, it, before, after } = require("node:test");
 const assert = require("node:assert/strict");
 const fs = require("node:fs");
 const path = require("node:path");
-const { PHONES, ROLES, PNG, UPLOAD_DIR, query, call, signIn, startApi, stopApi } = require("./support/harness");
+const { PHONES, ROLES, PNG, UPLOAD_DIR, TEST_DB, query, call, signIn, requestCode, startApi, stopApi } = require("./support/harness");
 
 let target; // an approved business the customer has not reviewed
 let pending; // a business awaiting approval
@@ -96,6 +96,18 @@ describe("my details (KAN-294)", () => {
         assert.equal((await save({ name: me.user_name, email: me.user_email ?? "", area: 999999 }, "customer")).status, 400);
         await save({ name: me.user_name, email: me.user_email ?? "", area: null }, "customer");
         assert.equal((await call("GET", "/me", { as: "customer" })).data.location_id, null);
+    });
+
+    it("saves the preferred language, keeps it when left out, and refuses anything else", async () => {
+        const me = (await call("GET", "/me", { as: "customer" })).data;
+        assert.equal(me.user_language, "en", "English to start with");
+        const base = { name: me.user_name, email: me.user_email ?? "" };
+        assert.equal((await save({ ...base, language: "bn" }, "customer")).data.user_language, "bn");
+        assert.equal((await save(base, "customer")).data.user_language, "bn", "unchanged when left out");
+        const bad = await save({ ...base, language: "fr" }, "customer");
+        assert.equal(bad.status, 400);
+        assert.ok(bad.data.errors.language);
+        await save({ ...base, language: "en" }, "customer");
     });
 });
 
@@ -296,8 +308,138 @@ describe("messages and alerts", () => {
         assert.equal(res.status, 409);
     });
 
+    it("each side sees the other's photo: the customer's for the business, the business's logo for the customer", async () => {
+        await query("UPDATE users SET user_avatar_url = 'uploads/test-face.png' WHERE user_phone = $1", [PHONES.customer]);
+        const [owner] = await query(
+            `SELECT u.user_phone FROM vendor_members m JOIN users u ON u.user_id = m.user_id
+             WHERE m.vendor_id = $1 AND m.member_role = 'owner'`, [target.vendor_id]
+        );
+        PHONES.targetOwner = owner.user_phone;
+        ROLES.targetOwner = "vendor";
+        await signIn("targetOwner");
+        const inbox = await call("GET", `/vendors/${target.vendor_id}/conversations`, { as: "targetOwner" });
+        assert.equal(inbox.status, 200, JSON.stringify(inbox.data));
+        assert.equal(inbox.data.find((c) => c.conversation_id === conversationId).customer_avatar, "uploads/test-face.png");
+        const thread = await call("GET", `/vendors/${target.vendor_id}/conversations/${conversationId}`, { as: "targetOwner" });
+        assert.equal(thread.data.conversation.customer_avatar, "uploads/test-face.png");
+        const [logo] = await query("SELECT vendor_logo_url FROM vendors WHERE vendor_id = $1", [target.vendor_id]);
+        const mine = (await call("GET", "/me/conversations", { as: "customer" })).data.find((c) => c.conversation_id === conversationId);
+        assert.equal(mine.vendor_logo, logo.vendor_logo_url);
+        await query("UPDATE users SET user_avatar_url = NULL WHERE user_phone = $1", [PHONES.customer]);
+    });
+
     it("unknown and invalid conversation ids are refused", async () => {
         assert.equal((await call("GET", "/me/conversations/999999", { as: "customer" })).status, 404);
         assert.equal((await call("GET", "/me/conversations/abc", { as: "customer" })).status, 400);
+    });
+});
+
+describe("deleting an account", () => {
+    const phone = "+8801799000077";
+    let id;
+    const counts = async () => (await query(
+        `SELECT (SELECT count(*)::int FROM saved_businesses WHERE user_id = $1) AS saved,
+                (SELECT count(*)::int FROM marketing_consents WHERE user_id = $1 AND consent_withdrawn_at IS NULL) AS consents,
+                (SELECT count(*)::int FROM sessions WHERE user_id = $1) AS sessions,
+                (SELECT count(*)::int FROM conversations WHERE user_id = $1 AND conversation_status = 'open') AS open_chats,
+                (SELECT count(*)::int FROM reviews WHERE user_id = $1) AS reviews`,
+        [id]
+    ))[0];
+
+    before(async () => {
+        [{ user_id: id }] = await query(
+            `INSERT INTO users (user_phone, user_email, user_name, user_role, user_phone_verified_at, user_avatar_url, user_language)
+             VALUES ($1, 'leaving@example.com', 'Leaving Customer', 'customer', now(), 'uploads/leaving.png', 'bn') RETURNING user_id`, [phone]
+        );
+        PHONES.leaving = phone;
+        ROLES.leaving = "customer";
+        await signIn("leaving");
+        await call("PUT", `/me/saved/${target.vendor_id}`, { as: "leaving" });
+        await call("PUT", `/me/consents/${target.vendor_id}`, { as: "leaving", json: { channels: ["email"], source: "account" } });
+        await call("POST", "/me/conversations", { as: "leaving", json: { vendor_id: target.vendor_id, body: "Do you deliver?" } });
+        await query(
+            `INSERT INTO reviews (vendor_id, user_id, review_rating, review_body) VALUES ($1, $2, 5, 'Left before deleting.')`, [target.vendor_id, id]
+        );
+    });
+
+    it("asks for confirmation first", async () => {
+        assert.equal((await call("DELETE", "/me", { as: "leaving", json: {} })).status, 400);
+        assert.equal((await call("GET", "/me", { as: "leaving" })).status, 200, "still there");
+    });
+
+    it("someone who runs a business must hand it over first", async () => {
+        const res = await call("DELETE", "/me", { as: "owner", json: { confirm: true } });
+        assert.equal(res.status, 409);
+        assert.match(res.data.error, /business/);
+    });
+
+    it("signed-out visitors can't delete anything", async () => {
+        assert.equal((await call("DELETE", "/me", { json: { confirm: true } })).status, 401);
+    });
+
+    it("deactivates for 30 days: signed out and sent no offers, with nothing lost", async () => {
+        const res = await call("DELETE", "/me", { as: "leaving", json: { confirm: true } });
+        assert.equal(res.status, 200, JSON.stringify(res.data));
+        assert.equal(res.data.grace_days, 30);
+        const days = (new Date(res.data.removed_on) - Date.now()) / 86400000;
+        assert.ok(days > 29.9 && days <= 30, `removed in 30 days, not ${days}`);
+        assert.match(res.headers.get("set-cookie") ?? "", /shaheb_session=;/, "the session cookie is cleared");
+        assert.equal((await call("GET", "/me", { as: "leaving" })).status, 401, "the session no longer works");
+
+        const [user] = await query("SELECT user_status, user_name, user_phone, user_email FROM users WHERE user_id = $1", [id]);
+        assert.deepEqual(user, { user_status: "deactivated", user_name: "Leaving Customer", user_phone: phone, user_email: "leaving@example.com" });
+        assert.deepEqual(await counts(), { saved: 1, consents: 1, sessions: 0, open_chats: 1, reviews: 1 });
+        const audience = await query(
+            `SELECT 1 FROM marketing_consents c JOIN users u ON u.user_id = c.user_id
+             WHERE c.user_id = $1 AND c.consent_withdrawn_at IS NULL AND u.user_status = 'active'`, [id]
+        );
+        assert.equal(audience.length, 0, "not in any business's audience while deactivated");
+    });
+
+    it("signing in again within the 30 days brings the account back as it was", async () => {
+        const code = await requestCode(phone, "login", "customer");
+        const verified = await call("POST", "/auth/verify", { json: { phone, purpose: "login", expectedRole: "customer", code } });
+        assert.equal(verified.status, 200, JSON.stringify(verified.data));
+        assert.equal(verified.data.reactivated, true);
+        const [user] = await query("SELECT user_status, user_deactivated_at FROM users WHERE user_id = $1", [id]);
+        assert.deepEqual(user, { user_status: "active", user_deactivated_at: null });
+        assert.deepEqual({ ...(await counts()), sessions: 0 }, { saved: 1, consents: 1, sessions: 0, open_chats: 1, reviews: 1 });
+        const actions = (await query("SELECT audit_action FROM audit_logs WHERE audit_target_id = $1 AND audit_action LIKE 'account.%' ORDER BY audit_id", [id]))
+            .map((r) => r.audit_action);
+        assert.deepEqual(actions, ["account.deactivate", "account.reactivate"]);
+        // A normal sign-in afterwards isn't a reactivation.
+        await signIn("leaving");
+    });
+
+    it("after 30 days the account can't sign in, and its personal details are removed", async () => {
+        assert.equal((await call("DELETE", "/me", { as: "leaving", json: { confirm: true } })).status, 200);
+        await query("UPDATE users SET user_deactivated_at = now() - INTERVAL '31 days' WHERE user_id = $1", [id]);
+        const refused = await call("POST", "/auth/request-verification", { json: { phone, purpose: "login", expectedRole: "customer" } });
+        assert.equal(refused.status, 401, "too late to bring it back");
+
+        // The API runs the removal every hour; run it now, against the test database.
+        process.env.PGDATABASE = TEST_DB;
+        const { removeExpired } = require("../lib/accountDeletion");
+        const pool = require("../db");
+        assert.equal(pool.options.database, TEST_DB);
+        try {
+            assert.ok((await removeExpired()) >= 1);
+        } finally {
+            await pool.end();
+        }
+
+        const [user] = await query("SELECT * FROM users WHERE user_id = $1", [id]);
+        assert.deepEqual(
+            [user.user_status, user.user_name, user.user_email, user.user_phone, user.user_avatar_url, user.location_id, user.user_phone_verified_at],
+            ["deleted", "Former customer", null, `deleted-${id}`, null, null, null]
+        );
+        assert.deepEqual(await counts(), { saved: 0, consents: 0, sessions: 0, open_chats: 0, reviews: 1 });
+        assert.equal((await query("SELECT count(*)::int AS n FROM audit_logs WHERE audit_action = 'account.delete' AND audit_target_id = $1", [id]))[0].n, 1);
+
+        const business = await call("GET", `/businesses/${target.vendor_slug}`);
+        const kept = business.data.reviews.find((r) => r.body === "Left before deleting.");
+        assert.ok(kept, "the review is still on the business page");
+        assert.deepEqual([kept.author, kept.author_verified, kept.author_avatar], ["Former customer", false, null]);
+        assert.equal((await query("SELECT count(*)::int AS n FROM users WHERE user_phone = $1", [phone]))[0].n, 0, "the mobile number is free again");
     });
 });

@@ -39,13 +39,18 @@ export function NewCampaignForm({
     listings,
     maxListings,
     events,
+    subscribers,
 }: {
     vendorId: number;
     listings: PromotableListing[];
     maxListings: number;
     /** The business's live, upcoming events (KAN-298). */
     events: VendorEvent[];
+    /** Email subscribers, and how many of them prefer Bangla (My details). */
+    subscribers: { total: number; bangla: number };
 }) {
+    // Start in the language most subscribers prefer; English when it's even or there are none.
+    const preferred = subscribers.bangla * 2 > subscribers.total ? "bn" : "en";
     const router = useRouter();
     const [goal, setGoal] = useState("new_stock");
     // The event this campaign is about; null for one described in the owner's own words.
@@ -311,12 +316,18 @@ export function NewCampaignForm({
                         <legend className="font-semibold">Language</legend>
                         <div className="mt-2.5 flex gap-4">
                             <label className="inline-flex items-center gap-1.5">
-                                <input type="radio" name="language" value="en" defaultChecked className="accent-brand-600" /> English
+                                <input type="radio" name="language" value="en" defaultChecked={preferred === "en"} className="accent-brand-600" /> English
                             </label>
                             <label className="inline-flex items-center gap-1.5">
-                                <input type="radio" name="language" value="bn" className="accent-brand-600" /> বাংলা
+                                <input type="radio" name="language" value="bn" defaultChecked={preferred === "bn"} className="accent-brand-600" /> বাংলা
                             </label>
                         </div>
+                        {subscribers.total > 0 && (
+                            <p className="mt-1.5 text-xs text-soft">
+                                {subscribers.bangla} of your {subscribers.total} email {subscribers.total === 1 ? "subscriber prefers" : "subscribers prefer"}{" "}
+                                Bangla.
+                            </p>
+                        )}
                     </fieldset>
                     <label className="block text-sm font-semibold sm:col-span-2">
                         Campaign name <span className="font-normal text-muted">(optional, only you see it)</span>

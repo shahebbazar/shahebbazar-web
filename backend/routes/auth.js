@@ -17,6 +17,7 @@ const {
     createSession,
 } = require("../lib/verification");
 const { validateVendorRegistration, createVendor, registeredMessage } = require("../lib/vendorRegistration");
+const { WITHIN_GRACE, reactivate } = require("../lib/accountDeletion");
 
 const router = express.Router();
 
@@ -107,16 +108,18 @@ router.post("/request-verification", async (req, res) => {
             const userResult = await pool.query(
                 `SELECT
                     user_role,
-                    user_status
+                    user_status,
+                    (${WITHIN_GRACE}) AS can_reactivate
                  FROM users
                  WHERE user_phone = $1
                  LIMIT 1`,
                 [phone]
             );
 
+            // A deleted account can sign in again during its 30 days, which brings it back.
             if (
                 userResult.rowCount === 0 ||
-                userResult.rows[0].user_status !== "active"
+                (userResult.rows[0].user_status !== "active" && !userResult.rows[0].can_reactivate)
             ) {
                 return res.status(401).json({
                     success: false,
@@ -378,7 +381,8 @@ router.post("/verify", async (req, res) => {
                 user_phone,
                 user_email,
                 user_role,
-                user_status
+                user_status,
+                (${WITHIN_GRACE}) AS can_reactivate
              FROM users
              WHERE user_phone = $1
              LIMIT 1
@@ -398,7 +402,7 @@ router.post("/verify", async (req, res) => {
 
         const user = userResult.rows[0];
 
-        if (user.user_status !== "active") {
+        if (user.user_status !== "active" && !user.can_reactivate) {
             await client.query("ROLLBACK");
 
             return res.status(403).json({
@@ -434,6 +438,9 @@ router.post("/verify", async (req, res) => {
              WHERE user_id = $1`,
             [user.user_id]
         );
+
+        // Signing in during the 30 days after deleting brings the account back.
+        const reactivated = user.user_status === "deactivated" && await reactivate(client, user.user_id);
 
         const sessionToken = crypto
             .randomBytes(32)
@@ -477,6 +484,7 @@ router.post("/verify", async (req, res) => {
 
         return res.json({
             success: true,
+            reactivated,
             session_id:
                 sessionResult.rows[0].session_id,
             user: {

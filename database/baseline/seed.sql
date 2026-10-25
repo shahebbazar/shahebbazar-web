@@ -946,11 +946,12 @@ WHERE u.user_phone = '+8801722000001';
 -- Email subscribers for Rajshahi Mango Traders (KAN-286), so a campaign can be sent in development.
 -- Three get its offers by email; Mahmud Hasan unsubscribed two days ago, so sends leave him out.
 -- example.com addresses can never receive mail, so even a real email provider reaches no one.
-INSERT INTO public.users (user_phone, user_email, user_name, user_role, user_phone_verified_at) VALUES
-    ('+8801722000003', 'rumana.akter@example.com',  'Rumana Akter',  'customer', NOW()),
-    ('+8801722000004', 'sajid.rahman@example.com',  'Sajid Rahman',  'customer', NOW()),
-    ('+8801722000005', 'tania.sultana@example.com', 'Tania Sultana', 'customer', NOW()),
-    ('+8801722000006', 'mahmud.hasan@example.com',  'Mahmud Hasan',  'customer', NOW());
+-- Rumana prefers Bangla (012), so the Mango Traders' campaign page shows 1 of 3 subscribers preferring it.
+INSERT INTO public.users (user_phone, user_email, user_name, user_role, user_phone_verified_at, user_language) VALUES
+    ('+8801722000003', 'rumana.akter@example.com',  'Rumana Akter',  'customer', NOW(), 'bn'),
+    ('+8801722000004', 'sajid.rahman@example.com',  'Sajid Rahman',  'customer', NOW(), 'en'),
+    ('+8801722000005', 'tania.sultana@example.com', 'Tania Sultana', 'customer', NOW(), 'en'),
+    ('+8801722000006', 'mahmud.hasan@example.com',  'Mahmud Hasan',  'customer', NOW(), 'en');
 
 INSERT INTO public.saved_businesses (user_id, vendor_id)
 SELECT u.user_id, v.vendor_id

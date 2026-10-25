@@ -634,8 +634,11 @@ CREATE TABLE public.users (
     user_updated_at timestamp with time zone DEFAULT now() NOT NULL,
     user_avatar_url character varying(500),
     location_id integer,
+    user_language character varying(2) DEFAULT 'en'::character varying NOT NULL,
+    user_deactivated_at timestamp with time zone,
+    CONSTRAINT users_user_language_check CHECK (((user_language)::text = ANY ((ARRAY['en'::character varying, 'bn'::character varying])::text[]))),
     CONSTRAINT users_user_role_check CHECK (((user_role)::text = ANY ((ARRAY['customer'::character varying, 'vendor'::character varying, 'admin'::character varying])::text[]))),
-    CONSTRAINT users_user_status_check CHECK (((user_status)::text = ANY ((ARRAY['active'::character varying, 'suspended'::character varying, 'deleted'::character varying])::text[])))
+    CONSTRAINT users_user_status_check CHECK (((user_status)::text = ANY ((ARRAY['active'::character varying, 'suspended'::character varying, 'deactivated'::character varying, 'deleted'::character varying])::text[])))
 );
 
 

@@ -73,6 +73,7 @@ export default async function OwnerConversationPage({
             <ThreadView
                 thread={thread}
                 otherName={thread.conversation.customer_name}
+                otherPhoto={thread.conversation.customer_avatar}
                 send={replyAsOwner.bind(null, vendorId, conversationId)}
             />
         </ProviderShell>

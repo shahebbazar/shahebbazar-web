@@ -146,8 +146,11 @@ export function PhoneVerificationForm({
         // Back to where they were going (e.g. messaging a business from an email), except for admins.
         const back = audience !== "admin" && result.user.user_role !== "admin" ? safeNext(next) : null;
 
+        // An account brought back from deletion goes to its account page, which says so.
         router.replace(
-            back ?? localeHref(destination, locale)
+            result.reactivated
+                ? "/account?welcome=back"
+                : back ?? localeHref(destination, locale)
         );
     }
 

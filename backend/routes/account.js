@@ -2,6 +2,8 @@ const express = require("express");
 const pool = require("../db");
 const { parseId, cleanText } = require("../lib/currentUser");
 const { requireFeature } = require("../lib/access");
+const { SESSION_COOKIE_NAME } = require("../lib/middleware/auth");
+const { GRACE_DAYS, runsBusiness, deactivate } = require("../lib/accountDeletion");
 const { withdraw, withdrawChannelEverywhere } = require("../services/marketing/consent");
 const { imageUpload, receive, discard, storedPath, checkUploads, removeUnreferencedFiles } = require("../lib/uploads");
 
@@ -25,7 +27,7 @@ router.get("/me", async (req, res) => {
         const userId = req.user.user_id;
         if (!userId) return res.status(404).json({ error: "No customer account exists" });
         const result = await pool.query(
-            `SELECT u.user_id, u.user_name, u.user_phone, u.user_email, u.user_avatar_url, u.location_id,
+            `SELECT u.user_id, u.user_name, u.user_phone, u.user_email, u.user_avatar_url, u.location_id, u.user_language,
                     loc.location_name AS area_name, loc.location_name_bn AS area_name_bn,
                     (SELECT COUNT(*)::int FROM saved_businesses s WHERE s.user_id = u.user_id) AS saved_count,
                     (SELECT COUNT(*)::int FROM reviews r WHERE r.user_id = u.user_id) AS review_count,
@@ -44,7 +46,7 @@ router.get("/me", async (req, res) => {
     }
 });
 
-// The customer's own details (KAN-294): { name, email, area }. Email is optional; an empty one removes it,
+// The customer's own details (KAN-294): { name, email, area, language }. Email is optional; an empty one removes it,
 // which also stops any offers by email, since there is nowhere to send them. The area (a location id,
 // or null) is optional and shows on their reviews. The phone number is the sign-in and is not changed here.
 router.put("/me/profile", async (req, res) => {
@@ -56,6 +58,9 @@ router.put("/me/profile", async (req, res) => {
     if (name.length < 2 || name.length > 120) errors.name = "Enter your name (2 to 120 characters).";
     if (email && (email.length > 255 || !EMAIL.test(email))) errors.email = "Enter a valid email address, or leave it empty.";
     if (area === null && rawArea !== null && rawArea !== undefined && rawArea !== "") errors.area = "Choose an area from the list.";
+    // Optional: left out, the saved language stays as it is.
+    const language = req.body?.language ?? null;
+    if (language !== null && !["en", "bn"].includes(language)) errors.language = "Choose English or Bangla.";
     if (Object.keys(errors).length) return res.status(400).json({ error: Object.values(errors)[0], errors });
 
     const client = await pool.connect();
@@ -65,9 +70,10 @@ router.put("/me/profile", async (req, res) => {
         }
         await client.query("BEGIN");
         const result = await client.query(
-            `UPDATE users SET user_name = $2, user_email = $3, location_id = $4, user_updated_at = NOW() WHERE user_id = $1
-             RETURNING user_name, user_phone, user_email, location_id`,
-            [req.user.user_id, name, email, area]
+            `UPDATE users SET user_name = $2, user_email = $3, location_id = $4,
+                    user_language = COALESCE($5, user_language), user_updated_at = NOW() WHERE user_id = $1
+             RETURNING user_name, user_phone, user_email, location_id, user_language`,
+            [req.user.user_id, name, email, area, language]
         );
         if (!email) await withdrawChannelEverywhere(client, req.user.user_id, "email", "account");
         await client.query("COMMIT");
@@ -123,6 +129,34 @@ router.delete("/me/avatar", async (req, res) => {
     } catch (err) {
         console.error("DELETE /api/me/avatar failed:", err);
         res.status(500).json({ error: "Could not remove your photo. Try again." });
+    }
+});
+
+// Deletes the customer's account: { confirm: true }. It is deactivated for 30 days first: signed out
+// everywhere and sent no offers, but with nothing lost, so signing in again brings it back. After
+// that its personal details are removed (lib/accountDeletion.js). Anyone who runs a business has to
+// hand it over or remove it first, so a business is never left without an owner.
+router.delete("/me", async (req, res) => {
+    if (req.body?.confirm !== true) return res.status(400).json({ error: "Confirm that you want to delete your account." });
+    const userId = req.user.user_id;
+    const client = await pool.connect();
+    try {
+        if (await runsBusiness(client, userId)) {
+            return res.status(409).json({
+                error: "You run a business on Shahebbazar. Hand it over to another owner, or contact us to remove it, before deleting your account.",
+            });
+        }
+        await client.query("BEGIN");
+        const removedOn = await deactivate(client, userId);
+        await client.query("COMMIT");
+        res.clearCookie(SESSION_COOKIE_NAME, { httpOnly: true, secure: process.env.NODE_ENV === "production", sameSite: "lax", path: "/" });
+        res.json({ removed_on: removedOn, grace_days: GRACE_DAYS });
+    } catch (err) {
+        await client.query("ROLLBACK").catch(() => { });
+        console.error("DELETE /api/me failed:", err);
+        res.status(500).json({ error: "Could not delete your account. Nothing was changed." });
+    } finally {
+        client.release();
     }
 });
 

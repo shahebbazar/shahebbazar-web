@@ -12,7 +12,8 @@ export const metadata: Metadata = {
     title: "My account",
 };
 
-export default async function AccountPage() {
+export default async function AccountPage({ searchParams }: { searchParams: Promise<{ welcome?: string }> }) {
+    const welcomeBack = (await searchParams).welcome === "back";
     const [me, alerts, session] = await Promise.all([
         authenticatedApiGet<Customer>("/me"),
         authenticatedApiGet<AlertList>("/me/alerts"),
@@ -45,6 +46,12 @@ export default async function AccountPage() {
                     Edit my details
                 </Link>
             </p>
+
+            {welcomeBack && (
+                <p role="status" className="mt-4 rounded-xl bg-success-bg p-3 text-sm text-success-ink">
+                    Welcome back. Your account is no longer being deleted, and everything is as you left it.
+                </p>
+            )}
 
             <ul className="mt-4 grid gap-3 sm:grid-cols-2 lg:grid-cols-4">
                 {cards.map(({ href, label, value, Icon }) => (

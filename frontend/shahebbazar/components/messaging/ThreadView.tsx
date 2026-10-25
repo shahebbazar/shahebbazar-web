@@ -4,15 +4,19 @@ import { MessageForm } from "@/components/customer/MessageForm";
 import { formatDateTime } from "@/lib/format";
 import type { SendResult } from "@/lib/api";
 import type { ConversationThread } from "@/lib/types";
+import { Avatar } from "./Avatar";
 
 export function ThreadView({
     thread,
     otherName,
+    otherPhoto,
     send,
     reportBackHref,
 }: {
     thread: ConversationThread;
     otherName: string;
+    /** The business's logo for the customer, the customer's photo for the business. */
+    otherPhoto: string | null;
     send: (body: string) => Promise<SendResult>;
     reportBackHref?: string;
 }) {
@@ -21,7 +25,10 @@ export function ThreadView({
     return (
         <div className="space-y-4">
             <div className="rounded-xl border border-line bg-surface p-4 shadow-card">
-                <p className="font-semibold">{otherName}</p>
+                <div className="flex items-center gap-3">
+                    <Avatar name={otherName} photo={otherPhoto} />
+                    <p className="font-semibold">{otherName}</p>
+                </div>
                 {conversation.event_title && conversation.event_slug && (
                     <p className="text-[0.8125rem] text-brand-700">
                         Event:{" "}

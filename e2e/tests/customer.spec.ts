@@ -1,7 +1,8 @@
 // A signed-in customer: saving businesses, offers, My details and unsubscribing.
 
+import crypto from "node:crypto";
 import path from "node:path";
-import { test, expect, signIn, sql, userIdOf, expectNoSideScroll } from "../fixtures";
+import { test, expect, signIn, sql, userIdOf, expectNoSideScroll, allowConsoleError, codeSince, logMark } from "../fixtures";
 import { ROOT } from "../env";
 
 // eslint-disable-next-line @typescript-eslint/no-require-imports
@@ -119,4 +120,72 @@ test("every account tab is visible on a phone @phone", async ({ page, context })
     await expect(tabs).toHaveCount(6);
     for (const tab of await tabs.all()) await expect(tab).toBeInViewport();
     await expectNoSideScroll(page);
+});
+
+test("the preferred language is saved on My details", async ({ page, context }) => {
+    const user = await userIdOf("customer2");
+    try {
+        await signIn(context, "customer2");
+        await page.goto("/account/details");
+        await page.getByRole("radio", { name: "বাংলা" }).check();
+        await page.getByRole("button", { name: "Save changes" }).click();
+        await expect(page.getByRole("status").filter({ hasText: /^Saved/ })).toBeVisible();
+        expect((await sql<{ user_language: string }>("SELECT user_language FROM users WHERE user_id = $1", [user]))[0].user_language).toBe("bn");
+        await page.reload();
+        await expect(page.getByRole("radio", { name: "বাংলা" })).toBeChecked();
+    } finally {
+        await sql("UPDATE users SET user_language = 'en' WHERE user_id = $1", [user]);
+    }
+});
+
+test("deleting an account signs out for 30 days, and signing in again brings it back @phone", async ({ page, context }, testInfo) => {
+    // A throwaway account, so the seeded ones are untouched.
+    const phone = testInfo.project.name === "phone" ? "+8801799000088" : "+8801799000087";
+    await sql("DELETE FROM users WHERE user_phone = $1", [phone]);
+    const [{ user_id: id }] = await sql<{ user_id: number }>(
+        `INSERT INTO users (user_phone, user_name, user_role, user_phone_verified_at) VALUES ($1, 'Leaving Soon', 'customer', now()) RETURNING user_id`,
+        [phone]
+    );
+    const token = crypto.randomBytes(32).toString("hex");
+    await sql(
+        `INSERT INTO sessions (user_id, session_token_hash, session_expires_at) VALUES ($1, $2, NOW() + INTERVAL '1 hour')`,
+        [id, crypto.createHash("sha256").update(token).digest("hex")]
+    );
+    await context.addCookies([{ name: "shaheb_session", value: token, domain: "localhost", path: "/", httpOnly: true, sameSite: "Lax" }]);
+
+    await page.goto("/account/details");
+    await expect(page.getByText(/deactivated for 30 days/)).toBeVisible();
+    await page.getByRole("button", { name: "Delete my account" }).click();
+    await page.getByRole("dialog").getByRole("button", { name: "Cancel" }).click();
+    await expect(page.getByRole("dialog")).toBeHidden();
+    await page.getByRole("button", { name: "Delete my account" }).click();
+    await expect(page.getByRole("dialog")).toContainText("within 30 days");
+    await page.getByRole("button", { name: "Yes, delete my account" }).click();
+
+    await expect(page).toHaveURL(/\/login\?account=deleted/);
+    await expect(page.getByRole("status").filter({ hasText: /will be deleted in 30 days/ })).toBeVisible();
+    expect((await context.cookies()).some((c) => c.name === "shaheb_session")).toBe(false);
+    const [user] = await sql<{ user_status: string; user_name: string }>("SELECT user_status, user_name FROM users WHERE user_id = $1", [id]);
+    expect([user.user_status, user.user_name]).toEqual(["deactivated", "Leaving Soon"]);
+    await expectNoSideScroll(page);
+
+    await page.locator("#customer-login-phone").fill(phone);
+    const mark = logMark();
+    await page.getByRole("button", { name: "Send verification code" }).click();
+    await page.locator("#customer-login-code").fill(await codeSince(phone, mark));
+    await page.getByRole("button", { name: "Verify and log in" }).click();
+    await expect(page).toHaveURL(/\/account\?welcome=back/);
+    await expect(page.getByRole("status").filter({ hasText: /Welcome back/ })).toBeVisible();
+    expect((await sql<{ user_status: string }>("SELECT user_status FROM users WHERE user_id = $1", [id]))[0].user_status).toBe("active");
+    await sql("DELETE FROM users WHERE user_id = $1", [id]);
+});
+
+test("a business owner is told to hand over the business before deleting their account", async ({ page, context, consoleErrors }) => {
+    allowConsoleError(consoleErrors, /409/);
+    await signIn(context, "owner");
+    await page.goto("/account/details");
+    await page.getByRole("button", { name: "Delete my account" }).click();
+    await page.getByRole("button", { name: "Yes, delete my account" }).click();
+    await expect(page.getByRole("alert").filter({ hasText: /run a business/ })).toBeVisible();
+    await expect(page).toHaveURL(/\/account\/details/);
 });

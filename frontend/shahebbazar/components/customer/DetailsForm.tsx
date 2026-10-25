@@ -16,6 +16,7 @@ export function DetailsForm({ me, areas }: { me: Customer; areas: Area[] }) {
     const [name, setName] = useState(me.user_name);
     const [email, setEmail] = useState(me.user_email ?? "");
     const [area, setArea] = useState(me.location_id ? String(me.location_id) : "");
+    const [language, setLanguage] = useState<"en" | "bn">(me.user_language ?? "en");
     const [errors, setErrors] = useState<Record<string, string>>({});
     const [message, setMessage] = useState<{ ok: boolean; text: string } | null>(null);
     const [pending, startTransition] = useTransition();
@@ -26,7 +27,7 @@ export function DetailsForm({ me, areas }: { me: Customer; areas: Area[] }) {
         setErrors({});
         const removingEmail = Boolean(me.user_email) && !email.trim();
         startTransition(async () => {
-            const result = await saveMyDetails(name, email, area ? Number(area) : null);
+            const result = await saveMyDetails(name, email, area ? Number(area) : null, language);
             if (result.ok) {
                 setMessage({
                     ok: true,
@@ -98,6 +99,37 @@ export function DetailsForm({ me, areas }: { me: Customer; areas: Area[] }) {
                     {errors.area ?? "Shown with your name on your reviews, so readers can see you're local."}
                 </span>
             </label>
+
+            <fieldset className="text-sm">
+                <legend className="font-semibold">Preferred language</legend>
+                <div className="mt-2 flex gap-4">
+                    <label className="inline-flex items-center gap-1.5">
+                        <input
+                            type="radio"
+                            name="language"
+                            value="en"
+                            checked={language === "en"}
+                            onChange={() => setLanguage("en")}
+                            className="accent-brand-600"
+                        />{" "}
+                        English
+                    </label>
+                    <label className="inline-flex items-center gap-1.5">
+                        <input
+                            type="radio"
+                            name="language"
+                            value="bn"
+                            checked={language === "bn"}
+                            onChange={() => setLanguage("bn")}
+                            className="accent-brand-600"
+                        />{" "}
+                        বাংলা
+                    </label>
+                </div>
+                <p className="mt-1 text-xs text-soft">
+                    {errors.language ?? "Businesses you get offers from see which language their customers prefer, so they can write in it."}
+                </p>
+            </fieldset>
 
             <div className="text-sm">
                 <p className="font-semibold">Mobile number</p>

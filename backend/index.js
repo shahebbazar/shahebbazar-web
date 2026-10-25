@@ -31,6 +31,7 @@ const consentsRouter = require('./routes/consents');
 const adminSettingsRouter = require('./routes/adminSettings');
 const campaignsRouter = require('./routes/campaigns');
 const { startNotificationWorker } = require('./lib/notify');
+const { startAccountRemoval } = require('./lib/accountDeletion');
 const authRouter = require("./routes/auth");
 
 const {
@@ -182,6 +183,7 @@ autoSetup().then(() => {
         console.log(`API running on http://localhost:${PORT}`);
         reportSchemaAtStartup();
         startNotificationWorker();
+        startAccountRemoval();
     });
 
     server.on('error', (err) => {

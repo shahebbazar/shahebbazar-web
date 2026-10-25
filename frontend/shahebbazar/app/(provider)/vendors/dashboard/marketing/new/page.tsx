@@ -43,6 +43,7 @@ export default async function NewCampaignPage({ searchParams }: { searchParams: 
                 vendorId={vendorId}
                 listings={workspace.listings}
                 maxListings={workspace.max_listings}
+                subscribers={{ total: workspace.email_subscribers, bangla: workspace.email_subscribers_bn }}
                 // Only events people can still go to (KAN-298), soonest first.
                 events={(events ?? [])
                     .filter((e) => e.event_status === "published" && !e.ended)

@@ -1,6 +1,7 @@
 import type { Metadata } from "next";
 import { CheckCircle2, Circle } from "lucide-react";
 import { AccountShell } from "@/components/customer/AccountShell";
+import { DeleteAccount } from "@/components/customer/DeleteAccount";
 import { DetailsForm } from "@/components/customer/DetailsForm";
 import { ProfilePhoto } from "@/components/customer/ProfilePhoto";
 import { apiGet } from "@/lib/api";
@@ -67,6 +68,7 @@ export default async function DetailsPage() {
 
             <ProfilePhoto name={me.user_name} initial={me.user_avatar_url} />
             <DetailsForm me={me} areas={areas ?? []} />
+            <DeleteAccount />
         </AccountShell>
     );
 }
