@@ -14,18 +14,35 @@ export const DEFAULT_OG_IMAGE = {
     alt: "Shahebbazar — find trusted businesses and services in Rajshahi",
 };
 
-/** Share card for one business, used when it has no cover photo. */
-export function businessOgImage(slug: string, name: string) {
-    return { url: `/og/business/${encodeURIComponent(slug)}`, width: 1200, height: 630, alt: name };
+/**
+ * A share card's address (app/og/...). The Bangla page gets the Bangla card, and `photo` (the stored
+ * cover) adds a version mark, so Facebook and WhatsApp fetch a new card when the cover changes rather
+ * than showing the one they saved.
+ */
+function ogCard(kind: "business" | "event" | "category", slug: string, alt: string, locale: Locale, photo?: string | null) {
+    const query = new URLSearchParams();
+    if (locale === "bn") query.set("lang", "bn");
+    if (photo) {
+        let hash = 0;
+        for (const ch of photo) hash = (Math.imul(hash, 31) + ch.charCodeAt(0)) | 0;
+        query.set("v", (hash >>> 0).toString(36));
+    }
+    const qs = query.toString();
+    return { url: `/og/${kind}/${encodeURIComponent(slug)}${qs ? `?${qs}` : ""}`, width: 1200, height: 630, alt };
 }
 
-/** Share cards for events and categories (app/og/event and app/og/category). */
-export function eventOgImage(slug: string, title: string) {
-    return { url: `/og/event/${encodeURIComponent(slug)}`, width: 1200, height: 630, alt: title };
+/** Share card for one business, carrying its cover photo when it has one. */
+export function businessOgImage(slug: string, name: string, locale: Locale = "en", cover?: string | null) {
+    return ogCard("business", slug, name, locale, cover);
 }
 
-export function categoryOgImage(slug: string, name: string) {
-    return { url: `/og/category/${encodeURIComponent(slug)}`, width: 1200, height: 630, alt: name };
+/** Share cards for events (with the cover photo) and categories. */
+export function eventOgImage(slug: string, title: string, locale: Locale = "en", cover?: string | null) {
+    return ogCard("event", slug, title, locale, cover);
+}
+
+export function categoryOgImage(slug: string, name: string, locale: Locale = "en") {
+    return ogCard("category", slug, name, locale);
 }
 
 const OG_LOCALE: Record<Locale, string> = { en: "en_GB", bn: "bn_BD" };

@@ -90,6 +90,7 @@ describe("access control", () => {
         ["delete an event", "DELETE", (id) => `/events/${id}`, {}],
         ["upload event photos", "POST", (id) => `/events/${id}/photos`, { photos: true }],
         ["choose the cover", "PUT", (id) => `/events/${id}/photos/1/cover`, {}],
+        ["replace a photo's file", "PUT", (id) => `/events/${id}/photos/1/file`, { photos: true }],
         ["remove an event photo", "DELETE", (id) => `/events/${id}/photos/1`, {}],
         ["message people going", "POST", (id) => `/events/${id}/message`, { json: { body: "Hello" } }],
     ];
@@ -273,6 +274,30 @@ describe("event photos", () => {
         assert.equal(res.data.photos[0].photo_id, second.photo_id);
         const [row] = await query("SELECT event_image_url FROM events WHERE event_id = $1", [eventId]);
         assert.equal(row.event_image_url, second.photo_url);
+    });
+
+    it("replacing the cover's file keeps it the cover and removes the old file", async () => {
+        const cover = (await call("GET", `/events/${eventId}/manage`, { as: "owner" })).data.photos[0];
+        const form = new FormData();
+        form.append("photo", new Blob([JPEG], { type: "image/jpeg" }), "cropped.jpg");
+        const res = await call("PUT", `/events/${eventId}/photos/${cover.photo_id}/file`, { as: "owner", form });
+        assert.equal(res.status, 200, JSON.stringify(res.data));
+        assert.equal(res.data.photos.length, 2);
+        assert.equal(res.data.photos[0].photo_id, cover.photo_id);
+        assert.equal(res.data.photos[0].photo_is_cover, true);
+        assert.notEqual(res.data.photos[0].photo_url, cover.photo_url);
+        assert.equal(fs.existsSync(path.join(UPLOAD_DIR, path.basename(cover.photo_url))), false);
+        const [row] = await query("SELECT event_image_url FROM events WHERE event_id = $1", [eventId]);
+        assert.equal(row.event_image_url, res.data.photos[0].photo_url);
+    });
+
+    it("replacing a photo that isn't the event's gives 404 and keeps no file", async () => {
+        const before = uploadedFiles().length;
+        const form = new FormData();
+        form.append("photo", new Blob([JPEG], { type: "image/jpeg" }), "cropped.jpg");
+        const res = await call("PUT", `/events/${eventId}/photos/999999/file`, { as: "owner", form });
+        assert.equal(res.status, 404);
+        assert.equal(uploadedFiles().length, before);
     });
 
     it("allows seven photos in all", async () => {

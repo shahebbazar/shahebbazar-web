@@ -35,15 +35,13 @@ export async function generateMetadata({
         title,
         description:
             locale === "bn"
-                ? `${title}, ${formatEventRange(event.event_starts_at, event.event_ends_at)}। বিস্তারিত দেখুন সাহেববাজারে।`
+                ? `${title}, ${formatEventRange(event.event_starts_at, event.event_ends_at, locale)}। বিস্তারিত দেখুন সাহেববাজারে।`
                 : event.event_description?.slice(0, 155) ??
                   `${title}, ${formatEventRange(event.event_starts_at, event.event_ends_at)} ${place}.`,
         locale,
         path: `/events/${event.event_slug}`,
-        // The cover photo, as on business pages, or a generated card so the link preview is never blank.
-        image: event.event_image_url
-            ? { url: assetUrl(event.event_image_url)!, alt: title }
-            : eventOgImage(event.event_slug, event.event_title),
+        // The 1200 x 630 card with the cover photo in it: a full-size preview whatever the photo's size.
+        image: eventOgImage(event.event_slug, title, locale, event.event_image_url),
     });
 }
 

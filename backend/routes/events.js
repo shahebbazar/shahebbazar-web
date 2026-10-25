@@ -841,6 +841,56 @@ router.put("/events/:eventId/photos/:photoId/cover", ...eventAccess, async (req,
     }
 });
 
+// Swaps one photo's file for a new one in the same place, such as the cover after cropping it to the
+// share-card shape; whether it is the cover doesn't change.
+router.put(
+    "/events/:eventId/photos/:photoId/file",
+    ...eventAccess,
+    receive(
+        imageUpload("photo", EVENT_PHOTO_MAX_BYTES, 1, (req) => `event-${req.params.eventId}`),
+        "5 MB",
+        "eventId",
+        "event"
+    ),
+    async (req, res) => {
+        const eventId = req.event.event_id;
+        const photoId = parseId(req.params.photoId);
+        if (photoId === null) {
+            await discard(req.files);
+            return res.status(400).json({ success: false, error: "Invalid photo id" });
+        }
+        if (!(await checkUploads(req, res))) return;
+
+        const client = await pool.connect();
+        try {
+            await client.query("BEGIN");
+            const replaced = await client.query(
+                `UPDATE event_photos p SET photo_url = $3
+                 FROM (SELECT photo_url AS old_url FROM event_photos WHERE photo_id = $1 AND event_id = $2) before
+                 WHERE p.photo_id = $1 AND p.event_id = $2
+                 RETURNING before.old_url`,
+                [photoId, eventId, storedPath(req.files[0])]
+            );
+            if (replaced.rowCount === 0) {
+                await client.query("ROLLBACK");
+                await discard(req.files);
+                return res.status(404).json({ success: false, error: "Photo not found." });
+            }
+            await syncCover(client, eventId);
+            await client.query("COMMIT");
+            await removeUnreferencedFiles(pool, [replaced.rows[0].old_url]);
+            res.json({ success: true, photos: await eventPhotos(pool, eventId) });
+        } catch (err) {
+            await client.query("ROLLBACK").catch(() => { });
+            await discard(req.files);
+            console.error(`PUT /api/events/${eventId}/photos/${photoId}/file failed:`, err);
+            res.status(500).json({ success: false, error: "Could not save the photo." });
+        } finally {
+            client.release();
+        }
+    }
+);
+
 router.delete("/events/:eventId/photos/:photoId", ...eventAccess, async (req, res) => {
     const eventId = req.event.event_id;
     const photoId = parseId(req.params.photoId);

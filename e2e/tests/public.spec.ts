@@ -28,29 +28,33 @@ test("home page cards fit their panels at laptop widths", async ({ page }) => {
     }
 });
 
+/** A JPEG's [width, height], from its frame header. */
+function jpegSize(jpeg: Buffer): [number, number] | null {
+    for (let i = 2; i + 9 < jpeg.length; ) {
+        if (jpeg[i] !== 0xff) return null;
+        const marker = jpeg[i + 1];
+        if (marker >= 0xc0 && marker <= 0xc3) return [jpeg.readUInt16BE(i + 7), jpeg.readUInt16BE(i + 5)];
+        i += 2 + jpeg.readUInt16BE(i + 2);
+    }
+    return null;
+}
+
 test("share cards are 1200 x 630 images, and each page points to its own", async ({ page, request, consoleErrors }) => {
-    // A business or event with a cover photo shares the photo instead, so its card is only checked as an image.
-    const pages: Record<string, string | null> = {
+    // Pages with a cover photo share it inside the card, so every one of these points to its card.
+    const pages: Record<string, string> = {
         "/og/event/rajshahi-book-fair": "/events/rajshahi-book-fair",
-        "/og/event/silk-city-trade-expo": null,
+        "/og/event/silk-city-trade-expo": "/events/silk-city-trade-expo",
         "/og/category/health": "/categories/health",
-        "/og/business/rajshahi-mango-traders": null,
+        "/og/business/rajshahi-mango-traders": "/business/rajshahi-mango-traders",
     };
     for (const [card, path] of Object.entries(pages)) {
-        if (path) {
-            await page.goto(path);
-            expect(await page.locator('meta[property="og:image"]').first().getAttribute("content")).toContain(card);
-        }
+        await page.goto(path);
+        expect(await page.locator('meta[property="og:image"]').first().getAttribute("content")).toContain(card);
         const res = await request.get(card);
         expect(res.status(), card).toBe(200);
-        expect(res.headers()["content-type"]).toBe("image/png");
-        const png = await res.body();
-        expect([png.readUInt32BE(16), png.readUInt32BE(20)], `${card} size`).toEqual([1200, 630]);
+        expect(res.headers()["content-type"]).toBe("image/jpeg");
+        expect(jpegSize(await res.body()), `${card} size`).toEqual([1200, 630]);
     }
-    await page.goto("/events/silk-city-trade-expo");
-    expect(await page.locator('meta[property="og:image"]').first().getAttribute("content")).toContain(
-        "/uploads/seed-business-shaheb-bazar-silk-house.jpg"
-    );
     expect((await request.get("/og.png")).status()).toBe(200);
     allowConsoleError(consoleErrors, /status of 404/);
     expect((await request.get("/og/event/no-such-event")).status()).toBe(404);

@@ -152,6 +152,21 @@ describe("business photos", () => {
         assert.equal((await call("DELETE", `/vendors/6/photos/${photo.id}`, { as: "otherVendor" })).status, 404);
     });
 
+    it("replacing its file (a cropped cover) keeps its place and updates the cover", async () => {
+        const form = new FormData();
+        form.append("photo", new Blob([PNG], { type: "image/png" }), "cropped.png");
+        assert.equal((await call("PUT", `/vendors/${MANGO}/photos/${photo.id}/file`, { as: "otherVendor", form })).status, 403);
+        const res = await call("PUT", `/vendors/${MANGO}/photos/${photo.id}/file`, { as: "owner", form });
+        assert.equal(res.status, 200, JSON.stringify(res.data));
+        const [replaced] = res.data.photos;
+        assert.equal(replaced.id, photo.id);
+        assert.notEqual(replaced.url, photo.url);
+        assert.equal(fs.existsSync(path.join(UPLOAD_DIR, path.basename(photo.url))), false);
+        const [v] = await query("SELECT vendor_cover_url FROM vendors WHERE vendor_id = $1", [MANGO]);
+        assert.equal(v.vendor_cover_url, replaced.url);
+        photo = replaced;
+    });
+
     it("removing it deletes the file and clears the cover", async () => {
         const res = await call("DELETE", `/vendors/${MANGO}/photos/${photo.id}`, { as: "owner" });
         assert.equal(res.status, 204, JSON.stringify(res.data));

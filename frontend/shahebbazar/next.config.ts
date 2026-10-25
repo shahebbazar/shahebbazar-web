@@ -10,11 +10,14 @@ const nextConfig: NextConfig = {
     distDir: process.env.NEXT_DIST_DIR || ".next",
     output: serverBuild ? "standalone" : undefined,
     compress: !serverBuild,
-    // The share images read their font files at run time, so the server build must include them.
+    // The share images read their font files at run time, and the Bangla text shaper (lib/ogText.ts) loads
+    // its WebAssembly file beside its own code, so the server build must include them.
     outputFileTracingIncludes: {
-        "/og/**": ["./assets/og-fonts/*.ttf"],
+        "/og/**": ["./assets/og-fonts/*.ttf", "./node_modules/harfbuzzjs/dist/harfbuzz.{js,wasm}"],
         "/og.png": ["./assets/og-fonts/*.ttf"],
     },
+    // Loaded by Node as it is, not bundled, so it finds that WebAssembly file.
+    serverExternalPackages: ["harfbuzzjs"],
     // No "X-Powered-By: Next.js" header advertising the software.
     poweredByHeader: false,
     turbopack: {

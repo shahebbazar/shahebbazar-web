@@ -408,6 +408,57 @@ router.post(
     }
 );
 
+// Swaps one photo's file for a new one in the same place, such as the cover after cropping it to the
+// share-card shape; the photo keeps its position, so a cover stays the cover.
+router.put(
+    "/vendors/:vendorId/photos/:photoId/file",
+    ...ownerAccess,
+    receive(imageUpload("photo", PHOTO_MAX_BYTES, 1, vendorFilePrefix), "5 MB"),
+    async (req, res) => {
+        const vendorId = parseId(req.params.vendorId);
+        const photoId = parseId(req.params.photoId);
+        if (photoId === null) {
+            await discard(req.files);
+            return res.status(400).json({ error: "Invalid id" });
+        }
+        if (!(await checkUploads(req, res))) return;
+
+        const client = await pool.connect();
+        try {
+            await client.query("BEGIN");
+            const replaced = await client.query(
+                `UPDATE vendor_photos p SET vendor_photo_url = $3
+                 FROM (SELECT vendor_photo_url AS old_url FROM vendor_photos WHERE vendor_photo_id = $1 AND vendor_id = $2) before
+                 WHERE p.vendor_photo_id = $1 AND p.vendor_id = $2
+                 RETURNING before.old_url`,
+                [photoId, vendorId, storedPath(req.files[0])]
+            );
+            if (replaced.rowCount === 0) {
+                await client.query("ROLLBACK");
+                await discard(req.files);
+                return res.status(404).json({ error: "Photo not found" });
+            }
+            await syncCover(client, vendorId);
+            await client.query("COMMIT");
+            await removeUnreferencedFiles(pool, [replaced.rows[0].old_url]);
+
+            const photos = await pool.query(
+                `SELECT vendor_photo_id AS id, vendor_photo_url AS url FROM vendor_photos
+                 WHERE vendor_id = $1 ORDER BY vendor_photo_sort, vendor_photo_id`,
+                [vendorId]
+            );
+            res.json({ photos: photos.rows });
+        } catch (err) {
+            await client.query("ROLLBACK").catch(() => { });
+            await discard(req.files);
+            console.error(`PUT /api/vendors/${vendorId}/photos/${photoId}/file failed:`, err);
+            res.status(500).json({ error: "Could not save the photo." });
+        } finally {
+            client.release();
+        }
+    }
+);
+
 router.delete("/vendors/:vendorId/photos/:photoId", ...ownerAccess, async (req, res) => {
     const vendorId = parseId(req.params.vendorId);
     const photoId = parseId(req.params.photoId);
