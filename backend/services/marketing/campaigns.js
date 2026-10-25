@@ -106,7 +106,10 @@ function validateContent(body) {
     const text = (v) => (typeof v === "string" ? v.replace(/\r\n/g, "\n").trim() : "");
     // Whether each channel goes out with photos; on unless the owner switched it off.
     const photos = (channel) => body?.[channel]?.photos !== false;
+    // The one message the channels were made from, kept so the editor can show it again.
+    const message = text(body?.message);
     const content = {
+        ...(message ? { message } : {}),
         email: { subject: text(body?.email?.subject), body: text(body?.email?.body), photos: photos("email") },
         facebook: { text: text(body?.facebook?.text), photos: photos("facebook") },
         whatsapp: { text: text(body?.whatsapp?.text), photos: photos("whatsapp") },
@@ -119,6 +122,7 @@ function validateContent(body) {
     check("email.body", content.email.body, LIMITS.body, "The email");
     check("facebook.text", content.facebook.text, LIMITS.facebook, "The Facebook post");
     check("whatsapp.text", content.whatsapp.text, LIMITS.whatsapp, "The WhatsApp message");
+    if (message.length > LIMITS.body) errors.message = `Your message is too long (${LIMITS.body} characters at most).`;
     return Object.keys(errors).length ? { errors } : { content };
 }
 

@@ -318,7 +318,7 @@ router.get("/businesses/:slug", async (req, res) => {
         const [extra, categories, hours, photos, listings, facts, reviews, distribution, similar, social] =
             await Promise.all([
                 pool.query(
-                    `SELECT vendor_address, vendor_phone, vendor_whatsapp, vendor_email,
+                    `SELECT vendor_address, vendor_phone, vendor_whatsapp, vendor_phone_alt, vendor_phone_alt_type, vendor_email,
                             vendor_website, vendor_lat, vendor_lng, vendor_created_at
                      FROM vendors WHERE vendor_id = $1`,
                     [id]
@@ -410,9 +410,12 @@ router.get("/businesses/:slug", async (req, res) => {
                     `SELECT r.review_id, r.review_rating AS rating, r.review_body AS body,
                             r.review_created_at AS created_at, u.user_name AS author,
                             u.user_phone_verified_at IS NOT NULL AS author_verified,
+                            u.user_avatar_url AS author_avatar,
+                            aloc.location_name AS author_area, aloc.location_name_bn AS author_area_bn,
                             r.review_reply AS reply, r.review_replied_at AS replied_at
                      FROM reviews r
                      JOIN users u ON u.user_id = r.user_id
+                     LEFT JOIN locations aloc ON aloc.location_id = u.location_id
                      WHERE r.vendor_id = $1 AND r.review_status = 'published'
                        AND r.review_body IS NOT NULL
                      ORDER BY r.review_created_at DESC

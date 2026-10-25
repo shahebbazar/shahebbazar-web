@@ -10,7 +10,9 @@ import type {
     VendorProfile,
     VendorProfileInput,
     VendorProfileWithOptions,
+    PhoneType,
 } from "@/lib/types";
+import { formatLocalPhone, formatPhone, toStoredPhone } from "@/lib/format";
 import { refreshPublicPages, saveBusinessProfile } from "./actions";
 import { Field, Section, borderFor, describedBy, inputClass } from "./formParts";
 import { DAY_NAMES, HoursSection, type DayHours } from "./HoursSection";
@@ -21,6 +23,12 @@ import { ImagesSection, imageSrc } from "./ImagesSection";
 type Photo = { id: number; url: string };
 type FactRow = FactEntry & { key: number };
 
+const ALT_PHONE_HINTS: Record<PhoneType, string> = {
+    landline: "Optional. An office or shop landline, e.g. 0721-775544.",
+    mobile: "Optional. Another mobile for customers to call, e.g. +8801812345678.",
+    whatsapp: "Optional. A WhatsApp number customers can message, e.g. +8801812345678.",
+};
+
 type FormState = {
     name: string;
     name_bn: string;
@@ -28,7 +36,8 @@ type FormState = {
     location_id: string;
     address: string;
     phone: string;
-    whatsapp: string;
+    alt_phone: string;
+    alt_phone_type: PhoneType;
     description: string;
     email: string;
     website: string;
@@ -54,8 +63,13 @@ function toForm(p: VendorProfile): FormState {
         categories: p.category_ids.length > 0 ? p.category_ids.map(String) : [""],
         location_id: v.location_id ? String(v.location_id) : "",
         address: v.vendor_address ?? "",
-        phone: v.vendor_phone,
-        whatsapp: v.vendor_whatsapp ?? "",
+        // Main numbers as +8801712345678; the second number in the local style (0721-775544).
+        // The owner's sign-in mobile, shown read-only.
+        phone: formatPhone(v.owner_phone ?? v.vendor_phone ?? ""),
+        // The second number in the style of its type: a landline as 0721-775544, a mobile or WhatsApp
+        // number as +8801712345678.
+        alt_phone: v.vendor_phone_alt ? (v.vendor_phone_alt_type === "landline" ? formatLocalPhone : formatPhone)(v.vendor_phone_alt) : "",
+        alt_phone_type: v.vendor_phone_alt_type ?? "landline",
         description: v.vendor_description ?? "",
         email: v.vendor_email ?? "",
         website: v.vendor_website ?? "",
@@ -81,7 +95,8 @@ function toInput(f: FormState, photos: Photo[], submit: boolean): VendorProfileI
         location_id: f.location_id ? Number(f.location_id) : null,
         address: f.address,
         phone: f.phone,
-        whatsapp: f.whatsapp,
+        alt_phone: f.alt_phone,
+        alt_phone_type: f.alt_phone_type,
         description: f.description,
         email: f.email,
         website: f.website,
@@ -413,16 +428,19 @@ export function BusinessForm({ initial }: { initial: VendorProfileWithOptions })
                                 />
                             </Field>
 
-                            <Field id="f-phone" label="Customer Contact Number" required error={errors.phone} hint="Enter the Bangladeshi phone number customers should use to contact this business, e.g. 01712-345678.">
+                            {/* One mobile per account: the contact number is the sign-in, so it can't be changed here. */}
+                            <Field
+                                id="f-phone"
+                                label="Contact Mobile Number"
+                                hint="The mobile you sign in with, which customers call. It can't be changed here; add another number below."
+                            >
                                 <input
                                     id="f-phone"
                                     type="tel"
-                                    inputMode="tel"
-                                    autoComplete="tel"
                                     value={form.phone}
-                                    onChange={(e) => set("phone", e.target.value)}
-                                    className={`${inputClass} ${borderFor(errors.phone)}`}
-                                    {...describedBy("f-phone", errors.phone, true)}
+                                    readOnly
+                                    className={`${inputClass} border-line bg-surface-2 text-muted`}
+                                    {...describedBy("f-phone", undefined, true)}
                                 />
                             </Field>
 
@@ -438,16 +456,44 @@ export function BusinessForm({ initial }: { initial: VendorProfileWithOptions })
                                 />
                             </Field>
 
-                            <Field id="f-whatsapp" label="WhatsApp Number" error={errors.whatsapp} hint="Optional.">
-                                <input
-                                    id="f-whatsapp"
-                                    type="tel"
-                                    inputMode="tel"
-                                    value={form.whatsapp}
-                                    onChange={(e) => set("whatsapp", e.target.value)}
-                                    className={`${inputClass} ${borderFor(errors.whatsapp)}`}
-                                    {...describedBy("f-whatsapp", errors.whatsapp, true)}
-                                />
+                            <Field
+                                id="f-alt-phone"
+                                label="Second Number"
+                                error={errors.alt_phone}
+                                hint={ALT_PHONE_HINTS[form.alt_phone_type]}
+                            >
+                                <div className="flex gap-2">
+                                    <select
+                                        aria-label="Type of second number"
+                                        value={form.alt_phone_type}
+                                        onChange={(e) => {
+                                            const type = e.target.value as PhoneType;
+                                            set("alt_phone_type", type);
+                                            const stored = toStoredPhone(form.alt_phone);
+                                            if (stored) set("alt_phone", (type === "landline" ? formatLocalPhone : formatPhone)(stored));
+                                        }}
+                                        className={`${inputClass.replace("w-full", "w-32")} shrink-0`}
+                                    >
+                                        <option value="landline">Landline</option>
+                                        <option value="mobile">Mobile</option>
+                                        <option value="whatsapp">WhatsApp</option>
+                                    </select>
+                                    <input
+                                        id="f-alt-phone"
+                                        type="tel"
+                                        inputMode="tel"
+                                        value={form.alt_phone}
+                                        placeholder={form.alt_phone_type === "landline" ? "0721-775544" : "+8801812345678"}
+                                        onChange={(e) => set("alt_phone", e.target.value)}
+                                        onBlur={() => {
+                                            // Shown in its type's style once typed: 0721-775544, or +8801812345678.
+                                            const stored = toStoredPhone(form.alt_phone);
+                                            if (stored) set("alt_phone", (form.alt_phone_type === "landline" ? formatLocalPhone : formatPhone)(stored));
+                                        }}
+                                        className={`${inputClass} min-w-0 flex-1 ${borderFor(errors.alt_phone)}`}
+                                        {...describedBy("f-alt-phone", errors.alt_phone, true)}
+                                    />
+                                </div>
                             </Field>
 
                             <Field
@@ -768,6 +814,7 @@ export function BusinessForm({ initial }: { initial: VendorProfileWithOptions })
                             {form.phone && (
                                 <p className="mt-1.5 flex items-center gap-1.5 text-[0.8125rem]">
                                     <Phone className="size-3.5 text-muted" /> {form.phone}
+                                    {form.alt_phone && <span className="text-muted">· {form.alt_phone}</span>}
                                 </p>
                             )}
                             {form.address && (

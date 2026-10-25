@@ -5,6 +5,7 @@ import { ProviderShell, parseVendorParam } from "@/components/provider/ProviderS
 import type { BusinessMember, OwnerDetails, VendorSummary } from "@/lib/types";
 import { SettingsForm } from "./SettingsForm";
 import { TeamSection } from "./TeamSection";
+import { formatPhone } from "@/lib/format";
 
 export const metadata: Metadata = {
     title: "Settings",
@@ -34,7 +35,7 @@ export default async function SettingsPage({ searchParams }: { searchParams: Pro
                     <dt className="text-muted">Owner</dt>
                     <dd className="font-medium">{owner.user_name}</dd>
                     <dt className="mt-3 text-muted">Phone</dt>
-                    <dd className="font-medium">{owner.user_phone}</dd>
+                    <dd className="font-medium">{formatPhone(owner.user_phone)}</dd>
                     <dt className="mt-3 text-muted">Email</dt>
                     <dd className="font-medium">{owner.user_email ?? "Not added"}</dd>
                 </dl>

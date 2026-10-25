@@ -44,8 +44,8 @@ test("an owner writes and fixes an offer campaign; parts still to fill in block 
     await expect(page.locator("mark").first()).toBeVisible();
     await expect(page.getByRole("button", { name: /^Send to 3 customers/ })).toBeDisabled();
 
-    // Replace every [[placeholder]] in all three channels and save.
-    for (const box of [subject, page.getByRole("textbox", { name: "Message", exact: true }), page.getByRole("textbox", { name: "Facebook post" }), page.getByRole("textbox", { name: "WhatsApp message" })]) {
+    // Replace every [[placeholder]] in the subject and the one message (which all three channels follow) and save.
+    for (const box of [subject, page.getByRole("textbox", { name: "Message", exact: true })]) {
         const value = await box.inputValue();
         await box.fill(value.replace(/\[\[[^\]]+\]\]/g, "10% off all mangoes this week"));
     }
@@ -56,6 +56,35 @@ test("an owner writes and fixes an offer campaign; parts still to fill in block 
 
     await page.getByRole("link", { name: "Marketing" }).first().click();
     await expect(page.getByRole("link", { name: /Offer: Khirsapat Mango/ }).first()).toContainText("Draft");
+});
+
+test("one message makes all three channels; one channel can be changed on its own and put back @phone", async ({ page }) => {
+    await newCampaign(page, { goal: "Reminder", products: ["Fazli Mango"] });
+    const message = page.getByRole("textbox", { name: "Message", exact: true });
+    await message.fill("Mango season is here!\nCome and taste the Fazli.");
+    await expect(page.getByLabel("Email preview")).toContainText("Mango season is here!");
+    await expect(page.getByLabel("Facebook preview")).toContainText("#Rajshahi #ShahebBazar");
+    await expect(page.getByLabel("WhatsApp preview")).toContainText("Mango season is here!");
+    await expect(page.getByText("Made from your message")).toHaveCount(3);
+
+    // Facebook alone gets different words; a later change to the message leaves it alone.
+    await page.getByRole("button", { name: "Change for Facebook only" }).click();
+    await page.getByRole("textbox", { name: "Facebook post" }).fill("Only on Facebook: free tasting!");
+    await expect(page.getByText("Changed for Facebook only")).toBeVisible();
+    await message.fill("Mango season is here!\nNow with Langra too.");
+    await expect(page.getByLabel("Facebook preview")).toContainText("Only on Facebook: free tasting!");
+    await expect(page.getByLabel("WhatsApp preview")).toContainText("Now with Langra too.");
+
+    // And back to the message.
+    await page.getByRole("button", { name: "Use my message again" }).click();
+    await expect(page.getByLabel("Facebook preview")).toContainText("Now with Langra too.");
+    await page.getByRole("button", { name: "Save changes" }).click();
+    await expect(page.getByRole("status").filter({ hasText: "Saved as version 2." })).toBeVisible();
+    await page.reload();
+    await expect(message).toHaveValue("Mango season is here!\nNow with Langra too.");
+    await expectNoSideScroll(page);
+    // Later tests count the Reminder campaigns.
+    await sql("DELETE FROM marketing_campaigns WHERE campaign_id = $1", [Number(new URL(page.url()).pathname.split("/").pop())]);
 });
 
 test("a Bangla campaign is written in Bangla @phone", async ({ page }) => {
@@ -172,9 +201,9 @@ test("a campaign is previewed and sent by email to the customers who chose email
     await newCampaign(page, { goal: "Reminder", products: ["Khirsapat Mango"] });
     const id = Number(new URL(page.url()).pathname.split("/").pop());
 
-    // Facebook and WhatsApp are posted by the owner, with the tools under each.
+    // Facebook and WhatsApp are posted by the owner, with the share buttons.
     await expect(page.getByText("You post this")).toHaveCount(2);
-    await expect(page.getByRole("link", { name: "Open in WhatsApp" })).toBeVisible();
+    await expect(page.getByRole("group", { name: "Share" }).getByRole("link", { name: "WhatsApp" })).toBeVisible();
 
     // No approval step: the draft can be sent straight away.
     const panel = page.getByRole("region", { name: "Send by email" });
@@ -184,8 +213,8 @@ test("a campaign is previewed and sent by email to the customers who chose email
 
     // Switching a photo off doesn't block sending: the change is saved as part of the send.
     await page.getByRole("switch", { name: "Include a photo in the WhatsApp message" }).uncheck({ force: true });
-    // Unsaved wording can't be posted: the posting tools wait for it to be saved.
-    await expect(page.getByText("Save your changes first, so what you post is the saved version.")).toHaveCount(2);
+    // Unsaved wording can't be shared: the share buttons wait for it to be saved.
+    await expect(page.getByText("Save your changes first, so what you share is the saved version.")).toBeVisible();
     const sendButton = page.getByRole("button", { name: "Save and send to 3 customers" });
     await expect(sendButton).toBeEnabled();
 
@@ -221,15 +250,18 @@ test("the owner posts on Facebook and WhatsApp themselves and marks it as posted
     await newCampaign(page, { goal: "New stock", products: ["Fazli Mango"] });
     const title = (await page.getByRole("heading", { level: 1 }).textContent()) ?? "";
 
-    // WhatsApp opens with the message filled in; Facebook shares the business page and its preview card.
+    // Share buttons like the business page's: WhatsApp and X open with the wording filled in; Facebook
+    // shares the business page and its preview card.
+    const share = page.getByRole("group", { name: "Share" });
     const whatsapp = page.getByRole("group", { name: "Post on WhatsApp" });
     const facebook = page.getByRole("group", { name: "Post on Facebook" });
     // The page link in each carries the channel and campaign, so visits from it count for the campaign.
     const id = Number(new URL(page.url()).pathname.split("/").pop());
-    await expect(whatsapp.getByRole("link", { name: "Open in WhatsApp" })).toHaveAttribute("href", /^https:\/\/wa\.me\/\?text=.*Rajshahi%20Mango%20Traders/);
-    await expect(whatsapp.getByRole("link", { name: "Open in WhatsApp" })).toHaveAttribute("href", new RegExp(`rajshahi-mango-traders%3Ffrom%3Dwhatsapp%26c%3D${id}`));
-    await expect(facebook.getByRole("link", { name: "Open Facebook" })).toHaveAttribute("href", new RegExp(`facebook\\.com/sharer/sharer\\.php\\?u=.*rajshahi-mango-traders%3Ffrom%3Dfacebook%26c%3D${id}$`));
-    await expect(whatsapp.getByRole("link", { name: "Open the photo" })).toBeVisible();
+    await expect(share.getByRole("link", { name: "WhatsApp" })).toHaveAttribute("href", /^https:\/\/wa\.me\/\?text=.*Rajshahi%20Mango%20Traders/);
+    await expect(share.getByRole("link", { name: "WhatsApp" })).toHaveAttribute("href", new RegExp(`rajshahi-mango-traders%3Ffrom%3Dwhatsapp%26c%3D${id}`));
+    await expect(share.getByRole("link", { name: "Facebook" })).toHaveAttribute("href", new RegExp(`facebook\\.com/sharer/sharer\\.php\\?u=.*rajshahi-mango-traders%3Ffrom%3Dfacebook%26c%3D${id}$`));
+    await expect(share.getByRole("link", { name: "X", exact: true })).toHaveAttribute("href", /^https:\/\/x\.com\/intent\/post\?text=Just%20in%20at%20Rajshahi%20Mango%20Traders!/);
+    await expect(share.getByRole("link", { name: "Open the photo" })).toBeVisible();
 
     // WhatsApp: marked as posted without a link.
     await whatsapp.getByRole("button", { name: "Mark as posted" }).click();
@@ -306,7 +338,7 @@ test("an event campaign can be about one of the business's events, with no produ
     await expect(page).toHaveURL(/\/vendors\/dashboard\/marketing\/\d+/);
 
     await expect(page.getByRole("textbox", { name: "Message", exact: true })).toHaveValue(/When: .+, 10:00 AM to 5:00 PM/);
-    const facebook = page.getByRole("link", { name: "Open Facebook" });
-    await expect(facebook).toHaveAttribute("href", /%2Fevents%2Fmango-season-tasting-day/);
-    await expect(page.getByRole("link", { name: "Open in WhatsApp" })).toHaveAttribute("href", /%2Fevents%2Fmango-season-tasting-day/);
+    const share = page.getByRole("group", { name: "Share" });
+    await expect(share.getByRole("link", { name: "Facebook" })).toHaveAttribute("href", /%2Fevents%2Fmango-season-tasting-day/);
+    await expect(share.getByRole("link", { name: "WhatsApp" })).toHaveAttribute("href", /%2Fevents%2Fmango-season-tasting-day/);
 });

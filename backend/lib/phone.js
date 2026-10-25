@@ -29,6 +29,20 @@ function normalisePhone(value) {
     return phone;
 }
 
+// A business's main number as shown in emails and campaign wording: a mobile in full international
+// form (+8801712345678), a landline in the local style with its area code (02-9123456, 0721-775544).
+// Anything else is shown as stored. frontend/shahebbazar/lib/format.ts (formatPhone) does the same.
+function displayPhone(phone) {
+    if (!phone) return phone;
+    const compact = String(phone).replace(/[\s-]/g, "");
+    if (/^\+8801\d{9}$/.test(compact)) return compact;
+    const national = /^\+880(\d+)$/.exec(compact)?.[1];
+    if (!national) return phone;
+    if (national.startsWith("2")) return `02-${national.slice(1)}`;
+    return `0${national.slice(0, 3)}-${national.slice(3)}`;
+}
+
 module.exports = {
     normalisePhone,
+    displayPhone,
 };

@@ -15,7 +15,7 @@ import {
     type LucideIcon,
 } from "lucide-react";
 import { assetUrl } from "@/lib/api";
-import { formatClockTime, toNumber } from "@/lib/format";
+import { formatClockTime, toNumber, formatPhone } from "@/lib/format";
 import type { PeriodCount, VendorDashboard } from "@/lib/types";
 import { providerHref } from "./ProviderShell";
 import { StatusBadge } from "./StatusBadge";
@@ -323,7 +323,7 @@ export function BusinessPreview({ data }: { data: VendorDashboard }) {
             <dl className="mt-5 grid gap-4 border-t border-line pt-4 text-[0.8125rem] sm:grid-cols-3">
                 <div className="min-w-0">
                     <dt className="text-muted">Phone</dt>
-                    <dd className="mt-0.5 truncate font-medium">{vendor.vendor_phone}</dd>
+                    <dd className="mt-0.5 truncate font-medium">{formatPhone(vendor.vendor_phone)}</dd>
                 </div>
                 <div className="min-w-0">
                     <dt className="text-muted">Email</dt>

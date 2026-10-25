@@ -5,7 +5,7 @@ import { redirect } from "next/navigation";
 import { assetUrl } from "@/lib/api";
 import { authenticatedApiGet } from "@/lib/auth-server";
 import type { AdminDecisionLog, AdminQueue, AdminSettings, PendingBusiness, PendingEvent, PendingListing } from "@/lib/types";
-import { formatEventWhen } from "@/lib/format";
+import { formatEventWhen, formatPhone } from "@/lib/format";
 import { eventPrice, eventTypeLabel, venueAndArea } from "@/lib/events";
 import { AdminShell } from "@/components/admin/AdminShell";
 import { StatusBadge } from "@/components/provider/StatusBadge";
@@ -187,10 +187,10 @@ function BusinessCard({ v }: { v: PendingBusiness }) {
                             {[v.vendor_address, v.area_name].filter(Boolean).join(", ") || "—"}
                         </Row>
                         <Row Icon={Phone} label="Phone">
-                            {v.vendor_phone}
+                            {formatPhone(v.vendor_phone)}
                         </Row>
                         <Row Icon={User} label="Owner">
-                            {v.owner_name} · {v.owner_phone}
+                            {v.owner_name} · {formatPhone(v.owner_phone)}
                             {v.owner_other_businesses > 0 && ` · ${v.owner_other_businesses} other business${v.owner_other_businesses === 1 ? "" : "es"}`}
                         </Row>
                         <Row Icon={Clock} label="Waiting since">

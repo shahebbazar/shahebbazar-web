@@ -25,6 +25,8 @@ async function currentForm(as = "owner", vendorId = MANGO) {
         address: p.vendor.vendor_address,
         phone: p.vendor.vendor_phone,
         whatsapp: p.vendor.vendor_whatsapp ?? "",
+        alt_phone: p.vendor.vendor_phone_alt ?? "",
+        alt_phone_type: p.vendor.vendor_phone_alt_type ?? "landline",
         description: p.vendor.vendor_description,
         email: p.vendor.vendor_email ?? "",
         website: p.vendor.vendor_website ?? "",
@@ -59,9 +61,29 @@ describe("business profile form", () => {
         });
         assert.equal(res.status, 200, JSON.stringify(res.data));
         const [v] = await query("SELECT vendor_phone, vendor_email, vendor_website FROM vendors WHERE vendor_id = $1", [MANGO]);
-        assert.deepEqual(v, { vendor_phone: "+8801712345678", vendor_email: "sales@mango.example", vendor_website: "www.mango.example/shop" });
+        // The contact number is the owner's sign-in mobile: a different one sent by the form is ignored.
+        assert.deepEqual(v, { vendor_phone: "+8801711000005", vendor_email: "sales@mango.example", vendor_website: "www.mango.example/shop" });
         const [s] = await query("SELECT social_url FROM vendor_social_links WHERE vendor_id = $1 AND social_platform = 'facebook'", [MANGO]);
         assert.equal(s.social_url, "https://facebook.com/rajshahimango");
+    });
+
+    it("a second number is saved with its type apart from the contact number, shown on the business page, and can be removed", async () => {
+        const form = await currentForm();
+        const res = await save({ ...form, alt_phone: "0721 775544", alt_phone_type: "landline" });
+        assert.equal(res.status, 200, JSON.stringify(res.data));
+        const [v] = await query("SELECT vendor_phone_alt, vendor_phone_alt_type FROM vendors WHERE vendor_id = $1", [MANGO]);
+        assert.deepEqual(v, { vendor_phone_alt: "+880721775544", vendor_phone_alt_type: "landline" });
+        const [slug] = await query("SELECT vendor_slug FROM vendors WHERE vendor_id = $1", [MANGO]);
+        const { business } = (await call("GET", `/businesses/${slug.vendor_slug}`)).data;
+        assert.deepEqual([business.vendor_phone_alt, business.vendor_phone_alt_type], ["+880721775544", "landline"]);
+        assert.equal((await save({ ...form, alt_phone: "01811-223344", alt_phone_type: "mobile" })).status, 200);
+        assert.equal((await query("SELECT vendor_phone_alt_type FROM vendors WHERE vendor_id = $1", [MANGO]))[0].vendor_phone_alt_type, "mobile");
+        // The owner's sign-in number is untouched.
+        const [owner] = await query("SELECT u.user_phone FROM users u JOIN vendors v ON v.user_id = u.user_id WHERE v.vendor_id = $1", [MANGO]);
+        assert.equal(owner.user_phone, "+8801711000005");
+        assert.equal((await save({ ...form, alt_phone: "" })).status, 200);
+        const [cleared] = await query("SELECT vendor_phone_alt, vendor_phone_alt_type FROM vendors WHERE vendor_id = $1", [MANGO]);
+        assert.deepEqual(cleared, { vendor_phone_alt: null, vendor_phone_alt_type: null });
     });
 
     it("reports every invalid field at once and saves nothing", async () => {
@@ -71,7 +93,7 @@ describe("business profile form", () => {
             name: "",
             category_ids: [1, 2, 3, 4],
             address: "abc",
-            phone: "12345",
+            alt_phone: "12345",
             description: "Too short",
             website: "not a site",
             social: { instagram: "https://facebook.com/someone" },
@@ -79,7 +101,7 @@ describe("business profile form", () => {
             facts: [{ label: "Parking", value: "Yes", group: "about" }, { label: "parking", value: "No", group: "about" }],
         });
         assert.equal(res.status, 400);
-        for (const key of ["name", "category_ids", "address", "phone", "description", "website", "social.instagram", "hours.1", "facts.1.label"]) {
+        for (const key of ["name", "category_ids", "address", "alt_phone", "description", "website", "social.instagram", "hours.1", "facts.1.label"]) {
             assert.ok(key in res.data.errors, `error for ${key}`);
         }
         const [v] = await query("SELECT vendor_name FROM vendors WHERE vendor_id = $1", [MANGO]);

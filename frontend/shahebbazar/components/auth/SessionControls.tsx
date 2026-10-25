@@ -3,6 +3,8 @@ import type { AuthUser } from "@/lib/auth-client";
 import { authenticatedApiGet } from "@/lib/auth-server";
 import type { VendorPickerRow } from "@/lib/types";
 import { AccountSwitcher, AccountSwitcherList } from "@/components/shared/AccountSwitcher";
+import { ThemeSelector } from "@/components/theme/ThemeSelector";
+import { AccountMenuExtras } from "./AccountMenuExtras";
 import { LogoutButton } from "./LogoutButton";
 
 type AuthMeResponse = {
@@ -30,6 +32,11 @@ export async function SessionControls({
     if (!session) {
         return (
             <div className={variant === "menu" ? "grid grid-cols-2 gap-2" : "flex items-center gap-3"}>
+                {variant === "header" && (
+                    <div className="hidden lg:block">
+                        <ThemeSelector />
+                    </div>
+                )}
                 <Link href="/login" className={OUTLINE}>
                     Log in
                 </Link>
@@ -43,6 +50,7 @@ export async function SessionControls({
     if (session.user.user_role === "admin") {
         return (
             <div className={variant === "menu" ? "grid grid-cols-2 gap-2" : "flex items-center gap-3"}>
+                {variant === "header" && <ThemeSelector />}
                 <Link href="/admin" className={OUTLINE}>
                     Admin dashboard
                 </Link>
@@ -66,9 +74,12 @@ export async function SessionControls({
     }
 
     return (
-        <div className="flex items-center gap-3">
-            <AccountSwitcher userName={session.user.user_name} side={{ kind: "customer" }} businesses={businesses} />
-            <LogoutButton />
-        </div>
+        <AccountSwitcher
+            userName={session.user.user_name}
+            avatarUrl={session.user.user_avatar_url}
+            side={{ kind: "customer" }}
+            businesses={businesses}
+            extras={<AccountMenuExtras />}
+        />
     );
 }

@@ -3,7 +3,9 @@
 
 const { describe, it, before, after } = require("node:test");
 const assert = require("node:assert/strict");
-const { PHONES, ROLES, query, call, signIn, startApi, stopApi } = require("./support/harness");
+const fs = require("node:fs");
+const path = require("node:path");
+const { PHONES, ROLES, PNG, UPLOAD_DIR, query, call, signIn, startApi, stopApi } = require("./support/harness");
 
 let target; // an approved business the customer has not reviewed
 let pending; // a business awaiting approval
@@ -70,6 +72,53 @@ describe("my details (KAN-294)", () => {
         const after = (await call("GET", "/me", { as: "customer" })).data;
         assert.deepEqual([after.user_name, after.user_email], [before.user_name, before.user_email]);
         await save({ name: "Farhana Yasmin", email: "" });
+    });
+
+    it("an area can be chosen, shows on the customer's reviews, and can be cleared", async () => {
+        const [area] = await query("SELECT location_id, location_name FROM locations WHERE location_type = 'area' ORDER BY location_id LIMIT 1");
+        const [reviewed] = await query(
+            `SELECT v.vendor_slug FROM reviews r
+             JOIN vendors v ON v.vendor_id = r.vendor_id JOIN users u ON u.user_id = r.user_id
+             WHERE u.user_phone = $1 AND r.review_status = 'published' AND r.review_body IS NOT NULL AND v.vendor_status = 'approved'
+             LIMIT 1`,
+            [PHONES.customer]
+        );
+        const me = (await call("GET", "/me", { as: "customer" })).data;
+        const res = await save({ name: me.user_name, email: me.user_email ?? "", area: area.location_id }, "customer");
+        assert.equal(res.status, 200, JSON.stringify(res.data));
+        assert.equal((await call("GET", "/me", { as: "customer" })).data.area_name, area.location_name);
+        if (reviewed) {
+            const page = await call("GET", `/businesses/${reviewed.vendor_slug}`);
+            const mine = page.data.reviews.find((r) => r.author === me.user_name);
+            assert.equal(mine?.author_area, area.location_name);
+        }
+
+        assert.equal((await save({ name: me.user_name, email: me.user_email ?? "", area: 999999 }, "customer")).status, 400);
+        await save({ name: me.user_name, email: me.user_email ?? "", area: null }, "customer");
+        assert.equal((await call("GET", "/me", { as: "customer" })).data.location_id, null);
+    });
+});
+
+describe("profile photo", () => {
+    it("uploads, shows in the session, replaces the old file, and can be removed", async () => {
+        const upload = () => {
+            const form = new FormData();
+            form.append("avatar", new Blob([PNG], { type: "image/png" }), "me.png");
+            return call("POST", "/me/avatar", { as: "customer2", form });
+        };
+        assert.equal((await call("POST", "/me/avatar", { form: new FormData() })).status, 401);
+
+        const first = await upload();
+        assert.equal(first.status, 201, JSON.stringify(first.data));
+        assert.match(first.data.avatar_url, /^uploads\/user-\d+-[0-9a-f]+\.png$/);
+        assert.equal((await call("GET", "/auth/me", { as: "customer2" })).data.user.user_avatar_url, first.data.avatar_url);
+
+        const second = await upload();
+        assert.equal(fs.existsSync(path.join(UPLOAD_DIR, path.basename(first.data.avatar_url))), false, "the old photo is deleted");
+
+        assert.equal((await call("DELETE", "/me/avatar", { as: "customer2" })).status, 204);
+        assert.equal(fs.existsSync(path.join(UPLOAD_DIR, path.basename(second.data.avatar_url))), false);
+        assert.equal((await call("GET", "/me", { as: "customer2" })).data.user_avatar_url, null);
     });
 });
 

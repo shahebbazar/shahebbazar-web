@@ -1,9 +1,8 @@
 "use client";
 
 import { useState, useTransition } from "react";
-import { CheckCircle2, Copy, ExternalLink, Image as ImageIcon, Loader2 } from "lucide-react";
+import { CheckCircle2, Loader2 } from "lucide-react";
 import type { CampaignDetail, CampaignPost, PostChannel } from "@/lib/types";
-import { campaignLink, swapPageUrl } from "@/lib/analytics";
 import { markPosted, unmarkPosted } from "../actions";
 import { formatWhen } from "../labels";
 
@@ -12,19 +11,15 @@ const BUTTON =
 const NAMES: Record<PostChannel, string> = { facebook: "Facebook", whatsapp: "WhatsApp" };
 
 /**
- * Facebook and WhatsApp aren't connected to Shaheb Bazar, so the owner posts these themselves:
- * copy the text, open WhatsApp with the message filled in (WhatsApp's own wa.me link), or open
- * Facebook's share box with the business page and its preview card, then paste. Afterwards they mark
- * it as posted, with a link to the post if they have one, so it shows in the results. Offered only
- * for saved wording with nothing left to fill in; admins see whether it was posted.
+ * Facebook and WhatsApp aren't connected to Shaheb Bazar, so the owner posts these themselves (with
+ * ShareButtons), then marks each as posted here, with a link to the post if they have one, so it shows
+ * in the results. Offered only for saved wording with nothing left to fill in; admins see whether it
+ * was posted.
  */
 export function ShareKit({
     vendorId,
     campaignId,
     channel,
-    text,
-    pageUrl,
-    photo,
     post,
     visits,
     blocked,
@@ -36,9 +31,6 @@ export function ShareKit({
     vendorId: number;
     campaignId: number;
     channel: PostChannel;
-    text: string;
-    pageUrl: string;
-    photo: string | null;
     post: CampaignPost | null;
     /** Why the tools aren't offered yet (unsaved changes, parts to fill in), or null. */
     blocked: string | null;
@@ -46,24 +38,10 @@ export function ShareKit({
     onChange: (campaign: CampaignDetail) => void;
 }) {
     const name = NAMES[channel];
-    const [copied, setCopied] = useState<string | null>(null);
     const [url, setUrl] = useState(post?.url ?? "");
     const [editing, setEditing] = useState(false);
     const [error, setError] = useState<string | null>(null);
     const [pending, startTransition] = useTransition();
-
-    // The page link in what's posted carries the channel and campaign, so its visits count in the results.
-    const link = campaignLink(pageUrl, channel, campaignId);
-    const shareText = swapPageUrl(text, pageUrl, link);
-
-    async function copy() {
-        try {
-            await navigator.clipboard.writeText(shareText);
-            setCopied(`Copied. Paste it into ${channel === "facebook" ? "your Facebook post" : "WhatsApp"}.`);
-        } catch {
-            setCopied("Couldn't copy here. Select the text above and copy it instead.");
-        }
-    }
 
     function save() {
         setError(null);
@@ -127,44 +105,13 @@ export function ShareKit({
             <div className="mt-3 space-y-2">
                 {posted}
                 {visitsLine}
-                <p className="text-xs text-muted">{blocked}</p>
             </div>
         );
     }
 
-    const open =
-        channel === "whatsapp"
-            ? { href: `https://wa.me/?text=${encodeURIComponent(shareText)}`, label: "Open in WhatsApp" }
-            : { href: `https://www.facebook.com/sharer/sharer.php?u=${encodeURIComponent(link)}`, label: "Open Facebook" };
-
     return (
-        <div aria-label={`Post on ${name}`} role="group" className="mt-3 space-y-3 rounded-lg border border-line bg-surface-2 p-3">
-            <p className="text-xs text-muted">
-                {channel === "whatsapp"
-                    ? "Opens WhatsApp with this message filled in; choose who to send it to, or post it to your Status."
-                    : "Copy the text, then open Facebook: it starts a post with your business page's link and its preview, and you paste the text above it."}
-                {photo && " Add the photo yourself if you want it."}
-            </p>
-            <div className="flex flex-wrap items-center gap-2">
-                <button type="button" onClick={copy} className={BUTTON}>
-                    <Copy className="size-4" aria-hidden /> Copy text
-                </button>
-                <a href={open.href} target="_blank" rel="noopener noreferrer" className={BUTTON}>
-                    <ExternalLink className="size-4" aria-hidden /> {open.label}
-                </a>
-                {photo && (
-                    <a href={photo} target="_blank" rel="noopener noreferrer" className={BUTTON}>
-                        <ImageIcon className="size-4" aria-hidden /> Open the photo
-                    </a>
-                )}
-            </div>
-            {copied && (
-                <p role="status" className="text-xs text-success-ink">
-                    {copied}
-                </p>
-            )}
-
-            <div className="border-t border-line pt-3">
+        <div aria-label={`Post on ${name}`} role="group" className="mt-3 rounded-lg border border-line bg-surface-2 p-3">
+            <div>
                 {posted && !editing ? (
                     <div className="space-y-2">
                         {posted}

@@ -37,6 +37,39 @@ describe("business phone numbers (profile form)", () => {
     it("refuses invalid mobiles and foreign numbers", () => {
         for (const bad of ["01212345678", "0171234567", "+61412345678", "abc"]) assert.equal(profile.normalisePhone(bad), null, bad);
     });
+    it("the main contact number must be a mobile; a landline can only be the second number", () => {
+        const base = { name: "Shop", category_ids: [1], location_id: 1, address: "Shaheb Bazar Road", description: "A shop selling mangoes in Rajshahi.", hours: [] };
+        assert.match(profile.validateProfile({ ...base, phone: "0721-775544" }).errors.phone, /must be a mobile number/);
+        assert.equal(profile.validateProfile({ ...base, phone: "01712-345678" }).errors.phone, undefined);
+    });
+
+    it("a second number is optional, must match its type, and can't repeat the contact number", () => {
+        const base = { name: "Shop", category_ids: [1], location_id: 1, address: "Shaheb Bazar Road", phone: "01712-345678", description: "A shop selling mangoes in Rajshahi.", hours: [] };
+        const check = (alt_phone, alt_phone_type) => profile.validateProfile({ ...base, alt_phone, alt_phone_type });
+        assert.deepEqual([check("0721-775544", "landline").value.altPhone, check("0721-775544", "landline").value.altPhoneType], ["+880721775544", "landline"]);
+        assert.deepEqual([check("01811-223344", "mobile").value.altPhone, check("01811-223344", "mobile").value.altPhoneType], ["+8801811223344", "mobile"]);
+        assert.deepEqual([check("", "mobile").value.altPhone, check("", "mobile").value.altPhoneType], [null, null]);
+        const wa = check("01811-223344", "whatsapp").value;
+        assert.deepEqual([wa.altPhone, wa.altPhoneType, wa.whatsapp], ["+8801811223344", "whatsapp", "+8801811223344"], "a WhatsApp second number is also the WhatsApp number");
+        assert.equal(check("0721-775544", "landline").value.whatsapp, null);
+        assert.ok(check("12345", "landline").errors.alt_phone);
+        assert.match(check("01811-223344", "landline").errors.alt_phone, /That's a mobile number/);
+        assert.match(check("0721-775544", "mobile").errors.alt_phone, /That's a landline number/);
+        assert.match(check("+8801712345678", "mobile").errors.alt_phone, /same as your contact number/);
+    });
+});
+
+describe("main phone numbers as shown: mobiles in full, landlines with their area code", () => {
+    const { displayPhone } = require("../lib/phone");
+    for (const [stored, shown] of [
+        ["+8801712345678", "+8801712345678"],
+        ["+880721775544", "0721-775544"],
+        ["+88029123456", "02-9123456"],
+        ["+61412345678", "+61412345678"],
+        [null, null],
+    ]) {
+        it(`${stored} -> ${shown}`, () => assert.equal(displayPhone(stored), shown));
+    }
 });
 
 describe("web addresses and social links", () => {

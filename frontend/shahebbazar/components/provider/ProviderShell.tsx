@@ -1,5 +1,6 @@
 import Link from "next/link";
 import { LogoutButton } from "@/components/auth/LogoutButton";
+import { AccountMenuExtras } from "@/components/auth/AccountMenuExtras";
 import {
     House,
     MapPin,
@@ -204,21 +205,14 @@ function ProviderHeader({
                 </Link>
 
                 <div className="ml-auto flex min-w-0 items-center gap-3 sm:gap-4">
-                    <div className="hidden lg:block">
-                        <ThemeSelector />
-                    </div>
-
+                    {/* The theme and Log out are in the account menu. */}
                     <AccountSwitcher
                         userName={userName}
                         side={side}
                         businesses={businesses}
                         businessPath={businessPath}
+                        extras={<AccountMenuExtras />}
                     />
-
-                    {/* Desktop logout */}
-                    <div className="hidden lg:block">
-                        <LogoutButton />
-                    </div>
 
                     {/* Mobile navigation and logout */}
                     <MobileMenu>

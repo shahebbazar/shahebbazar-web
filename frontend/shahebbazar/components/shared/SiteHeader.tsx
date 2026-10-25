@@ -4,6 +4,7 @@ import { localeHref, t, type Locale } from "@/lib/i18n";
 import { SessionControls } from "@/components/auth/SessionControls";
 import { ThemeSelector } from "@/components/theme/ThemeSelector";
 import { MainNavList } from "../public/SideNav";
+import { LanguageLinks } from "./LanguageLinks";
 import { MobileMenu } from "./MobileMenu";
 
 type SiteHeaderProps = {
@@ -69,32 +70,11 @@ export function SiteHeader({ locale, current, runsBusiness = false }: SiteHeader
                     
                     {/* Desktop Language Switcher */}
                     <nav aria-label="Language" className="hidden items-center gap-2 text-[0.8125rem] xl:flex">
-                        <Link 
-                            href={localeHref("/", "en")}
-                            aria-current={locale === "en" ? "true" : undefined}
-                            className={locale === "en" ? "font-semibold text-brand-600" : "text-muted hover:text-ink"}
-                        >
-                            English
-                        </Link>
-
-                        <span aria-hidden="true" className="text-line-strong">
-                            |
-                        </span>
-
-                        <Link 
-                            href={localeHref("/", "bn")}
-                            aria-current={locale === "bn" ? "true" : undefined}
-                            className={locale === "bn" ? "font-bn font-semibold text-brand-600" : "font-bn text-muted hover:text-ink"}
-                        >
-                            বাংলা
-                        </Link>
+                        <LanguageLinks locale={locale} variant="header" />
                     </nav>
 
-                    <div className="hidden lg:block">
-                        <ThemeSelector />
-                    </div>
-
-                    <div className="hidden lg:block">
+                    {/* The theme and Log out sit in the account menu, so this fits from tablet width up. */}
+                    <div className="hidden md:block">
                         <SessionControls variant="header" />
                     </div>
 
@@ -139,29 +119,7 @@ export function SiteHeader({ locale, current, runsBusiness = false }: SiteHeader
 
                         {/* Mobile Language Switcher */}
                         <nav aria-label="Language" className="mt-3 grid grid-cols-2 gap-2 border-t border-line pt-3 text-sm font-medium">
-                            <Link 
-                                href={localeHref("/", "en")}
-                                aria-current={locale === "en" ? "true" : undefined}
-                                className={`rounded-[10px] px-3.5 py-2.5 text-center transition-colors ${
-                                    locale === "en"
-                                        ? "bg-brand-50 text-brand-600"
-                                        : "text-muted hover:bg-surface-2 hover:text-ink"
-                                }`}
-                            >
-                                English
-                            </Link>
-
-                            <Link 
-                                href={localeHref("/", "bn")}
-                                aria-current={locale === "bn" ? "true" : undefined}
-                                className={`rounded-[10px] px-3.5 py-2.5 text-center transition-colors ${
-                                    locale === "bn"
-                                        ? "bg-brand-50 text-brand-600"
-                                        : "text-muted hover:bg-surface-2 hover:text-ink"
-                                }`}
-                            >
-                                বাংলা
-                            </Link>
+                            <LanguageLinks locale={locale} variant="menu" />
                         </nav>
                     </MobileMenu>
                 </div>

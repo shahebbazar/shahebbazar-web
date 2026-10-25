@@ -125,9 +125,9 @@ test("a business page shows its details and payment methods @phone", async ({ pa
     await expect(page.getByRole("button", { name: /Save/ }).first()).toBeVisible();
     await expect(page.getByText(/Opening Hours/i).first()).toBeVisible();
     // The phone number is shown: a Call link on a phone, plain text to read or copy on a computer.
-    const call = page.getByRole("link", { name: "Call 01711-000005" });
+    const call = page.getByRole("link", { name: "Call +8801711000005" });
     if ((page.viewportSize()?.width ?? 1280) >= 1024) {
-        await expect(page.getByText("01711-000005", { exact: true }).filter({ visible: true })).toHaveCount(1);
+        await expect(page.getByText("+8801711000005", { exact: true }).filter({ visible: true })).toHaveCount(1);
         await expect(call).toBeHidden();
     } else {
         await expect(call).toHaveAttribute("href", "tel:+8801711000005");
@@ -138,6 +138,20 @@ test("a business page shows its details and payment methods @phone", async ({ pa
 test("the Bangla version of a page switches the interface language", async ({ page }) => {
     await page.goto("/?lang=bn");
     await expect(page.getByText("রাজশাহী ঘুরে দেখুন").first()).toBeVisible();
+});
+
+test("switching language stays on the same page, with its filters", async ({ page }) => {
+    await page.goto("/business/rajshahi-mango-traders");
+    const languages = page.getByRole("navigation", { name: "Language" }).first();
+    await languages.getByRole("link", { name: "বাংলা" }).click();
+    await expect(page).toHaveURL(/\/business\/rajshahi-mango-traders\?lang=bn$/);
+    await expect(page.getByRole("heading", { level: 1, name: "রাজশাহী আম ব্যবসায়ী" })).toBeVisible();
+    await languages.getByRole("link", { name: "English" }).click();
+    await expect(page).toHaveURL(/\/business\/rajshahi-mango-traders$/);
+
+    await page.goto("/events?type=festival");
+    await languages.getByRole("link", { name: "বাংলা" }).click();
+    await expect(page).toHaveURL(/\/events\?type=festival&lang=bn$/);
 });
 
 test("every footer link opens a page", async ({ page, request }) => {

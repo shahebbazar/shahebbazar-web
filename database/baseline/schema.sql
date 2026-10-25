@@ -632,6 +632,8 @@ CREATE TABLE public.users (
     user_status character varying(20) DEFAULT 'active'::character varying NOT NULL,
     user_created_at timestamp with time zone DEFAULT now() NOT NULL,
     user_updated_at timestamp with time zone DEFAULT now() NOT NULL,
+    user_avatar_url character varying(500),
+    location_id integer,
     CONSTRAINT users_user_role_check CHECK (((user_role)::text = ANY ((ARRAY['customer'::character varying, 'vendor'::character varying, 'admin'::character varying])::text[]))),
     CONSTRAINT users_user_status_check CHECK (((user_status)::text = ANY ((ARRAY['active'::character varying, 'suspended'::character varying, 'deleted'::character varying])::text[])))
 );
@@ -733,6 +735,8 @@ CREATE TABLE public.vendors (
     vendor_phone character varying(20) NOT NULL,
     vendor_email character varying(255),
     vendor_whatsapp character varying(20),
+    vendor_phone_alt character varying(20),
+    vendor_phone_alt_type character varying(10),
     vendor_address text,
     location_id integer,
     vendor_lat numeric(9,6),
@@ -754,6 +758,7 @@ CREATE TABLE public.vendors (
     vendor_nid_submitted_at timestamp with time zone,
     vendor_nid_verified_at timestamp with time zone,
     vendor_nid_verified_by integer,
+    CONSTRAINT vendors_phone_alt_type_check CHECK (((vendor_phone_alt_type IS NULL) OR ((vendor_phone_alt_type)::text = ANY ((ARRAY['landline'::character varying, 'mobile'::character varying, 'whatsapp'::character varying])::text[])))),
     CONSTRAINT vendors_nid_status_check CHECK (((vendor_nid_status)::text = ANY ((ARRAY['pending'::character varying, 'verified'::character varying, 'rejected'::character varying])::text[]))),
     CONSTRAINT vendors_vendor_business_type_check CHECK (((vendor_business_type)::text = ANY ((ARRAY['b2b'::character varying, 'b2c'::character varying, 'both'::character varying])::text[]))),
     CONSTRAINT vendors_vendor_status_check CHECK (((vendor_status)::text = ANY ((ARRAY['draft'::character varying, 'pending'::character varying, 'approved'::character varying, 'rejected'::character varying, 'suspended'::character varying])::text[])))
@@ -2194,6 +2199,14 @@ ALTER TABLE ONLY public.vendor_social_links
 
 ALTER TABLE ONLY public.vendors
     ADD CONSTRAINT vendors_location_id_fkey FOREIGN KEY (location_id) REFERENCES public.locations(location_id) ON DELETE SET NULL;
+
+
+--
+-- Name: users users_location_id_fkey; Type: FK CONSTRAINT; Schema: public; Owner: -
+--
+
+ALTER TABLE ONLY public.users
+    ADD CONSTRAINT users_location_id_fkey FOREIGN KEY (location_id) REFERENCES public.locations(location_id) ON DELETE SET NULL;
 
 
 --

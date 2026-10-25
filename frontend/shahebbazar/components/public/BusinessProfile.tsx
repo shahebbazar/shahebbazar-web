@@ -1,4 +1,5 @@
 import Link from "next/link";
+import { SiWhatsapp } from "@icons-pack/react-simple-icons";
 import {
     Award,
     BadgeCheck,
@@ -18,7 +19,7 @@ import { SiFacebook, SiInstagram, SiTiktok, SiYoutube } from "@icons-pack/react-
 import { assetUrl } from "@/lib/api";
 import { t, pick, localeHref, type Locale } from "@/lib/i18n";
 import { SITE_URL } from "@/lib/seo";
-import { formatClockTime, formatPhone, formatRating, localiseDigits, toNumber } from "@/lib/format";
+import { formatClockTime, formatLocalPhone, formatPhone, formatRating, localiseDigits, toNumber } from "@/lib/format";
 import type { BusinessDetail, SocialPlatform } from "@/lib/types";
 import { SaveButton } from "@/components/customer/SaveButton";
 import { ShareMenu } from "@/components/shared/ShareMenu";
@@ -435,8 +436,13 @@ export function BusinessProfile({
                                         className="rounded-xl border border-line p-4"
                                     >
                                         <div className="flex items-center gap-2.5">
-                                            <span className="grid size-9 shrink-0 place-items-center rounded-full bg-brand-100 text-[0.8125rem] font-semibold text-brand-700">
-                                                {review.author.charAt(0).toUpperCase()}
+                                            <span className="grid size-9 shrink-0 place-items-center overflow-hidden rounded-full bg-brand-100 text-[0.8125rem] font-semibold text-brand-700">
+                                                {review.author_avatar ? (
+                                                    // eslint-disable-next-line @next/next/no-img-element
+                                                    <img src={assetUrl(review.author_avatar) ?? ""} alt="" className="size-full object-cover" loading="lazy" />
+                                                ) : (
+                                                    review.author.charAt(0).toUpperCase()
+                                                )}
                                             </span>
                                             <span className="min-w-0">
                                                 <span className="flex items-center gap-1.5 text-[0.875rem] font-semibold">
@@ -447,6 +453,7 @@ export function BusinessProfile({
                                                 </span>
                                                 <span className="block text-[0.75rem] text-soft">
                                                     {relativeTime(review.created_at)}
+                                                    {review.author_area && ` · ${locale === "bn" ? review.author_area_bn || review.author_area : review.author_area}`}
                                                 </span>
                                             </span>
                                             <span className="ml-auto flex shrink-0 gap-0.5">
@@ -543,6 +550,13 @@ function ActionButtons({ locale, detail }: { locale: Locale; detail: BusinessDet
 
     const pageUrl = `${SITE_URL}${localeHref(`/business/${business.vendor_slug}`, locale)}`;
     const phone = business.vendor_phone ? localiseDigits(formatPhone(business.vendor_phone), locale) : null;
+    // The second number in the style of its type: an office landline as 0721-775544, a mobile or WhatsApp
+    // number as +8801712345678. A WhatsApp number opens a chat (WhatsApp Web on a computer).
+    const altType = business.vendor_phone_alt_type ?? "landline";
+    const alt = business.vendor_phone_alt
+        ? localiseDigits((altType === "landline" ? formatLocalPhone : formatPhone)(business.vendor_phone_alt), locale)
+        : null;
+    const altLabel = altType === "mobile" ? copy.callMobile : altType === "whatsapp" ? copy.callWhatsApp : copy.callOffice;
 
     return (
         <div className="grid shrink-0 grid-cols-2 gap-2 lg:w-[260px]">
@@ -560,6 +574,32 @@ function ActionButtons({ locale, detail }: { locale: Locale; detail: BusinessDet
                         <Phone className="size-4" aria-hidden />
                         <span className="sr-only">{copy.call}: </span>
                         <span className="tabular-nums select-all">{phone}</span>
+                    </p>
+                </>
+            )}
+            {alt && altType === "whatsapp" && (
+                <a
+                    href={`https://wa.me/${business.vendor_phone_alt!.replace(/\D/g, "")}`}
+                    target="_blank"
+                    rel="noopener noreferrer"
+                    className="col-span-2 inline-flex items-center justify-center gap-2 rounded-[10px] border border-line-strong bg-surface px-4 py-2.5 text-sm font-medium text-ink transition-colors hover:border-brand-600 hover:text-brand-600"
+                >
+                    <SiWhatsapp size={16} color="#25D366" aria-hidden />
+                    {altLabel} <span className="tabular-nums">{alt}</span>
+                </a>
+            )}
+            {alt && altType !== "whatsapp" && (
+                <>
+                    <a
+                        href={`tel:${business.vendor_phone_alt}`}
+                        className="col-span-2 inline-flex items-center justify-center gap-2 rounded-[10px] border border-line-strong bg-surface px-4 py-2.5 text-sm font-medium text-ink transition-colors hover:border-brand-600 hover:text-brand-600 lg:hidden"
+                    >
+                        <Phone className="size-4" />
+                        {altLabel} <span className="tabular-nums">{alt}</span>
+                    </a>
+                    <p className="col-span-2 hidden items-center justify-center gap-2 rounded-[10px] border border-line-strong bg-surface px-4 py-2.5 text-sm font-medium text-ink lg:flex">
+                        <Phone className="size-4" aria-hidden />
+                        {altLabel}: <span className="tabular-nums select-all">{alt}</span>
                     </p>
                 </>
             )}
