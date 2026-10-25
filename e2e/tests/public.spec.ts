@@ -28,6 +28,53 @@ test("home page cards fit their panels at laptop widths", async ({ page }) => {
     }
 });
 
+test("share cards are 1200 x 630 images, and each page points to its own", async ({ page, request, consoleErrors }) => {
+    // A business with a cover photo shares the photo instead, so its card is only checked as an image.
+    const pages: Record<string, string | null> = {
+        "/og/event/silk-city-trade-expo": "/events/silk-city-trade-expo",
+        "/og/category/health": "/categories/health",
+        "/og/business/rajshahi-mango-traders": null,
+    };
+    for (const [card, path] of Object.entries(pages)) {
+        if (path) {
+            await page.goto(path);
+            expect(await page.locator('meta[property="og:image"]').first().getAttribute("content")).toContain(card);
+        }
+        const res = await request.get(card);
+        expect(res.status(), card).toBe(200);
+        expect(res.headers()["content-type"]).toBe("image/png");
+        const png = await res.body();
+        expect([png.readUInt32BE(16), png.readUInt32BE(20)], `${card} size`).toEqual([1200, 630]);
+    }
+    expect((await request.get("/og.png")).status()).toBe(200);
+    allowConsoleError(consoleErrors, /status of 404/);
+    expect((await request.get("/og/event/no-such-event")).status()).toBe(404);
+});
+
+test("the share menu on a business page opens in full and closes on a click outside @phone", async ({ page }) => {
+    await page.goto("/business/rajshahi-mango-traders");
+    const menu = page.locator("details").filter({ has: page.locator("summary", { hasText: "Share" }) });
+    await menu.locator("summary").click();
+    const options = menu.locator("a, button");
+    await expect(options).toHaveCount(4); // WhatsApp, Facebook, X, Copy link (plus the phone's own share sheet where offered)
+    // No box around the menu that hides its overflow may cut through it (the header card used to).
+    const clippedBy = await menu.evaluate((details) => {
+        const panel = details.querySelector("div")!.getBoundingClientRect();
+        for (let el = details.parentElement; el && el !== document.body; el = el.parentElement) {
+            const style = getComputedStyle(el);
+            if (style.overflowX === "visible" && style.overflowY === "visible") continue;
+            const box = el.getBoundingClientRect();
+            if (panel.top < box.top || panel.bottom > box.bottom || panel.left < box.left || panel.right > box.right) {
+                return `${el.tagName.toLowerCase()}.${el.className}`;
+            }
+        }
+        return null;
+    });
+    expect(clippedBy, "the menu is cut off by").toBeNull();
+    await page.getByRole("heading", { level: 1 }).click();
+    await expect(options.first()).toBeHidden();
+});
+
 test("search finds a business and labels paid placement as Sponsored", async ({ page }) => {
     await page.goto("/search?q=mango");
     await expect(page.getByRole("link", { name: "Rajshahi Mango Traders" }).first()).toBeVisible();
