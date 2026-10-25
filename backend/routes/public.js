@@ -81,11 +81,14 @@ router.get("/home", async (req, res) => {
             ),
 
             pool.query(
-                `SELECT event_id, event_title, event_title_bn, event_slug,
-                        event_venue, event_starts_at, event_ends_at
-                 FROM events
-                 WHERE event_status = 'published' AND event_starts_at > NOW()
-                 ORDER BY event_starts_at
+                `SELECT e.event_id, e.event_title, e.event_title_bn, e.event_slug,
+                        e.event_venue, e.event_starts_at, e.event_ends_at
+                 FROM events e
+                 LEFT JOIN vendors v ON v.vendor_id = e.vendor_id
+                 -- As on the events page (routes/events.js): only events of approved businesses or the site's own.
+                 WHERE e.event_status = 'published' AND e.event_starts_at > NOW()
+                   AND (e.vendor_id IS NULL OR v.vendor_status = 'approved')
+                 ORDER BY e.event_starts_at
                  LIMIT $1`,
                 [HOME_EVENT_LIMIT]
             ),

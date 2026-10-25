@@ -59,6 +59,17 @@ export interface EventItem {
     event_ends_at: string | null;
 }
 
+/** KAN-298. Keys match the CHECK constraint on events.event_type. */
+export type EventType = "market" | "festival" | "sale" | "workshop" | "launch" | "trade" | "community" | "other";
+export type EventStatus = "draft" | "pending" | "published" | "rejected" | "cancelled";
+export type EventResponse = "interested" | "going";
+
+export interface EventPhoto {
+    photo_id: number;
+    photo_url: string;
+    photo_is_cover: boolean;
+}
+
 export interface HomePayload {
     categories: CategoryTile[];
     featured: BusinessCard[];
@@ -420,8 +431,8 @@ export interface PendingListing {
 export interface AdminDecisionLog {
     /** BIGSERIAL, which node-pg returns as a string. */
     audit_id: string;
-    audit_action: "vendor.approve" | "vendor.reject" | "listing.approve" | "listing.reject";
-    audit_target_type: "vendor" | "listing";
+    audit_action: `${"vendor" | "listing" | "event"}.${"approve" | "reject"}`;
+    audit_target_type: "vendor" | "listing" | "event";
     audit_target_id: number;
     reason: string | null;
     audit_created_at: string;
@@ -432,6 +443,7 @@ export interface AdminDecisionLog {
 export interface AdminQueue {
     vendors: PendingBusiness[];
     listings: PendingListing[];
+    events: PendingEvent[];
     recent: AdminDecisionLog[];
 }
 
@@ -467,12 +479,13 @@ export interface AdminSetting {
 
 export interface AdminSettings {
     settings: AdminSetting[];
-    waiting: { businesses: number; listings: number };
+    waiting: { businesses: number; listings: number; events?: number };
 }
 
 export interface PublicSettings {
     require_business_approval: boolean;
     require_listing_approval: boolean;
+    require_event_approval: boolean;
 }
 
 export type OfferChannel = "email" | "sms";
@@ -529,6 +542,10 @@ export interface ConversationSummary {
     customer_name: string;
     listing_id: number | null;
     listing_title: string | null;
+    /** Set when the business wrote about one of its events (KAN-298). */
+    event_id: number | null;
+    event_title: string | null;
+    event_slug: string | null;
     last_message: string | null;
     unread: number;
 }
@@ -551,6 +568,9 @@ export interface ConversationThread {
         customer_name: string;
         listing_id: number | null;
         listing_title: string | null;
+        event_id: number | null;
+        event_title: string | null;
+        event_slug: string | null;
     };
     messages: Message[];
 }
@@ -613,12 +633,98 @@ export interface AdminTrends {
     noResults: { query: string; searches: number }[];
 }
 
+/** An event as the public pages show it (GET /events and /events/:slug). */
 export interface EventDetail extends EventItem {
     event_description: string | null;
     event_image_url: string | null;
+    event_status: EventStatus;
+    event_type: EventType;
+    event_is_online: boolean;
+    event_online_url: string | null;
+    event_price_type: "free" | "paid";
+    /** NUMERIC, returned by `pg` as a string. */
+    event_price_bdt: string | null;
+    event_ticket_url: string | null;
     area_name: string | null;
+    area_slug: string | null;
     vendor_name: string | null;
     vendor_slug: string | null;
+    vendor_logo_url: string | null;
+    going_count: number;
+    interested_count: number;
+    /** It has finished (or started, without an end time), by the database's clock. */
+    ended: boolean;
+    /** Only on GET /events/:slug. */
+    photos?: EventPhoto[];
+}
+
+/** The signed-in customer's answer (GET/PUT /events/:id/response). */
+export interface EventResponseState {
+    response: EventResponse | null;
+    going_count: number;
+    interested_count: number;
+}
+
+/** GET /me/events */
+export interface MyEvent extends EventDetail {
+    response_type: EventResponse;
+}
+
+/** An event as its business manages it (GET /vendors/:id/events, /events/:id/manage). */
+export interface VendorEvent {
+    event_id: number;
+    vendor_id: number | null;
+    event_title: string;
+    event_title_bn: string | null;
+    event_slug: string;
+    event_description: string | null;
+    event_type: EventType;
+    event_venue: string | null;
+    location_id: number | null;
+    area_name: string | null;
+    event_starts_at: string;
+    event_ends_at: string | null;
+    event_is_online: boolean;
+    event_online_url: string | null;
+    event_price_type: "free" | "paid";
+    event_price_bdt: string | null;
+    event_ticket_url: string | null;
+    event_image_url: string | null;
+    event_status: EventStatus;
+    event_rejection_reason: string | null;
+    going_count: number;
+    interested_count: number;
+    ended: boolean;
+    photo_count: number;
+    /** Only on /events/:id/manage. */
+    photos?: EventPhoto[];
+}
+
+/** GET /admin/queue events. */
+export interface PendingEvent {
+    event_id: number;
+    event_title: string;
+    event_title_bn: string | null;
+    event_slug: string;
+    event_description: string | null;
+    event_type: EventType;
+    event_venue: string | null;
+    event_is_online: boolean;
+    event_online_url: string | null;
+    event_starts_at: string;
+    event_ends_at: string | null;
+    event_price_type: "free" | "paid";
+    event_price_bdt: string | null;
+    event_ticket_url: string | null;
+    event_image_url: string | null;
+    event_created_at: string;
+    area_name: string | null;
+    vendor_id: number | null;
+    vendor_name: string | null;
+    vendor_slug: string | null;
+    vendor_status: string | null;
+    photo_count: number;
+    resubmitted: boolean;
 }
 
 export interface AdminCategory {

@@ -1,10 +1,12 @@
 import type { Metadata } from "next";
 import Link from "next/link";
-import { AlertTriangle, CheckCircle2, Clock, MapPin, Package, Phone, RotateCcw, User, XCircle } from "lucide-react";
+import { AlertTriangle, CalendarDays, CheckCircle2, Clock, Globe, MapPin, Package, Phone, RotateCcw, Ticket, User, XCircle } from "lucide-react";
 import { redirect } from "next/navigation";
 import { assetUrl } from "@/lib/api";
 import { authenticatedApiGet } from "@/lib/auth-server";
-import type { AdminDecisionLog, AdminQueue, AdminSettings, PendingBusiness, PendingListing } from "@/lib/types";
+import type { AdminDecisionLog, AdminQueue, AdminSettings, PendingBusiness, PendingEvent, PendingListing } from "@/lib/types";
+import { formatEventWhen } from "@/lib/format";
+import { eventPrice, eventTypeLabel } from "@/lib/events";
 import { AdminShell } from "@/components/admin/AdminShell";
 import { StatusBadge } from "@/components/provider/StatusBadge";
 import { listingPrice } from "@/components/provider/DashboardCards";
@@ -14,9 +16,9 @@ export const metadata: Metadata = {
     title: "Approvals",
 };
 
-// Admin approvals: new and resubmitted businesses, and new listings.
+// Admin approvals: new and resubmitted businesses, new listings and new events.
 
-type Tab = "businesses" | "listings";
+type Tab = "businesses" | "listings" | "events";
 
 const when = new Intl.DateTimeFormat("en-GB", {
     day: "numeric",
@@ -36,30 +38,37 @@ export default async function AdminApprovalsPage({
         authenticatedApiGet<AdminQueue>("/admin/queue"),
         authenticatedApiGet<AdminSettings>("/admin/settings"),
     ]);
-    // Which kinds currently go public without review (KAN-293).
-    const unreviewed = (settings?.settings ?? [])
-        .filter((s) => !s.value)
-        .map((s) => (s.key === "require_business_approval" ? "new businesses" : "new products and services"));
+    // Which kinds currently go public without review (KAN-293, KAN-298).
+    const KINDS: Record<string, string> = {
+        require_business_approval: "new businesses",
+        require_listing_approval: "new products and services",
+        require_event_approval: "new events",
+    };
+    const approvalSettings = (settings?.settings ?? []).filter((s) => s.key in KINDS);
+    const unreviewed = approvalSettings.filter((s) => !s.value).map((s) => KINDS[s.key]);
+    const listed = (items: string[]) => (items.length > 1 ? `${items.slice(0, -1).join(", ")} and ${items.at(-1)}` : items[0]);
     // Null when the session ended after the layout checked it.
     if (!queue) redirect("/admin/login");
-    const tab: Tab = rawTab === "listings" ? "listings" : "businesses";
+    const tab: Tab = rawTab === "listings" || rawTab === "events" ? rawTab : "businesses";
+    const events = queue.events ?? [];
 
     const tabs: { key: Tab; label: string; count: number }[] = [
         { key: "businesses", label: "Businesses", count: queue.vendors.length },
         { key: "listings", label: "Listings", count: queue.listings.length },
+        { key: "events", label: "Events", count: events.length },
     ];
 
     return (
         <AdminShell current="approvals">
             <h1 className="text-[1.75rem] leading-tight font-bold tracking-tight">Approvals</h1>
             <p className="mt-1.5 text-[0.9375rem] text-muted">
-                {unreviewed.length === 2
+                {unreviewed.length > 0 && unreviewed.length === approvalSettings.length
                     ? "Requests that were waiting before approval was switched off. Oldest requests are listed first."
                     : "Nothing that needs approval appears on the public site until it is approved here. Oldest requests are listed first."}
             </p>
             {unreviewed.length > 0 && (
                 <p className="mt-3 rounded-lg border border-sponsor-ink/30 bg-sponsor-bg p-3 text-sm text-sponsor-ink">
-                    Approval is switched off for {unreviewed.join(" and ")}, so they go public without review. Anything
+                    Approval is switched off for {listed(unreviewed)}, so they go public without review. Anything
                     already waiting is still listed here.{" "}
                     <Link href="/admin/settings" className="font-semibold underline">
                         Change in Settings
@@ -71,7 +80,7 @@ export default async function AdminApprovalsPage({
                 {tabs.map((t) => (
                     <Link
                         key={t.key}
-                        href={t.key === "businesses" ? "/admin" : "/admin?tab=listings"}
+                        href={t.key === "businesses" ? "/admin" : `/admin?tab=${t.key}`}
                         aria-current={t.key === tab ? "page" : undefined}
                         className={`-mb-px inline-flex items-center gap-2 border-b-2 px-3 py-2.5 text-sm font-medium ${
                             t.key === tab ? "border-brand-600 text-brand-600" : "border-transparent text-muted hover:text-ink"
@@ -97,10 +106,16 @@ export default async function AdminApprovalsPage({
                         ) : (
                             queue.vendors.map((v) => <BusinessCard key={v.vendor_id} v={v} />)
                         )
-                    ) : queue.listings.length === 0 ? (
-                        <Empty text="No listings are waiting for approval." />
+                    ) : tab === "listings" ? (
+                        queue.listings.length === 0 ? (
+                            <Empty text="No listings are waiting for approval." />
+                        ) : (
+                            queue.listings.map((l) => <ListingCard key={l.listing_id} l={l} />)
+                        )
+                    ) : events.length === 0 ? (
+                        <Empty text="No events are waiting for approval." />
                     ) : (
-                        queue.listings.map((l) => <ListingCard key={l.listing_id} l={l} />)
+                        events.map((e) => <EventCard key={e.event_id} e={e} />)
                     )}
                 </div>
 
@@ -260,6 +275,94 @@ function ListingCard({ l }: { l: PendingListing }) {
     );
 }
 
+function EventCard({ e }: { e: PendingEvent }) {
+    const cover = assetUrl(e.event_image_url);
+    const flags: string[] = [];
+    if (e.photo_count === 0) flags.push("No photos");
+    if (!e.event_description || e.event_description.trim().length < 30) flags.push("Very short description");
+    const businessHidden = e.vendor_status !== null && e.vendor_status !== "approved";
+
+    return (
+        <article aria-labelledby={`e-${e.event_id}`} className="rounded-xl border border-line bg-surface p-5 shadow-card">
+            <div className="flex flex-col gap-4 sm:flex-row">
+                <div className="aspect-[4/3] w-full shrink-0 self-start overflow-hidden rounded-lg bg-gradient-to-br from-brand-100 to-brand-200 sm:w-40">
+                    {cover && (
+                        // eslint-disable-next-line @next/next/no-img-element
+                        <img src={cover} alt="" className="size-full object-cover" />
+                    )}
+                </div>
+                <div className="min-w-0 flex-1">
+                    <div className="flex flex-wrap items-center gap-2">
+                        <h2 id={`e-${e.event_id}`} className="text-[1.125rem] font-semibold tracking-tight">
+                            {e.event_title}
+                        </h2>
+                        {e.resubmitted && (
+                            <span className="inline-flex items-center gap-1 rounded-full bg-brand-50 px-2 py-0.5 text-[0.6875rem] font-semibold text-brand-700">
+                                <RotateCcw className="size-3" /> Resubmitted after rejection
+                            </span>
+                        )}
+                    </div>
+                    {e.event_title_bn && (
+                        <p lang="bn" className="font-bn text-[0.875rem] text-muted">
+                            {e.event_title_bn}
+                        </p>
+                    )}
+                    <p className="mt-0.5 text-[0.8125rem] text-muted">
+                        {eventTypeLabel(e.event_type)} · by {e.vendor_name ?? "Shahebbazar"}
+                    </p>
+
+                    <dl className="mt-3 grid gap-x-6 gap-y-1.5 text-[0.8125rem] sm:grid-cols-2">
+                        <Row Icon={CalendarDays} label="When">
+                            {formatEventWhen(e.event_starts_at, e.event_ends_at)}
+                        </Row>
+                        {e.event_is_online ? (
+                            <Row Icon={Globe} label="Online">
+                                Online{e.event_online_url && ` · ${e.event_online_url}`}
+                            </Row>
+                        ) : (
+                            <Row Icon={MapPin} label="Venue">
+                                {[e.event_venue, e.area_name].filter(Boolean).join(", ") || "—"}
+                            </Row>
+                        )}
+                        <Row Icon={Ticket} label="Entry">
+                            {eventPrice(e, { free: "Free", ticketed: "Ticketed" })}
+                            {e.event_ticket_url && ` · ${e.event_ticket_url}`}
+                        </Row>
+                        <Row Icon={Clock} label="Added">
+                            {when.format(new Date(e.event_created_at))}
+                        </Row>
+                    </dl>
+
+                    {e.event_description && (
+                        <p className="mt-3 text-[0.875rem] leading-relaxed whitespace-pre-line text-muted">{e.event_description}</p>
+                    )}
+                    <p className="mt-2 text-[0.75rem] text-muted">
+                        {e.photo_count} photo{e.photo_count === 1 ? "" : "s"}
+                    </p>
+                    {flags.length > 0 && (
+                        <ul className="mt-3 flex flex-wrap gap-1.5" aria-label="Worth checking">
+                            {flags.map((f) => (
+                                <li key={f} className="inline-flex items-center gap-1 rounded-full bg-sponsor-bg px-2 py-0.5 text-[0.6875rem] font-medium text-sponsor-ink">
+                                    <AlertTriangle className="size-3" /> {f}
+                                </li>
+                            ))}
+                        </ul>
+                    )}
+                    {businessHidden && (
+                        <p className="mt-2 text-[0.75rem] text-sponsor-ink">
+                            The business itself is not approved yet, so this event stays hidden until it is.
+                        </p>
+                    )}
+                    <div className="mt-4 border-t border-line pt-4">
+                        <DecisionButtons kind="event" id={e.event_id} label={e.event_title} />
+                        {e.vendor_id && <BusinessPagesLink vendorId={e.vendor_id} />}
+                    </div>
+                </div>
+            </div>
+        </article>
+    );
+}
+
 // Opens the business's own dashboard pages in admin view, to check or correct the details.
 function BusinessPagesLink({ vendorId }: { vendorId: number }) {
     return (
@@ -304,7 +407,7 @@ function RecentDecisions({ recent }: { recent: AdminDecisionLog[] }) {
                                     <p>
                                         <span className="font-medium">{r.target_label ?? `#${r.audit_target_id}`}</span>{" "}
                                         <span className="text-muted">
-                                            {r.audit_target_type === "vendor" ? "business" : "listing"} {approved ? "approved" : "rejected"}
+                                            {r.audit_target_type === "vendor" ? "business" : r.audit_target_type} {approved ? "approved" : "rejected"}
                                         </span>
                                     </p>
                                     {r.reason && <p className="mt-0.5 text-muted">“{r.reason}”</p>}

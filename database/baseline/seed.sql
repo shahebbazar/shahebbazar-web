@@ -985,3 +985,47 @@ FROM (VALUES
     ('vat-registration',       'seed-listing-digitax-services.jpg')
 ) AS x(listing_slug, file)
 JOIN public.vendor_listings l ON l.listing_slug = x.listing_slug;
+
+-- Events run by businesses (KAN-298). Also see database/migrations/008_events.sql.
+-- New events are public at once until an admin switches approval on.
+INSERT INTO public.platform_settings (setting_key, setting_value) VALUES ('require_event_approval', 'false')
+ON CONFLICT (setting_key) DO NOTHING;
+
+-- Types and organisers for the seeded events, plus one run by the demo owner's business
+-- (rajshahi-mango-traders) so its dashboard has an event to manage. Covers reuse the matching
+-- business photos in database/seed-assets/.
+UPDATE public.events e SET
+    event_type = x.event_type,
+    vendor_id = (SELECT vendor_id FROM public.vendors WHERE vendor_slug = x.vendor_slug),
+    event_price_type = x.price_type,
+    event_price_bdt = x.price,
+    event_image_url = x.cover
+FROM (VALUES
+    ('rajshahi-food-festival', 'festival',  'padma-view-restaurant',   'free', NULL::numeric, 'uploads/seed-business-padma-view-restaurant.jpg'),
+    ('padma-river-festival',   'festival',  'padma-garden-tours',      'free', NULL,          'uploads/seed-business-padma-garden-tours.jpg'),
+    ('rajshahi-book-fair',     'community', NULL,                      'free', NULL,          NULL),
+    ('silk-city-trade-expo',   'trade',     'shaheb-bazar-silk-house', 'paid', 200,           'uploads/seed-business-shaheb-bazar-silk-house.jpg')
+) AS x(slug, event_type, vendor_slug, price_type, price, cover)
+WHERE e.event_slug = x.slug;
+
+INSERT INTO public.events (event_title, event_title_bn, event_slug, event_description, event_venue,
+                           location_id, vendor_id, event_starts_at, event_ends_at, event_image_url,
+                           event_type, event_price_type, event_created_by)
+SELECT 'Mango Season Tasting Day', 'আমের মৌসুম স্বাদ উৎসব', 'mango-season-tasting-day',
+       'Taste Khirsapat, Langra and Fazli straight from the orchard, meet the growers and order for the season at opening prices.',
+       'Rajshahi Mango Traders, Shaheb Bazar', v.location_id, v.vendor_id,
+       date_trunc('day', NOW()) + INTERVAL '9 days 10 hours', date_trunc('day', NOW()) + INTERVAL '9 days 17 hours',
+       'uploads/seed-business-rajshahi-mango-traders.jpg', 'market', 'free', v.user_id
+FROM public.vendors v WHERE v.vendor_slug = 'rajshahi-mango-traders';
+
+INSERT INTO public.event_photos (event_id, photo_url, photo_sort_order, photo_is_cover)
+SELECT event_id, event_image_url, 0, TRUE FROM public.events WHERE event_image_url IS NOT NULL;
+
+-- Interested / Going from the seeded customers (not +8801722000001, whom the tests start from).
+INSERT INTO public.event_responses (event_id, user_id, response_type)
+SELECT e.event_id, u.user_id, CASE WHEN (e.event_id + u.user_id) % 3 = 0 THEN 'going' ELSE 'interested' END
+FROM public.events e
+CROSS JOIN public.users u
+WHERE u.user_role = 'customer' AND u.user_phone <> '+8801722000001'
+  AND (e.event_id + u.user_id) % 2 = 0
+ON CONFLICT DO NOTHING;

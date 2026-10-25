@@ -7,12 +7,12 @@ import type { AdminDecision, AdminDecisionResult } from "@/lib/types";
 // Approves or rejects a pending item, then refreshes every cached page so the change shows at once.
 // The API checks the forwarded session belongs to an admin.
 export async function decide(
-    kind: "vendor" | "listing",
+    kind: "vendor" | "listing" | "event",
     id: number,
     decision: AdminDecision,
     reason: string
 ): Promise<AdminDecisionResult> {
-    if (kind !== "vendor" && kind !== "listing") return { ok: false, error: "Invalid item" };
+    if (kind !== "vendor" && kind !== "listing" && kind !== "event") return { ok: false, error: "Invalid item" };
     if (!Number.isSafeInteger(id) || id <= 0) return { ok: false, error: "Invalid id" };
     if (decision !== "approve" && decision !== "reject") return { ok: false, error: "Invalid decision" };
 

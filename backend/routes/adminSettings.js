@@ -14,7 +14,8 @@ const router = express.Router();
 async function waiting(db) {
     const result = await db.query(
         `SELECT (SELECT COUNT(*)::int FROM vendors WHERE vendor_status = 'pending') AS businesses,
-                (SELECT COUNT(*)::int FROM vendor_listings WHERE listing_status = 'pending') AS listings`
+                (SELECT COUNT(*)::int FROM vendor_listings WHERE listing_status = 'pending') AS listings,
+                (SELECT COUNT(*)::int FROM events WHERE event_status = 'pending') AS events`
     );
     return result.rows[0];
 }
@@ -56,12 +57,13 @@ router.put("/admin/settings/:key", requireFeature("admin.settings"), async (req,
     }
 });
 
-// Public: lets the registration page say whether a new business needs approval.
+// Public: lets the registration and event pages say whether something new needs approval.
 router.get("/settings/public", async (req, res) => {
     try {
         res.json({
             require_business_approval: await getSetting(pool, "require_business_approval"),
             require_listing_approval: await getSetting(pool, "require_listing_approval"),
+            require_event_approval: await getSetting(pool, "require_event_approval"),
         });
     } catch (err) {
         console.error("GET /api/settings/public failed:", err);

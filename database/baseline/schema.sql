@@ -161,8 +161,25 @@ CREATE TABLE public.events (
     event_image_url text,
     event_status character varying(20) DEFAULT 'published'::character varying NOT NULL,
     event_created_at timestamp with time zone DEFAULT now() NOT NULL,
+    -- KAN-298 (also database/migrations/008_events.sql).
+    event_type character varying(20) DEFAULT 'other' NOT NULL,
+    event_is_online boolean DEFAULT false NOT NULL,
+    event_online_url character varying(500),
+    event_price_type character varying(10) DEFAULT 'free' NOT NULL,
+    event_price_bdt numeric(10,2),
+    event_ticket_url character varying(500),
+    event_rejection_reason text,
+    event_created_by integer,
+    event_updated_at timestamp with time zone DEFAULT now() NOT NULL,
     CONSTRAINT events_check CHECK (((event_ends_at IS NULL) OR (event_ends_at >= event_starts_at))),
-    CONSTRAINT events_event_status_check CHECK (((event_status)::text = ANY ((ARRAY['draft'::character varying, 'published'::character varying, 'cancelled'::character varying])::text[])))
+    CONSTRAINT events_event_status_check CHECK (event_status IN ('draft', 'pending', 'published', 'rejected', 'cancelled')),
+    CONSTRAINT events_event_type_check CHECK (
+        event_type IN ('market', 'festival', 'sale', 'workshop', 'launch', 'trade', 'community', 'other')),
+    CONSTRAINT events_event_price_type_check CHECK (event_price_type IN ('free', 'paid')),
+    CONSTRAINT events_event_price_bdt_check CHECK (event_price_bdt IS NULL OR event_price_bdt >= 0),
+    CONSTRAINT events_event_urls_check CHECK (
+        (event_online_url IS NULL OR event_online_url ~ '^https?://')
+        AND (event_ticket_url IS NULL OR event_ticket_url ~ '^https?://'))
 );
 
 
@@ -2487,6 +2504,42 @@ ALTER TABLE public.vendor_profile_views
 CREATE INDEX idx_vendor_profile_views_campaign
     ON public.vendor_profile_views (view_campaign_id) WHERE view_campaign_id IS NOT NULL;
 
+--
+-- Events businesses run themselves (KAN-298). Also in database/migrations/008_events.sql.
+-- Cover photo and gallery (events.event_image_url holds the cover's path), and customers'
+-- Interested / Going answers.
+--
+
+ALTER TABLE ONLY public.events
+    ADD CONSTRAINT events_event_created_by_fkey FOREIGN KEY (event_created_by) REFERENCES public.users(user_id) ON DELETE SET NULL;
+
+CREATE INDEX idx_events_vendor ON public.events (vendor_id, event_starts_at DESC);
+
+CREATE TABLE public.event_photos (
+    photo_id serial PRIMARY KEY,
+    event_id integer NOT NULL REFERENCES public.events(event_id) ON DELETE CASCADE,
+    photo_url text NOT NULL,
+    photo_sort_order integer DEFAULT 0 NOT NULL,
+    photo_is_cover boolean DEFAULT false NOT NULL,
+    photo_created_at timestamp with time zone DEFAULT now() NOT NULL
+);
+CREATE INDEX idx_event_photos_event ON public.event_photos (event_id, photo_sort_order);
+CREATE UNIQUE INDEX idx_event_photos_one_cover ON public.event_photos (event_id) WHERE photo_is_cover;
+
+CREATE TABLE public.event_responses (
+    event_id integer NOT NULL REFERENCES public.events(event_id) ON DELETE CASCADE,
+    user_id integer NOT NULL REFERENCES public.users(user_id) ON DELETE CASCADE,
+    response_type character varying(12) NOT NULL,
+    response_created_at timestamp with time zone DEFAULT now() NOT NULL,
+    response_updated_at timestamp with time zone DEFAULT now() NOT NULL,
+    PRIMARY KEY (event_id, user_id),
+    CONSTRAINT event_responses_type_check CHECK (response_type IN ('interested', 'going'))
+);
+CREATE INDEX idx_event_responses_user ON public.event_responses (user_id);
+
+-- Messages about an event (cancelled, moved, or a note from the business) go in their own conversation.
+ALTER TABLE public.conversations
+    ADD COLUMN event_id integer REFERENCES public.events(event_id) ON DELETE SET NULL;
 
 --
 -- PostgreSQL database dump complete

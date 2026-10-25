@@ -32,6 +32,9 @@ export function ConversationList({
                                     <span className="shrink-0 text-xs text-soft">{formatDateTime(c.last_message_at)}</span>
                                 )}
                             </span>
+                            {c.event_title && (
+                                <span className="block truncate text-xs font-medium text-brand-700">Event: {c.event_title}</span>
+                            )}
                             {c.listing_title && (
                                 <span className="block truncate text-xs font-medium text-brand-700">About: {c.listing_title}</span>
                             )}

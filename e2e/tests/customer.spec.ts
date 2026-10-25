@@ -90,7 +90,7 @@ test("every account tab is visible on a phone @phone", async ({ page, context })
     await signIn(context, "customer");
     await page.goto("/account");
     const tabs = page.getByRole("navigation", { name: "Account" }).getByRole("link");
-    await expect(tabs).toHaveCount(5);
+    await expect(tabs).toHaveCount(6);
     for (const tab of await tabs.all()) await expect(tab).toBeInViewport();
     await expectNoSideScroll(page);
 });

@@ -17,7 +17,8 @@ export default async function AdminSettingsPage() {
     // Null when the session ended after the layout checked it.
     if (!data) redirect("/admin/login");
 
-    const waiting = data.waiting.businesses + data.waiting.listings;
+    const events = data.waiting.events ?? 0;
+    const waiting = data.waiting.businesses + data.waiting.listings + events;
 
     return (
         <AdminShell current="settings">
@@ -38,8 +39,9 @@ export default async function AdminSettingsPage() {
             {waiting > 0 && (
                 <p className="mt-4 max-w-3xl rounded-lg border border-line bg-surface-2 p-3 text-sm text-muted">
                     Turning approval off doesn&apos;t approve anything already waiting: {data.waiting.businesses}{" "}
-                    {data.waiting.businesses === 1 ? "business" : "businesses"} and {data.waiting.listings}{" "}
-                    {data.waiting.listings === 1 ? "listing" : "listings"} are still in{" "}
+                    {data.waiting.businesses === 1 ? "business" : "businesses"}, {data.waiting.listings}{" "}
+                    {data.waiting.listings === 1 ? "listing" : "listings"} and {events} {events === 1 ? "event" : "events"} are
+                    still in{" "}
                     <Link href="/admin" className="font-medium text-brand-600 hover:underline">
                         Approvals
                     </Link>
