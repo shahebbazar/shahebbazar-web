@@ -141,8 +141,18 @@ jobs:
           npm ci --prefix backend
           npm ci --prefix frontend/shahebbazar
           npm ci --prefix e2e
+      # Only Playwright's headless Chromium, kept between runs until the Playwright version changes.
+      # No --with-deps: that ran apt-get on every run (4 to 7 minutes, depending on Ubuntu's mirrors)
+      # for libraries the runner image already has, since it ships with Google Chrome.
+      - name: Cache the browser
+        id: browser-cache
+        uses: actions/cache@v5
+        with:
+          path: ~/.cache/ms-playwright
+          key: playwright-${{ runner.os }}-${{ hashFiles('e2e/package-lock.json') }}
       - name: Install the browser
-        run: npx playwright install --with-deps chromium
+        if: steps.browser-cache.outputs.cache-hit != 'true'
+        run: npx playwright install --only-shell chromium
         working-directory: e2e
       # Loads a throwaway database, builds the site, starts the API and the site, and runs every
       # browser test on a desktop and a phone-sized screen (e2e/README.md).
