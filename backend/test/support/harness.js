@@ -134,9 +134,9 @@ async function signIn(role) {
 
 /**
  * Loads the test database, starts the API and signs in as every role. `env` overrides the API's
- * settings, e.g. to point email at a provider that is down.
+ * settings, e.g. to point email at a provider that is down; `signInAll: false` skips the sign-ins.
  */
-async function startApi(env = {}) {
+async function startApi(env = {}, { signInAll = true } = {}) {
     assert.notEqual(TEST_DB, DEV_DB, "The test database must not be the development database.");
 
     const load = spawnSync(process.execPath, ["scripts/load-db.js", "--reset", "--yes", `--database=${TEST_DB}`], {
@@ -165,7 +165,8 @@ async function startApi(env = {}) {
     server.stderr.on("data", (chunk) => (serverLog += chunk));
     await waitFor(() => serverLog.includes("API running on"), "the API to start");
 
-    for (const role of Object.keys(PHONES)) await signIn(role);
+    // Signing in reads codes from the console mock, so a test that sends them elsewhere (an SMS provider) skips it.
+    if (signInAll) for (const role of Object.keys(PHONES)) await signIn(role);
 }
 
 /** Stops the API, drops the test database and removes the test upload folder. */

@@ -96,6 +96,7 @@ export function PhoneVerificationForm({
             phone,
             purpose: "login",
             expectedRole: audience,
+            language: locale,
         });
 
         setBusy(false);

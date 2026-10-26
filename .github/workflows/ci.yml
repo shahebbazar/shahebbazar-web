@@ -1,7 +1,8 @@
 # Checks every pull request into main, and main itself after a merge (KAN-281).
 # Branch protection on main requires these jobs to pass before a pull request can be merged:
 # API tests, Frontend checks and Browser tests.
-# Once they pass on main, the Deploy job updates the test server (docs/DEPLOY.md).
+# Once they pass on main, the Deploy jobs update the AWS test server (docs/DEPLOY.md) and the staging
+# site on the client's server (docs/DEPLOY-CLIENT.md).
 # Run workflow (Actions tab) on main re-runs the checks and deploys again.
 
 name: CI
@@ -212,3 +213,46 @@ jobs:
           fi
           printf '%s\n' "$DEPLOY_KNOWN_HOSTS" | tr -d '\r' > ~/.ssh/known_hosts
           ssh -i ~/.ssh/deploy_key -o BatchMode=yes -o ServerAliveInterval=30 "ubuntu@$DEPLOY_HOST" "$GITHUB_SHA"
+
+  # Updates the staging site on the client's server (staging.shahebbazar.com) with main, once every
+  # check has passed. Over SSH with a key that can only run deploy/client/deploy.sh
+  # (docs/DEPLOY-CLIENT.md, "Automatic deploys"). Until the staging environment's secrets are set, it
+  # notes that and passes.
+  deploy-staging:
+    name: Deploy to staging
+    needs: [api, web, e2e]
+    if: github.ref == 'refs/heads/main' && github.event_name != 'pull_request'
+    runs-on: ubuntu-24.04
+    timeout-minutes: 25
+    environment:
+      name: staging
+      url: https://staging.shahebbazar.com
+    concurrency:
+      group: deploy-staging
+      cancel-in-progress: false
+
+    steps:
+      - name: Deploy
+        env:
+          STAGING_HOST: ${{ secrets.STAGING_HOST }}
+          STAGING_USER: ${{ secrets.STAGING_USER }}
+          STAGING_SSH_KEY: ${{ secrets.STAGING_SSH_KEY }}
+          STAGING_KNOWN_HOSTS: ${{ secrets.STAGING_KNOWN_HOSTS }}
+        run: |
+          if [ -z "$STAGING_HOST" ]; then
+            echo "::notice::The staging environment's secrets aren't set (docs/DEPLOY-CLIENT.md), so nothing was deployed."
+            exit 0
+          fi
+          install -m 700 -d ~/.ssh
+          if printf '%s' "$STAGING_SSH_KEY" | grep -q 'BEGIN'; then
+            printf '%s\n' "$STAGING_SSH_KEY" | tr -d '\r' | sed 's/^[[:space:]]*//; s/[[:space:]]*$//' > ~/.ssh/staging_key
+          else
+            printf '%s' "$STAGING_SSH_KEY" | tr -d '[:space:]' | base64 -d > ~/.ssh/staging_key
+          fi
+          chmod 600 ~/.ssh/staging_key
+          if ! ssh-keygen -y -f ~/.ssh/staging_key > /dev/null; then
+            echo "::error::STAGING_SSH_KEY isn't a readable private key. Set it again as described in docs/DEPLOY-CLIENT.md."
+            exit 1
+          fi
+          printf '%s\n' "$STAGING_KNOWN_HOSTS" | tr -d '\r' > ~/.ssh/known_hosts
+          ssh -i ~/.ssh/staging_key -o BatchMode=yes -o ServerAliveInterval=30 "$STAGING_USER@$STAGING_HOST" "$GITHUB_SHA"

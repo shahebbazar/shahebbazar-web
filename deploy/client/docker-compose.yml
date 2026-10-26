@@ -66,6 +66,10 @@ services:
       UNSUBSCRIBE_SECRET: ${UNSUBSCRIBE_SECRET:?Set UNSUBSCRIBE_SECRET in .env}
       ANALYTICS_SALT: ${ANALYTICS_SALT:?Set ANALYTICS_SALT in .env}
       DEMO_LOGIN_CODE: ${DEMO_LOGIN_CODE:-}
+      # Sign-in codes by SMS (KAN-278): BulkSMSBD when all three are set; otherwise not sent.
+      SMS_PROVIDER: ${SMS_PROVIDER:-}
+      SMS_API_KEY: ${SMS_API_KEY:-}
+      SMS_SENDER_ID: ${SMS_SENDER_ID:-}
       MARKETING_WORKSPACE_ENABLED: "true"
       # Campaign emails go to the test inbox until the client's email provider is set up.
       MARKETING_EMAIL_ENABLED: "true"
