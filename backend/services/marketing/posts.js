@@ -1,4 +1,4 @@
-// Facebook and WhatsApp posts (KAN-287): Shaheb Bazar isn't connected to either, so the owner posts
+// Facebook and WhatsApp posts (KAN-287): Shahebbazar isn't connected to either, so the owner posts
 // the campaign's text themselves and marks it as posted, with a link to the post if they have one.
 // Routes are in routes/campaigns.js.
 

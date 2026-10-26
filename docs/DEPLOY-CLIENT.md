@@ -144,7 +144,21 @@ The same stack, with these changes in `.env`:
   If every code fails with BulkSMSBD code 1032 in the API log, whitelist the server's IP
   (145.223.23.210) in the BulkSMSBD panel. Codes are in Bangla for anyone using the site in Bangla or
   preferring it in My details, English otherwise.
-- `SMTP_*` for the client's email provider, so campaign emails are delivered.
+- `SMTP_*` for the client's Hostinger mailbox, so campaign emails are delivered (checked on staging,
+  27 October: delivered to a Gmail inbox, not spam, with SPF and DKIM passing for shahebbazar.com):
+
+  ```text
+  SMTP_HOST=smtp.hostinger.com
+  SMTP_PORT=465
+  SMTP_SECURE=true
+  SMTP_USER=offers@shahebbazar.com
+  SMTP_PASS='<the mailbox password>'
+  MARKETING_EMAIL_FROM=offers@shahebbazar.com
+  ```
+
+  The domain's MX, SPF (`include:_spf.mail.hostinger.com`), DKIM (`hostingermail-a/b/c._domainkey`)
+  and DMARC records are in Cloudflare, **DNS only**. Staging keeps these lines commented out, so its
+  campaigns go to the test inbox; set them there only for a one-off delivery test to your own address.
 - **The data.** An empty database is loaded with the demo data today. The live site needs a
   reference-only seed (locations and categories) first, and a fresh database volume.
 

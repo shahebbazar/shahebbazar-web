@@ -210,8 +210,8 @@ describe("campaign email text as HTML", () => {
     const { bodyHtml } = require("../services/marketing/emailMessage");
 
     it("shows links as words, not raw addresses, and keeps the tracked address in the link", () => {
-        const html = bodyHtml("See more: https://shahebbazar.com/business/mango?from=email&c=3", () => "our page on Shaheb Bazar");
-        assert.equal(html, 'See more: <a href="https://shahebbazar.com/business/mango?from=email&amp;c=3" class="sb-link" style="color:#1d4ed8;font-weight:bold">our page on Shaheb Bazar</a>');
+        const html = bodyHtml("See more: https://shahebbazar.com/business/mango?from=email&c=3", () => "our page on Shahebbazar");
+        assert.equal(html, 'See more: <a href="https://shahebbazar.com/business/mango?from=email&amp;c=3" class="sb-link" style="color:#1d4ed8;font-weight:bold">our page on Shahebbazar</a>');
     });
 
     it("an address without its own words is shortened", () => {

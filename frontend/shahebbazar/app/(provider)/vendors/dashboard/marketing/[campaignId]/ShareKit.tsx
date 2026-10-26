@@ -11,7 +11,7 @@ const BUTTON =
 const NAMES: Record<PostChannel, string> = { facebook: "Facebook", whatsapp: "WhatsApp" };
 
 /**
- * Facebook and WhatsApp aren't connected to Shaheb Bazar, so the owner posts these themselves (with
+ * Facebook and WhatsApp aren't connected to Shahebbazar, so the owner posts these themselves (with
  * ShareButtons), then marks each as posted here, with a link to the post if they have one, so it shows
  * in the results. Offered only for saved wording with nothing left to fill in; admins see whether it
  * was posted.

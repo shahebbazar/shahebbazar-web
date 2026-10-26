@@ -1,7 +1,7 @@
 import { redirect } from "next/navigation";
 import { getViewer } from "@/lib/auth-server";
 
-// /message/<business>: the "Reply on Shaheb Bazar" button in campaign emails and the Message button on
+// /message/<business>: the "Reply on Shahebbazar" button in campaign emails and the Message button on
 // a business page. Signed in, it opens a new message to the business; signed out, it goes to the login
 // page, which comes back to the message afterwards. (The account pages themselves send signed-out
 // visitors to the login page without remembering where they were going.) ?listing=<id> asks about one product.
