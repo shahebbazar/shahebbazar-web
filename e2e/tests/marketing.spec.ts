@@ -62,7 +62,14 @@ test("one message makes all three channels; one channel can be changed on its ow
     await newCampaign(page, { goal: "Reminder", products: ["Fazli Mango"] });
     const message = page.getByRole("textbox", { name: "Message", exact: true });
     await message.fill("Mango season is here!\nCome and taste the Fazli.");
-    await expect(page.getByLabel("Email preview")).toContainText("Mango season is here!");
+    const emailPreview = page.getByLabel("Email preview");
+    await expect(emailPreview).toContainText("Mango season is here!");
+    await expect(emailPreview).toContainText("Shahebbazar");
+    // The preview can show the email as mail apps in dark mode do.
+    await expect(emailPreview).toHaveAttribute("data-scheme", "light");
+    await page.getByRole("group", { name: "Preview colours" }).getByRole("button", { name: "Dark" }).click();
+    await expect(emailPreview).toHaveAttribute("data-scheme", "dark");
+    await page.getByRole("group", { name: "Preview colours" }).getByRole("button", { name: "Light" }).click();
     await expect(page.getByLabel("Facebook preview")).toContainText("#Rajshahi #ShahebBazar");
     await expect(page.getByLabel("WhatsApp preview")).toContainText("Mango season is here!");
     await expect(page.getByText("Made from your message")).toHaveCount(3);
