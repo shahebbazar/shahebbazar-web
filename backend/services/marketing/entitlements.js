@@ -145,7 +145,7 @@ async function checkEntitlement(db, vendorId, action, quantity = 1, { lock = fal
 
     switch (status) {
         case "suspended":
-            return deny("suspended", "The Marketing pass is suspended. Contact Shaheb Bazar for help.");
+            return deny("suspended", "The Marketing pass is suspended. Contact Shahebbazar for help.");
         case "expired": {
             const ended = `Your Marketing pass ended on ${day(pass.subscription_ends_at)}. Renew it to continue.`;
             if (action !== "email_campaign") return deny("expired", ended);

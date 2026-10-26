@@ -1,5 +1,5 @@
 // Builds one campaign email for one customer (KAN-286, KAN-287): the approved wording, product cards
-// if the owner kept the photos, the offer's coupon, buttons to reply on Shaheb Bazar, see the page,
+// if the owner kept the photos, the offer's coupon, buttons to reply on Shahebbazar, see the page,
 // call and get directions, and the customer's own unsubscribe link, both in the email and as the
 // one-click List-Unsubscribe header (RFC 8058) that mail apps show as an "Unsubscribe" button.
 //
@@ -19,12 +19,12 @@ const { listingPrice, channelsFromMessage } = require("./templates");
 
 const COPY = {
     en: {
-        // Replies belong in the business's Shaheb Bazar inbox, not an email inbox.
-        reply: "Reply on Shaheb Bazar",
-        replyText: (url) => `Reply on Shaheb Bazar: ${url}`,
+        // Replies belong in the business's Shahebbazar inbox, not an email inbox.
+        reply: "Reply on Shahebbazar",
+        replyText: (url) => `Reply on Shahebbazar: ${url}`,
         page: "View our page",
-        pageLink: "our page on Shaheb Bazar",
-        eventLink: "the event's page on Shaheb Bazar",
+        pageLink: "our page on Shahebbazar",
+        eventLink: "the event's page on Shahebbazar",
         pageText: (url) => `Our page: ${url}`,
         call: (phone) => `Call ${phone}`,
         directions: "Get directions",
@@ -32,8 +32,8 @@ const COPY = {
         couponLabel: "Your code",
         couponUntil: (day) => `Show this code when you visit or order. Valid until ${day}.`,
         share: "Know someone who'd like this? Send it on:",
-        sentWith: "Sent with Shaheb Bazar, Rajshahi's local business directory.",
-        why: (name) => `You get this because you chose to get offers from ${name} on Shaheb Bazar.`,
+        sentWith: "Sent with Shahebbazar, Rajshahi's local business directory.",
+        why: (name) => `You get this because you chose to get offers from ${name} on Shahebbazar.`,
         stop: "Unsubscribe",
         stopText: (url) => `Unsubscribe: ${url}`,
         day: (d) => new Intl.DateTimeFormat("en-GB", { day: "numeric", month: "long", year: "numeric", timeZone: "Asia/Dhaka" }).format(d),
@@ -309,7 +309,7 @@ ${escapeHtml(c.why(name))} <a href="${escapeHtml(unsubscribe)}" class="sb-link" 
     ].join("\n");
 
     return {
-        from: { name: `${name} via Shaheb Bazar`, address: senderAddress() },
+        from: { name: `${name} via Shahebbazar`, address: senderAddress() },
         replyTo: replyTo || undefined,
         to: { name: recipient.user_name || "", address: recipient.address },
         subject: content.email.subject,

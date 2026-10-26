@@ -103,7 +103,7 @@ describe("sending a campaign by email", () => {
         assert.deepEqual([audit[0].audit_after.sent, audit[0].audit_after.provider], [3, "console"]);
 
         output = apiOutput().slice(from);
-        assert.match(output, /\[mock email\] from: Rajshahi Mango Traders via Shaheb Bazar <offers@shahebbazar\.com>/);
+        assert.match(output, /\[mock email\] from: Rajshahi Mango Traders via Shahebbazar <offers@shahebbazar\.com>/);
         assert.equal(output.match(/\[mock email\] to: /g).length, 3);
     });
 
@@ -189,9 +189,9 @@ describe("the email itself", () => {
     // Photos in the email, leaving out the Shahebbazar mark at the top, which every email has.
     const photosIn = (html) => (html.match(/<img (?![^>]*shahebbazar-pin)/g) || []).length;
 
-    it("comes from the business via Shaheb Bazar, replies to the business, and has one-click unsubscribe", () => {
+    it("comes from the business via Shahebbazar, replies to the business, and has one-click unsubscribe", () => {
         const email = buildCampaignEmail({ campaign, content: content(), recipient, replyTo: "shop@example.com" });
-        assert.deepEqual(email.from, { name: "Rajshahi Mango Traders via Shaheb Bazar", address: "offers@shahebbazar.com" });
+        assert.deepEqual(email.from, { name: "Rajshahi Mango Traders via Shahebbazar", address: "offers@shahebbazar.com" });
         assert.equal(email.replyTo, "shop@example.com");
         assert.match(email.html, />Rajshahi Mango Traders<\/div><\/td>/, "shown at the top of the email too");
         assert.match(email.html, /\/email\/shahebbazar-pin\.png"[^>]*>[\s\S]{0,300}>Shahebbazar<\/td>/, "with the Shahebbazar mark at the top right");
@@ -221,10 +221,10 @@ describe("the email itself", () => {
         assert.match(without.html, />R<\/td>/);
     });
 
-    it("has a button for replying on Shaheb Bazar, which opens a message to the business", () => {
+    it("has a button for replying on Shahebbazar, which opens a message to the business", () => {
         const email = buildCampaignEmail({ campaign, content: content(), recipient });
-        assert.match(email.html, /<a href="https?:\/\/[^"]+\/message\/rajshahi-mango-traders"[^>]*>Reply on Shaheb Bazar<\/a>/);
-        assert.match(email.text, /Reply on Shaheb Bazar: \S+\/message\/rajshahi-mango-traders\n/);
+        assert.match(email.html, /<a href="https?:\/\/[^"]+\/message\/rajshahi-mango-traders"[^>]*>Reply on Shahebbazar<\/a>/);
+        assert.match(email.text, /Reply on Shahebbazar: \S+\/message\/rajshahi-mango-traders\n/);
         const bangla = buildCampaignEmail({ campaign: { ...campaign, campaign_language: "bn" }, content: content(), recipient });
         assert.match(bangla.html, />সাহেব বাজারে উত্তর দিন<\/a>/);
     });
@@ -282,7 +282,7 @@ describe("the email itself", () => {
 
     it("writes the footer in Bangla for a Bangla campaign", () => {
         const email = buildCampaignEmail({ campaign: { ...campaign, campaign_language: "bn" }, content: content(), recipient });
-        assert.equal(email.from.name, "রাজশাহী আম ব্যবসায়ী via Shaheb Bazar");
+        assert.equal(email.from.name, "রাজশাহী আম ব্যবসায়ী via Shahebbazar");
         assert.match(email.text, /আর অফার চাই না: /);
     });
 });

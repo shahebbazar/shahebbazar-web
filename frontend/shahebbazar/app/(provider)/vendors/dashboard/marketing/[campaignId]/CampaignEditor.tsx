@@ -547,9 +547,9 @@ export function CampaignEditor({ vendorId, initial, readOnly: viewOnly }: { vend
                                             <span className={`block text-lg font-bold tracking-[0.15em] ${t.code}`}>{coupon.code}</span>
                                         </div>
                                     )}
-                                    {/* As in the sent email: replies come to your Messages on Shaheb Bazar. */}
+                                    {/* As in the sent email: replies come to your Messages on Shahebbazar. */}
                                     <span className="mt-4 inline-block rounded-lg bg-[#2563eb] px-4 py-2 text-[0.8125rem] font-bold text-white">
-                                        {bangla ? "সাহেব বাজারে উত্তর দিন" : "Reply on Shaheb Bazar"}
+                                        {bangla ? "সাহেব বাজারে উত্তর দিন" : "Reply on Shahebbazar"}
                                     </span>
                                     <span className="mt-2 flex flex-wrap gap-1.5 pb-3 text-xs font-semibold">
                                         <span className={`rounded-lg border px-2.5 py-1 ${t.outline}`}>{bangla ? "আমাদের পেজ দেখুন" : "View our page"}</span>
