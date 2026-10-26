@@ -186,12 +186,15 @@ describe("the email itself", () => {
     };
     const recipient = { user_id: 42, user_name: "Rumana", address: "rumana@example.com" };
     const content = (over = {}) => ({ email: { subject: "Fresh <mangoes>", body: "Hello & welcome\n\nSee https://example.com/x.", photos: true, ...over } });
+    // Photos in the email, leaving out the Shahebbazar mark at the top, which every email has.
+    const photosIn = (html) => (html.match(/<img (?![^>]*shahebbazar-pin)/g) || []).length;
 
     it("comes from the business via Shaheb Bazar, replies to the business, and has one-click unsubscribe", () => {
         const email = buildCampaignEmail({ campaign, content: content(), recipient, replyTo: "shop@example.com" });
         assert.deepEqual(email.from, { name: "Rajshahi Mango Traders via Shaheb Bazar", address: "offers@shahebbazar.com" });
         assert.equal(email.replyTo, "shop@example.com");
-        assert.match(email.html, />Rajshahi Mango Traders<\/div><div[^>]*>via Shaheb Bazar<\/div>/, "shown at the top of the email too");
+        assert.match(email.html, />Rajshahi Mango Traders<\/div><\/td>/, "shown at the top of the email too");
+        assert.match(email.html, /\/email\/shahebbazar-pin\.png"[^>]*>[\s\S]{0,300}>Shahebbazar<\/td>/, "with the Shahebbazar mark at the top right");
         assert.match(email.headers["List-Unsubscribe"], /^<https?:\/\/[^>]+\/api\/unsubscribe\/42\.1\.email\.[\w-]{32}>$/);
         assert.equal(email.headers["List-Unsubscribe-Post"], "List-Unsubscribe=One-Click");
         assert.match(email.text, /Unsubscribe: \S+\/unsubscribe\/42\.1\.email\./);
@@ -202,11 +205,11 @@ describe("the email itself", () => {
         const email = buildCampaignEmail({ campaign, content: content(), recipient });
         assert.match(email.html, /Hello &amp; welcome/);
         assert.match(email.html, /<a href="https:\/\/example\.com\/x"/);
-        assert.equal((email.html.match(/<img /g) || []).length, 1, "the product without a photo adds none");
+        assert.equal(photosIn(email.html), 1, "the product without a photo adds none");
         assert.match(email.html, /src="https?:\/\/[^"]+\/uploads\/mango\.jpg"/);
         assert.equal(email.subject, "Fresh <mangoes>", "the subject is plain text");
         const without = buildCampaignEmail({ campaign, content: content({ photos: false }), recipient });
-        assert.doesNotMatch(without.html, /<img /);
+        assert.equal(photosIn(without.html), 0);
     });
 
     it("shows the business's logo beside its name, or its first letter when it has none", () => {
@@ -214,7 +217,7 @@ describe("the email itself", () => {
         const email = buildCampaignEmail({ campaign: withLogo, content: content({ photos: false }), recipient });
         assert.match(email.html, /<img src="https?:\/\/[^"]+\/uploads\/logo\.png" alt="" width="44" height="44"/);
         const without = buildCampaignEmail({ campaign, content: content({ photos: false }), recipient });
-        assert.doesNotMatch(without.html, /<img /);
+        assert.equal(photosIn(without.html), 0);
         assert.match(without.html, />R<\/td>/);
     });
 
@@ -265,13 +268,15 @@ describe("the email itself", () => {
             content: { message, email: { subject: "Just in", body: `Hello,\n\n${message}\n\nRajshahi Mango Traders`, photos: false } },
             recipient,
         });
-        assert.match(email.html, /font-size:24px[^"]*">Just in at Rajshahi Mango Traders!<\/div>/);
+        assert.match(email.html, /font-size:20px[^"]*">Just in at Rajshahi Mango Traders!<\/div>/);
         assert.match(email.html, /href="https:\/\/wa\.me\/\?text=Just%20in%20at%20Rajshahi%20Mango%20Traders!%20[^"]*from%3Dwhatsapp%26c%3D7"/);
         assert.match(email.html, /facebook\.com\/sharer\/sharer\.php\?u=[^"]*from%3Dfacebook%26c%3D7"/);
         assert.match(email.html, /@media \(prefers-color-scheme: dark\)/);
+        assert.match(email.html, /\.sb-card \{ background: #111827/, "the website's dark colours");
+        assert.doesNotMatch(email.html, /#0f172a" style="padding/, "no dark bands at the top and bottom");
         // Wording changed for the email alone shows as written.
         const own = buildCampaignEmail({ campaign, content: { message, email: { subject: "Just in", body: "Hi there\n\nMy own words", photos: false } }, recipient });
-        assert.doesNotMatch(own.html, /font-size:24px/);
+        assert.doesNotMatch(own.html, /font-size:20px/);
         assert.match(own.html, /Hi there/);
     });
 

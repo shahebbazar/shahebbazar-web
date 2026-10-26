@@ -2,7 +2,7 @@
 
 import { Fragment, useState, useTransition } from "react";
 import { useRouter } from "next/navigation";
-import { AlertTriangle, CheckCircle2, Info, Link2, Loader2, Mail, PenLine, RotateCcw, Send, Ticket } from "lucide-react";
+import { AlertTriangle, CheckCircle2, Info, Link2, Loader2, Mail, MapPin, Moon, PenLine, RotateCcw, Send, Sun, Ticket } from "lucide-react";
 import { browserAssetUrl } from "@/lib/apiBase";
 import { ConfirmDialog } from "@/components/shared/ConfirmDialog";
 import { channelsFromMessage, messageFromFacebook } from "@/lib/campaignMessage";
@@ -24,6 +24,22 @@ const PRICE = "৳[0-9০-৯,.]+(?:–৳[0-9০-৯,.]+)?";
  * Shows text keeping line breaks, with [[placeholders]] (must fill in) in yellow and facts from the
  * business's saved details (name, products, prices, address, phone, page, coupon) in blue.
  */
+// The email's colours, light and dark: the website's own (app/globals.css), as in the sent email
+// (backend/services/marketing/emailMessage.js). Mail apps pick light or dark themselves; the switch
+// above the preview shows both.
+const EMAIL_THEME = {
+    light: {
+        page: "bg-[#f6f8fc]", card: "border-[#e6eaf2] bg-white text-[#0f172a]", line: "border-[#e6eaf2]", soft: "bg-[#f8fafc]",
+        ink: "text-[#0f172a]", muted: "text-[#64748b]", link: "text-[#2563eb]", outline: "border-[#d8dfec]", price: "text-[#15803d]",
+        coupon: "border-[#93c5fd] bg-[#eff6ff]", code: "text-[#1d4ed8]",
+    },
+    dark: {
+        page: "bg-[#0b1120]", card: "border-[#263244] bg-[#111827] text-[#f1f5f9]", line: "border-[#263244]", soft: "bg-[#182233]",
+        ink: "text-[#f1f5f9]", muted: "text-[#a8b3c4]", link: "text-[#60a5fa]", outline: "border-[#354258]", price: "text-[#86efac]",
+        coupon: "border-[#1e40af] bg-[#172554]", code: "text-[#93c5fd]",
+    },
+};
+
 function Marked({ text, facts }: { text: string; facts: string[] }) {
     const parts = ["\\[\\[[^\\]]+\\]\\]", PRICE, ...facts.map(escape)];
     const splitter = new RegExp(`(${parts.join("|")})`, "g");
@@ -116,6 +132,7 @@ export function CampaignEditor({ vendorId, initial, readOnly: viewOnly }: { vend
     const [errors, setErrors] = useState<Record<string, string>>({});
     const [notice, setNotice] = useState<{ ok: boolean; text: string } | null>(null);
     const [asking, setAsking] = useState<"delete" | "send" | null>(null);
+    const [emailScheme, setEmailScheme] = useState<"light" | "dark">("light");
     const [pending, startTransition] = useTransition();
 
     // Admins only look; a campaign that has gone out can't be changed.
@@ -440,101 +457,127 @@ export function CampaignEditor({ vendorId, initial, readOnly: viewOnly }: { vend
                     )}
                 </div>
                 {channelWording("email", "Email message", 14, 5000)}
-                {/* Laid out like the sent email (backend/services/marketing/emailMessage.js). */}
-                <div aria-label="Email preview" className="mx-auto mt-3 max-w-[600px] overflow-hidden rounded-xl bg-slate-200 p-3 text-[0.8125rem] text-slate-800">
-                    <div className="h-1 rounded-t-lg bg-[#2563eb]" />
-                    <div className="flex items-center gap-2.5 bg-[#0f172a] px-4 py-3">
-                        {logo ? (
-                            // eslint-disable-next-line @next/next/no-img-element
-                            <img src={logo} alt="" className="size-9 rounded-full object-cover" />
-                        ) : (
-                            <span className="grid size-9 place-items-center rounded-full bg-blue-100 font-semibold text-blue-700">{name.charAt(0)}</span>
-                        )}
-                        <span className="min-w-0">
-                            <span className="block font-semibold text-white">{name}</span>
-                            <span className="block text-xs text-slate-400">via Shaheb Bazar</span>
-                        </span>
+                <div className="mt-4 flex items-center justify-between gap-2">
+                    <p className="text-sm font-medium">Preview</p>
+                    <div role="group" aria-label="Preview colours" className="inline-flex rounded-[10px] border border-line p-0.5 text-xs font-medium">
+                        {(["light", "dark"] as const).map((scheme) => (
+                            <button
+                                key={scheme}
+                                type="button"
+                                aria-pressed={emailScheme === scheme}
+                                onClick={() => setEmailScheme(scheme)}
+                                className={`inline-flex items-center gap-1 rounded-lg px-2.5 py-1 ${emailScheme === scheme ? "bg-brand-600 text-white" : "text-muted hover:text-ink"}`}
+                            >
+                                {scheme === "light" ? <Sun className="size-3.5" aria-hidden /> : <Moon className="size-3.5" aria-hidden />}
+                                {scheme === "light" ? "Light" : "Dark"}
+                            </button>
+                        ))}
                     </div>
-                    {content.email.photos !== false && emailHero && (
-                        // eslint-disable-next-line @next/next/no-img-element
-                        <img src={emailHero} alt="" className="block max-h-56 w-full object-cover" />
-                    )}
-                    <div className="bg-white px-4 pt-4 pb-2">
-                        <p className="text-xs text-slate-500">
-                            Subject: <Marked text={content.email.subject} facts={facts} />
-                        </p>
-                        {follows("email") ? (
-                            <>
-                                <p className="mt-3 text-slate-500">{content.email.body.split("\n")[0]}</p>
-                                <p className="mt-2 text-lg leading-snug font-bold">
-                                    <Marked text={headline} facts={facts} />
-                                </p>
-                                <p className="mt-2 whitespace-pre-line">
-                                    <Marked text={content.email.body.split("\n").slice(3).join("\n").replace(/^\n+/, "")} facts={facts} />
-                                </p>
-                            </>
-                        ) : (
-                            <p className="mt-3 whitespace-pre-line">
-                                <Marked text={content.email.body} facts={facts} />
-                            </p>
-                        )}
-                        {content.email.photos !== false && (
-                            <ul className="mt-3 space-y-2">
-                                {snapshot.listings.map((l) => {
-                                    const src = browserAssetUrl(l.photo_url);
-                                    const price = priceOf(l, bangla);
-                                    return (
-                                        <li key={l.listing_id} className="flex items-center gap-3 rounded-lg border border-slate-200 p-2">
-                                            {src && (
-                                                // eslint-disable-next-line @next/next/no-img-element
-                                                <img src={src} alt="" className="size-16 shrink-0 rounded-md object-cover" />
-                                            )}
-                                            <span className="min-w-0">
-                                                <span className="block font-semibold">{bangla && l.title_bn ? l.title_bn : l.title}</span>
-                                                {price && <span className="block font-semibold text-green-700">{price}</span>}
-                                                <span className="block text-xs font-semibold text-[#2563eb]">{bangla ? "দেখুন" : "View"} →</span>
-                                            </span>
-                                        </li>
-                                    );
-                                })}
-                            </ul>
-                        )}
-                        {coupon && coupon.status !== "expired" && (
-                            <div className="mt-3 rounded-lg border-2 border-dashed border-blue-300 bg-blue-50 p-3 text-center">
-                                <span className="block text-[0.6875rem] font-semibold tracking-wider text-slate-500 uppercase">
-                                    {bangla ? "আপনার কোড" : "Your code"}
-                                </span>
-                                <span className="block text-lg font-bold tracking-[0.15em] text-blue-700">{coupon.code}</span>
-                            </div>
-                        )}
-                        {/* As in the sent email: replies come to your Messages on Shaheb Bazar. */}
-                        <span className="mt-4 inline-block rounded-lg bg-[#2563eb] px-4 py-2 text-[0.8125rem] font-bold text-white">
-                            {bangla ? "সাহেব বাজারে উত্তর দিন" : "Reply on Shaheb Bazar"}
-                        </span>
-                        <span className="mt-2 flex flex-wrap gap-1.5 pb-2 text-xs font-semibold">
-                            <span className="rounded-md border border-slate-300 px-2.5 py-1">{bangla ? "আমাদের পেজ দেখুন" : "View our page"}</span>
-                            {snapshot.business.phone && (
-                                <span className="rounded-md border border-slate-300 px-2.5 py-1">
-                                    {bangla ? "কল করুন" : "Call"} {formatPhone(snapshot.business.phone)}
-                                </span>
-                            )}
-                            {snapshot.business.address && (
-                                <span className="rounded-md border border-slate-300 px-2.5 py-1">{bangla ? "পথ দেখুন" : "Get directions"}</span>
-                            )}
-                        </span>
-                    </div>
-                    <div className="flex flex-wrap items-center gap-1.5 border-t border-slate-200 bg-slate-50 px-4 py-2.5 text-xs text-slate-500">
-                        {bangla ? "পরিচিত কারও কাজে লাগবে? পাঠিয়ে দিন:" : "Know someone who'd like this? Send it on:"}
-                        <span className="rounded-full bg-green-600 px-2.5 py-0.5 font-semibold text-white">WhatsApp</span>
-                        <span className="rounded-full bg-[#1877f2] px-2.5 py-0.5 font-semibold text-white">Facebook</span>
-                    </div>
-                    <p className="rounded-b-lg bg-[#0f172a] px-4 py-3 text-[0.6875rem] text-slate-400">
-                        <span className="font-semibold text-white">{name}</span>
-                        <br />
-                        You get this because you chose offers from {name}. An unsubscribe link is added here when it&apos;s sent. In dark mode,
-                        mail apps that support it show this email in dark colours.
-                    </p>
                 </div>
+                {/* Laid out like the sent email (backend/services/marketing/emailMessage.js). */}
+                {(() => {
+                    const t = EMAIL_THEME[emailScheme];
+                    return (
+                        <div aria-label="Email preview" data-scheme={emailScheme} className={`mx-auto mt-2 max-w-[600px] rounded-xl p-3 text-[0.8125rem] sm:p-4 ${t.page}`}>
+                            <div className={`overflow-hidden rounded-xl border ${t.card}`}>
+                                <div className={`flex items-center gap-2.5 border-b px-4 py-3 ${t.line}`}>
+                                    {logo ? (
+                                        // eslint-disable-next-line @next/next/no-img-element
+                                        <img src={logo} alt="" className="size-9 shrink-0 rounded-full object-cover" />
+                                    ) : (
+                                        <span className="grid size-9 shrink-0 place-items-center rounded-full bg-[#dbeafe] font-semibold text-[#1d4ed8]">{name.charAt(0)}</span>
+                                    )}
+                                    <span className="min-w-0 flex-1 leading-tight font-semibold">{name}</span>
+                                    <span className={`inline-flex shrink-0 items-center gap-1 font-bold tracking-tight ${t.link}`}>
+                                        <MapPin className="size-4 fill-current" strokeWidth={1.5} aria-hidden />
+                                        Shahebbazar
+                                    </span>
+                                </div>
+                                {content.email.photos !== false && emailHero && (
+                                    <div className="px-4 pt-4">
+                                        {/* eslint-disable-next-line @next/next/no-img-element */}
+                                        <img src={emailHero} alt="" className="block max-h-48 w-full rounded-lg object-cover" />
+                                    </div>
+                                )}
+                                <div className="px-4 pt-4 pb-1">
+                                    <p className={`text-xs ${t.muted}`}>
+                                        Subject: <Marked text={content.email.subject} facts={facts} />
+                                    </p>
+                                    {follows("email") ? (
+                                        <>
+                                            <p className={`mt-3 ${t.muted}`}>{content.email.body.split("\n")[0]}</p>
+                                            <p className="mt-1.5 text-base leading-snug font-bold">
+                                                <Marked text={headline} facts={facts} />
+                                            </p>
+                                            <p className="mt-1.5 whitespace-pre-line">
+                                                <Marked text={content.email.body.split("\n").slice(3).join("\n").replace(/^\n+/, "")} facts={facts} />
+                                            </p>
+                                        </>
+                                    ) : (
+                                        <p className="mt-3 whitespace-pre-line">
+                                            <Marked text={content.email.body} facts={facts} />
+                                        </p>
+                                    )}
+                                    {content.email.photos !== false && snapshot.listings.length > 0 && (
+                                        <ul className="mt-3 space-y-2">
+                                            {snapshot.listings.map((l) => {
+                                                const src = browserAssetUrl(l.photo_url);
+                                                const price = priceOf(l, bangla);
+                                                return (
+                                                    <li key={l.listing_id} className={`flex items-center gap-3 rounded-xl border p-2 ${t.line}`}>
+                                                        {src && (
+                                                            // eslint-disable-next-line @next/next/no-img-element
+                                                            <img src={src} alt="" className="size-14 shrink-0 rounded-lg object-cover" />
+                                                        )}
+                                                        <span className="min-w-0">
+                                                            <span className="block font-semibold">{bangla && l.title_bn ? l.title_bn : l.title}</span>
+                                                            {price && <span className={`block font-semibold ${t.price}`}>{price}</span>}
+                                                            <span className={`block text-xs font-semibold ${t.link}`}>{bangla ? "দেখুন" : "View"} →</span>
+                                                        </span>
+                                                    </li>
+                                                );
+                                            })}
+                                        </ul>
+                                    )}
+                                    {coupon && coupon.status !== "expired" && (
+                                        <div className={`mt-3 rounded-xl border-2 border-dashed p-3 text-center ${t.coupon}`}>
+                                            <span className={`block text-[0.6875rem] font-semibold tracking-wider uppercase ${t.muted}`}>
+                                                {bangla ? "আপনার কোড" : "Your code"}
+                                            </span>
+                                            <span className={`block text-lg font-bold tracking-[0.15em] ${t.code}`}>{coupon.code}</span>
+                                        </div>
+                                    )}
+                                    {/* As in the sent email: replies come to your Messages on Shaheb Bazar. */}
+                                    <span className="mt-4 inline-block rounded-lg bg-[#2563eb] px-4 py-2 text-[0.8125rem] font-bold text-white">
+                                        {bangla ? "সাহেব বাজারে উত্তর দিন" : "Reply on Shaheb Bazar"}
+                                    </span>
+                                    <span className="mt-2 flex flex-wrap gap-1.5 pb-3 text-xs font-semibold">
+                                        <span className={`rounded-lg border px-2.5 py-1 ${t.outline}`}>{bangla ? "আমাদের পেজ দেখুন" : "View our page"}</span>
+                                        {snapshot.business.phone && (
+                                            <span className={`rounded-lg border px-2.5 py-1 ${t.outline}`}>
+                                                {bangla ? "কল করুন" : "Call"} {formatPhone(snapshot.business.phone)}
+                                            </span>
+                                        )}
+                                        {snapshot.business.address && (
+                                            <span className={`rounded-lg border px-2.5 py-1 ${t.outline}`}>{bangla ? "পথ দেখুন" : "Get directions"}</span>
+                                        )}
+                                    </span>
+                                </div>
+                                <div className={`flex flex-wrap items-center gap-1.5 border-t px-4 py-2.5 text-xs ${t.line} ${t.muted}`}>
+                                    {bangla ? "পরিচিত কারও কাজে লাগবে? পাঠিয়ে দিন:" : "Know someone who'd like this? Send it on:"}
+                                    <span className="rounded-full bg-green-600 px-2.5 py-0.5 font-semibold text-white">WhatsApp</span>
+                                    <span className="rounded-full bg-[#1877f2] px-2.5 py-0.5 font-semibold text-white">Facebook</span>
+                                </div>
+                                <p className={`border-t px-4 py-3 text-[0.6875rem] ${t.line} ${t.soft} ${t.muted}`}>
+                                    <span className={`font-semibold ${t.ink}`}>{name}</span>
+                                    {snapshot.business.address ? ` · ${snapshot.business.address}` : ""}
+                                    <br />
+                                    You get this because you chose offers from {name}. <span className={`underline ${t.link}`}>Unsubscribe</span>
+                                </p>
+                            </div>
+                        </div>
+                    );
+                })()}
                 <p className="mt-1.5 text-center text-xs text-muted">Customers&apos; replies come to your Messages.</p>
             </section>
 
