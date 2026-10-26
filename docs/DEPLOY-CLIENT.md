@@ -90,8 +90,38 @@ New files in `database/migrations/` are applied by the API as it starts, each on
 (`Database setup: applied migration …`). If one fails, the API doesn't start and the log shows why:
 fix it in a new pull request, merge, and update again.
 
-Automatic deploys from GitHub, as on the AWS server, would need a restricted key that may run
-`project-ctl` (asked of Mohammad). Until then, updating is the commands above.
+Or run `sh /var/www/apps/shahebbazar/app/deploy/client/deploy.sh`, which does the same and then
+checks the site answers.
+
+## Automatic deploys
+
+Once every check passes on `main`, the **Deploy to staging** job in `.github/workflows/ci.yml` runs
+`deploy/client/deploy.sh` on the server over SSH. It uses its own key, which the server lets run that
+script and nothing else, under a team member's account (until there's a separate deploy user). Set up
+once:
+
+1. On your own computer, make a key just for this, pressing Enter twice for no passphrase:
+   `ssh-keygen -t ed25519 -C "github-deploy-staging" -f staging_deploy`
+   (On Windows PowerShell, `-N ""` doesn't work: PowerShell drops the empty value.)
+2. On the server, add the public half to your `~/.ssh/authorized_keys` as **one line**, starting with
+   the restriction:
+
+   ```text
+   command="sh /var/www/apps/shahebbazar/app/deploy/client/deploy.sh",no-port-forwarding,no-X11-forwarding,no-agent-forwarding,no-pty ssh-ed25519 AAAA... github-deploy-staging
+   ```
+
+3. On GitHub: **Settings → Environments → New environment** `staging`, then add these environment
+   secrets:
+   - `STAGING_HOST`: `145.223.23.210`
+   - `STAGING_USER`: the account from step 2
+   - `STAGING_SSH_KEY`: the private half (`staging_deploy`, the file without `.pub`), pasted whole
+   - `STAGING_KNOWN_HOSTS`: the output of `ssh-keyscan 145.223.23.210`
+4. Delete `staging_deploy` and `staging_deploy.pub` from your computer.
+
+Until the secrets are set, the job notes that and passes. To check it: **Actions → CI → Run workflow**
+on `main`. The **Deploy to staging** job ends with `Deployed: https://staging.shahebbazar.com is up.`
+
+Production isn't deployed automatically: it will deploy only on a release, approved by hand.
 
 ## What `project-ctl` can't do
 
@@ -110,6 +140,10 @@ The same stack, with these changes in `.env`:
 - `SITE_HOST=shahebbazar.com` (and its DNS).
 - `TEST_BUILD=false` and `ROBOTS_HEADER=` (empty): no Test site strip, and search engines may index it.
 - `DEMO_LOGIN_CODE=` (empty), once sign-in codes are sent by SMS.
+- `SMS_PROVIDER=bulksmsbd`, `SMS_API_KEY` (from the BulkSMSBD panel) and `SMS_SENDER_ID=8809617634406`.
+  If every code fails with BulkSMSBD code 1032 in the API log, whitelist the server's IP
+  (145.223.23.210) in the BulkSMSBD panel. Codes are in Bangla for anyone using the site in Bangla or
+  preferring it in My details, English otherwise.
 - `SMTP_*` for the client's email provider, so campaign emails are delivered.
 - **The data.** An empty database is loaded with the demo data today. The live site needs a
   reference-only seed (locations and categories) first, and a fresh database volume.

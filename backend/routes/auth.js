@@ -18,6 +18,7 @@ const {
 } = require("../lib/verification");
 const { validateVendorRegistration, createVendor, registeredMessage } = require("../lib/vendorRegistration");
 const { WITHIN_GRACE, reactivate } = require("../lib/accountDeletion");
+const { smsAdapter, codeMessage } = require("../integrations/sms");
 
 const router = express.Router();
 
@@ -68,12 +69,15 @@ if (DEMO_LOGIN_CODE) {
 const OTP_EXPIRY_MINUTES = 5;
 const OTP_REQUEST_LIMIT = 3;
 const OTP_REQUEST_WINDOW_MINUTES = 10;
-// Generates and stores a verification code.
-// In local development, code delivery is mocked through the API terminal.
+// Generates and stores a verification code, and sends it by SMS (KAN-278, integrations/sms). Without an
+// SMS provider configured (local development, tests), the code is printed to the API terminal instead.
+// { phone, purpose, expectedRole, language? }: language "bn" sends the SMS in Bangla; for a sign-in, an
+// account that prefers Bangla (My details) gets it in Bangla too.
 router.post("/request-verification", async (req, res) => {
     const phone = normalisePhone(req.body?.phone);
     const purpose = req.body?.purpose;
     const expectedRole = req.body?.expectedRole;
+    let language = req.body?.language === "bn" ? "bn" : "en";
 
     if (!phone) {
         return res.status(400).json({
@@ -109,6 +113,7 @@ router.post("/request-verification", async (req, res) => {
                 `SELECT
                     user_role,
                     user_status,
+                    user_language,
                     (${WITHIN_GRACE}) AS can_reactivate
                  FROM users
                  WHERE user_phone = $1
@@ -137,6 +142,8 @@ router.post("/request-verification", async (req, res) => {
                     error: portalError(expectedRole, actualRole),
                 });
             }
+
+            if (userResult.rows[0].user_language === "bn") language = "bn";
         }
 
         const recentRequests = await pool.query(
@@ -176,7 +183,7 @@ router.post("/request-verification", async (req, res) => {
             code,
         });
 
-        await pool.query(
+        const inserted = await pool.query(
             `INSERT INTO otp_codes (
                 otp_phone,
                 otp_code_hash,
@@ -190,7 +197,8 @@ router.post("/request-verification", async (req, res) => {
                 $3,
                 NOW() + ($4 * INTERVAL '1 minute'),
                 $5
-             )`,
+             )
+             RETURNING otp_id`,
             [
                 phone,
                 codeHash,
@@ -200,7 +208,21 @@ router.post("/request-verification", async (req, res) => {
             ]
         );
 
-        if (
+        // The demo code is never sent: everyone on the test server already knows it.
+        const sms = DEMO_LOGIN_CODE ? null : smsAdapter();
+        if (sms && sms.name !== "console") {
+            try {
+                await sms.send({ to: phone, message: codeMessage(code, { language, minutes: OTP_EXPIRY_MINUTES }) });
+            } catch (sendError) {
+                // Not sent, so the code can't be used and shouldn't count towards the request limit.
+                await pool.query("DELETE FROM otp_codes WHERE otp_id = $1", [inserted.rows[0].otp_id]);
+                console.error(`[sms] sending the ${purpose} code to ${phone} failed: ${sendError.message}`);
+                return res.status(502).json({
+                    success: false,
+                    error: "We couldn't send the code by SMS just now. Please try again in a minute.",
+                });
+            }
+        } else if (
             process.env.NODE_ENV !== "production" &&
             process.env.MOCK_VERIFICATION_DELIVERY ===
             "console"

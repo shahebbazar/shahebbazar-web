@@ -116,6 +116,8 @@ export async function requestVerification(input: {
     phone: string;
     purpose: VerificationPurpose;
     expectedRole?: AuthRole;
+    /** The SMS's language: "bn" sends it in Bangla. */
+    language?: "en" | "bn";
 }): Promise<RequestVerificationResult> {
     try {
         const response = await fetch(
