@@ -69,7 +69,7 @@ export default async function ProviderDashboardPage({
 
         const session = await authenticatedApiGet<{ user: AuthUser }>("/auth/me");
         return (
-            <PickerShell userName={session?.user.user_name ?? ""}>
+            <PickerShell userName={session?.user.user_name ?? ""} avatarUrl={session?.user.user_avatar_url}>
                 <BusinessPicker vendors={vendors} />
             </PickerShell>
         );

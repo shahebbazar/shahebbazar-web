@@ -67,7 +67,7 @@ export async function SessionControls({
     if (variant === "menu") {
         return (
             <div className="space-y-3">
-                <AccountSwitcherList side={{ kind: "customer" }} businesses={businesses} />
+                <AccountSwitcherList side={{ kind: "customer" }} businesses={businesses} avatarUrl={session.user.user_avatar_url} />
                 <LogoutButton />
             </div>
         );

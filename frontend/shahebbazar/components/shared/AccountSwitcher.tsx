@@ -17,7 +17,7 @@ type Props = {
     businesses: VendorPickerRow[];
     // The dashboard page to open in another business, e.g. "/vendors/dashboard/marketing".
     businessPath?: string;
-    /** The customer's profile photo, shown on the customer side in place of their first letter. */
+    /** The customer's profile photo, shown on the customer side in place of their first letter (a business shows its own). */
     avatarUrl?: string | null;
     /** Under the account list in the dropdown: the theme choice and Log out, so the header itself stays short. */
     extras?: React.ReactNode;
@@ -34,8 +34,15 @@ function current({ userName, side, businesses }: Props) {
     return { name: business?.vendor_name ?? userName, role: business?.member_role === "manager" ? "Manager" : "Business owner" };
 }
 
+/** A row's picture: the photo when there is one, otherwise the icon. */
+function RowIcon({ photo, Icon }: { photo: string | null | undefined; Icon: typeof Store }) {
+    const src = browserAssetUrl(photo ?? null);
+    // eslint-disable-next-line @next/next/no-img-element
+    return src ? <img src={src} alt="" className="size-5 shrink-0 rounded-full object-cover" /> : <Icon className="size-4 shrink-0" aria-hidden />;
+}
+
 /** The choices, for the dropdown and for the phone menu drawer. */
-export function AccountSwitcherList({ side, businesses, businessPath = "/vendors/dashboard" }: Omit<Props, "userName">) {
+export function AccountSwitcherList({ side, businesses, businessPath = "/vendors/dashboard", avatarUrl }: Omit<Props, "userName">) {
     const isCustomer = side.kind === "customer";
     return (
         <div>
@@ -43,7 +50,7 @@ export function AccountSwitcherList({ side, businesses, businessPath = "/vendors
             <ul className="space-y-0.5">
                 <li>
                     <Link href="/account" aria-current={isCustomer ? "true" : undefined} className={`${ROW} ${isCustomer ? ROW_ACTIVE : ROW_IDLE}`}>
-                        <UserRound className="size-4 shrink-0" aria-hidden />
+                        <RowIcon photo={avatarUrl} Icon={UserRound} />
                         <span className="min-w-0 flex-1 truncate">Customer account</span>
                     </Link>
                 </li>
@@ -56,7 +63,7 @@ export function AccountSwitcherList({ side, businesses, businessPath = "/vendors
                                 aria-current={active ? "true" : undefined}
                                 className={`${ROW} ${active ? ROW_ACTIVE : ROW_IDLE}`}
                             >
-                                <Store className="size-4 shrink-0" aria-hidden />
+                                <RowIcon photo={b.vendor_photo} Icon={Store} />
                                 <span className="min-w-0 flex-1 truncate">{b.vendor_name}</span>
                                 {b.member_role === "manager" && <span className="text-[0.6875rem] text-soft">Manager</span>}
                             </Link>
@@ -80,7 +87,11 @@ export function AccountSwitcherList({ side, businesses, businessPath = "/vendors
 export function AccountSwitcher(props: Props) {
     const { name, role } = current(props);
     const initial = name.trim().charAt(0).toUpperCase() || "?";
-    const avatar = props.side.kind === "customer" ? browserAssetUrl(props.avatarUrl ?? null) : null;
+    const side = props.side;
+    const photo = side.kind === "customer"
+        ? props.avatarUrl
+        : props.businesses.find((b) => b.vendor_id === side.vendorId)?.vendor_photo;
+    const avatar = browserAssetUrl(photo ?? null);
     return (
         <details className="group relative min-w-0">
             <summary
@@ -102,7 +113,7 @@ export function AccountSwitcher(props: Props) {
                 <ChevronDown className="hidden size-4 shrink-0 text-soft transition-transform group-open:rotate-180 md:block" aria-hidden />
             </summary>
             <div className="absolute right-0 z-50 mt-2 hidden w-72 rounded-xl border border-line bg-surface p-2 shadow-raised md:block">
-                <AccountSwitcherList side={props.side} businesses={props.businesses} businessPath={props.businessPath} />
+                <AccountSwitcherList side={props.side} businesses={props.businesses} businessPath={props.businessPath} avatarUrl={props.avatarUrl} />
                 {props.extras && <div className="mt-2 space-y-2 border-t border-line px-1.5 pt-3 pb-1">{props.extras}</div>}
             </div>
         </details>

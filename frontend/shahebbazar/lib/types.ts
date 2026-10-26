@@ -277,6 +277,8 @@ export interface VendorPickerRow {
     vendor_slug: string;
     vendor_status: VendorStatus;
     member_role: MemberRole;
+    /** The business's logo, or its cover photo when it has no logo. */
+    vendor_photo: string | null;
 }
 
 /** GET /api/vendors/:id/members */
@@ -562,7 +564,7 @@ export interface ConversationSummary {
     vendor_id: number;
     vendor_name: string;
     vendor_slug: string;
-    /** The business's logo and the customer's profile photo, when they've added one. */
+    /** The business's logo (or its cover photo when it has none) and the customer's profile photo. */
     vendor_logo: string | null;
     customer_name: string;
     customer_avatar: string | null;
