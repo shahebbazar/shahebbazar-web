@@ -492,7 +492,7 @@ export interface AdminSetting {
     key: string;
     // "boolean" settings are switches; "integer" ones are numbers between min and max.
     type: "boolean" | "integer";
-    group: "approval" | "marketing";
+    group: "approval" | "marketing" | "reviews";
     min?: number;
     max?: number;
     label: string;

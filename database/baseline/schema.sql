@@ -2403,6 +2403,67 @@ CREATE TABLE public.platform_settings (
 
 
 --
+-- Reviews from deleted accounts (KAN-321). Also in database/migrations/014_hide_deactivated_reviews.sql.
+-- Replaces v_business_cards above, now platform_settings exists: ratings leave out a deactivated
+-- customer's reviews, and a removed account's if show_removed_account_reviews is off.
+--
+
+CREATE OR REPLACE VIEW public.v_business_cards AS
+ SELECT v.vendor_id,
+    v.vendor_slug,
+    v.vendor_name,
+    v.vendor_name_bn,
+    v.vendor_description,
+    v.vendor_logo_url,
+    v.vendor_cover_url,
+    v.vendor_phone,
+    v.vendor_address,
+    (v.vendor_is_featured AND v.vendor_featured_until IS NOT NULL AND v.vendor_featured_until > now()) AS vendor_is_featured,
+    (v.vendor_verified_at IS NOT NULL) AS is_verified,
+    loc.location_name AS area_name,
+    loc.location_name_bn AS area_name_bn,
+    cat.category_name AS primary_category,
+    cat.category_name_bn AS primary_category_bn,
+    cat.category_slug AS primary_category_slug,
+    (COALESCE(r.avg_rating, (0)::numeric))::numeric(2,1) AS rating,
+    COALESCE(r.review_count, (0)::bigint) AS review_count,
+    h.open_state,
+    h.close_time_today
+   FROM ((((public.vendors v
+     LEFT JOIN public.locations loc ON ((loc.location_id = v.location_id)))
+     LEFT JOIN LATERAL ( SELECT c.category_name,
+            c.category_name_bn,
+            c.category_slug
+           FROM (public.vendor_categories vc
+             JOIN public.categories c ON ((c.category_id = vc.category_id)))
+          WHERE (vc.vendor_id = v.vendor_id)
+          ORDER BY c.category_sort_order, c.category_id
+         LIMIT 1) cat ON (true))
+     LEFT JOIN LATERAL ( SELECT avg(reviews.review_rating) AS avg_rating,
+            count(*) AS review_count
+           FROM (public.reviews
+             JOIN public.users ru ON ((ru.user_id = reviews.user_id)))
+          WHERE ((reviews.vendor_id = v.vendor_id) AND ((reviews.review_status)::text = 'published'::text)
+            AND ((ru.user_status)::text <> 'deactivated'::text)
+            AND (((ru.user_status)::text <> 'deleted'::text) OR COALESCE((SELECT (ps.setting_value)::boolean FROM public.platform_settings ps
+                  WHERE ((ps.setting_key)::text = 'show_removed_account_reviews'::text)), true)))) r ON (true))
+     LEFT JOIN LATERAL ( SELECT
+                CASE
+                    WHEN oh.hours_is_closed THEN 'closed'::text
+                    WHEN oh.hours_is_24h THEN 'open'::text
+                    WHEN ((LOCALTIME >= oh.hours_open_time) AND (LOCALTIME <= oh.hours_close_time)) THEN 'open'::text
+                    ELSE 'closed'::text
+                END AS open_state,
+                CASE
+                    WHEN oh.hours_is_24h THEN NULL::time without time zone
+                    ELSE oh.hours_close_time
+                END AS close_time_today
+           FROM public.vendor_opening_hours oh
+          WHERE ((oh.vendor_id = v.vendor_id) AND ((oh.hours_day_of_week)::numeric = EXTRACT(dow FROM CURRENT_DATE)))) h ON (true))
+  WHERE ((v.vendor_status)::text = 'approved'::text);
+
+
+--
 -- Marketing campaigns (KAN-285). Also in database/migrations/004_marketing_campaigns.sql.
 -- A business's campaign brief, the snapshot it was written from, and every saved wording.
 --

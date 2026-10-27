@@ -1,6 +1,7 @@
 const express = require("express");
 const router = express.Router();
 const pool = require("../db");
+const { reviewerShown } = require("../lib/accountDeletion");
 
 // Public read endpoints.
 
@@ -406,6 +407,7 @@ router.get("/businesses/:slug", async (req, res) => {
                 ),
 
                 // Reviews with written text only; ratings without a body still count towards the average.
+                // Not those of a customer who is deleting their account (lib/accountDeletion.js).
                 pool.query(
                     `SELECT r.review_id, r.review_rating AS rating, r.review_body AS body,
                             r.review_created_at AS created_at, u.user_name AS author,
@@ -417,6 +419,7 @@ router.get("/businesses/:slug", async (req, res) => {
                      JOIN users u ON u.user_id = r.user_id
                      LEFT JOIN locations aloc ON aloc.location_id = u.location_id
                      WHERE r.vendor_id = $1 AND r.review_status = 'published'
+                       AND ${reviewerShown("u")}
                        AND r.review_body IS NOT NULL
                      ORDER BY r.review_created_at DESC
                      LIMIT 5`,
@@ -424,9 +427,11 @@ router.get("/businesses/:slug", async (req, res) => {
                 ),
 
                 pool.query(
-                    `SELECT review_rating AS rating, COUNT(*)::int AS count
-                     FROM reviews
-                     WHERE vendor_id = $1 AND review_status = 'published'
+                    `SELECT r.review_rating AS rating, COUNT(*)::int AS count
+                     FROM reviews r
+                     JOIN users u ON u.user_id = r.user_id
+                     WHERE r.vendor_id = $1 AND r.review_status = 'published'
+                       AND ${reviewerShown("u")}
                      GROUP BY 1`,
                     [id]
                 ),

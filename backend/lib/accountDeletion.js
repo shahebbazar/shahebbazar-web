@@ -58,6 +58,13 @@ async function reactivate(db, userId) {
 // The SQL for "still within the 30 days", for sign-in checks.
 const WITHIN_GRACE = `user_status = 'deactivated' AND user_deactivated_at > NOW() - (${GRACE_DAYS} * INTERVAL '1 day')`;
 
+// The SQL for "this reviewer's reviews are shown", given the users alias. A deactivated customer's
+// reviews are hidden until they come back. Once the account is removed they show as from a "Former
+// customer", unless an admin has switched off show_removed_account_reviews (lib/settings.js). The
+// v_business_cards view repeats this for ratings (database/migrations/014_hide_deactivated_reviews.sql).
+const reviewerShown = (u) => `(${u}.user_status <> 'deactivated' AND (${u}.user_status <> 'deleted' OR COALESCE(
+    (SELECT setting_value::boolean FROM platform_settings WHERE setting_key = 'show_removed_account_reviews'), true)))`;
+
 // Removes the personal details of one account. Run inside a transaction.
 async function anonymise(db, userId) {
     const before = await db.query("SELECT user_avatar_url FROM users WHERE user_id = $1 FOR UPDATE", [userId]);
@@ -113,4 +120,4 @@ function startAccountRemoval() {
     setInterval(run, PURGE_INTERVAL_MS).unref();
 }
 
-module.exports = { GRACE_DAYS, WITHIN_GRACE, runsBusiness, deactivate, reactivate, removeExpired, startAccountRemoval };
+module.exports = { GRACE_DAYS, WITHIN_GRACE, reviewerShown, runsBusiness, deactivate, reactivate, removeExpired, startAccountRemoval };

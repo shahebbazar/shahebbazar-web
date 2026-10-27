@@ -2,10 +2,9 @@
 
 import { useId, useState, useTransition } from "react";
 import { Loader2 } from "lucide-react";
+import { formatDayTime } from "@/lib/format";
 import type { AdminSetting } from "@/lib/types";
 import { changeSetting } from "./actions";
-
-const when = new Intl.DateTimeFormat("en-GB", { day: "numeric", month: "short", hour: "numeric", minute: "2-digit", timeZone: "Asia/Dhaka" });
 
 // One number setting, for example the free plan's email campaigns a month (KAN-286). Saved with a
 // button, so typing doesn't change the live value one keystroke at a time.
@@ -43,7 +42,7 @@ export function SettingNumber({ setting }: { setting: AdminSetting }) {
                 <p className="mt-1 text-sm text-muted">{setting.help}</p>
                 {meta.updated_at && (
                     <p className="mt-1.5 text-xs text-soft">
-                        Last changed {when.format(new Date(meta.updated_at))}
+                        Last changed {formatDayTime(meta.updated_at)}
                         {meta.updated_by ? ` by ${meta.updated_by}` : ""}.
                     </p>
                 )}

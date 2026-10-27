@@ -7,6 +7,7 @@ const {
 
 const { requireVendorOwnership } = require("../lib/middleware/auth");
 const { requireFeature } = require("../lib/access");
+const { reviewerShown } = require("../lib/accountDeletion");
 const { memberRole } = require("../lib/membership");
 
 const router = express.Router();
@@ -81,6 +82,7 @@ router.get("/vendors/:vendorId/reviews", ...readAccess, async (req, res) => {
              FROM reviews r
              JOIN users u ON u.user_id = r.user_id
              WHERE r.vendor_id = $1 AND r.review_status IN ('published', 'pending')
+               AND ${reviewerShown("u")}
              ORDER BY (r.review_reply IS NULL AND r.review_body IS NOT NULL) DESC, r.review_created_at DESC`,
             [vendorId]
         );

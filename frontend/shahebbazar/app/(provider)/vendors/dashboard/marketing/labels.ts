@@ -1,3 +1,4 @@
+import { formatDayTime } from "@/lib/format";
 import type { CampaignCoupon, CampaignCta, CampaignGoal, CampaignStatus } from "@/lib/types";
 
 // Words shown for the campaign brief and status in the Marketing pages.
@@ -28,9 +29,8 @@ export const STATUS: Record<CampaignStatus, { label: string; className: string }
 };
 
 const day = new Intl.DateTimeFormat("en-GB", { day: "numeric", month: "short", year: "numeric", timeZone: "Asia/Dhaka" });
-const dayTime = new Intl.DateTimeFormat("en-GB", { day: "numeric", month: "short", hour: "numeric", minute: "2-digit", timeZone: "Asia/Dhaka" });
 export const formatDay = (iso: string | null) => (iso ? day.format(new Date(iso)) : "—");
-export const formatWhen = (iso: string) => dayTime.format(new Date(iso));
+export const formatWhen = (iso: string) => formatDayTime(iso);
 
 /** "Valid until 7 Nov 2026", "Starts 1 Nov 2026" or "Expired 7 Nov 2026", with a matching colour. */
 export function couponState(coupon: CampaignCoupon) {

@@ -3,14 +3,28 @@
 import { useId, useState, useTransition } from "react";
 import { Loader2 } from "lucide-react";
 import { ConfirmDialog } from "@/components/shared/ConfirmDialog";
+import { formatDayTime } from "@/lib/format";
 import type { AdminSetting } from "@/lib/types";
 import { changeSetting } from "./actions";
 
-const when = new Intl.DateTimeFormat("en-GB", { day: "numeric", month: "short", hour: "numeric", minute: "2-digit", timeZone: "Asia/Dhaka" });
+// What on and off mean, and what else to say before switching off, for each group of settings.
+const WORDING = {
+    approval: {
+        on: "On: an admin approves each one in Approvals.",
+        off: "Off: they go public without review.",
+        offNote: " Anything already waiting stays in Approvals.",
+    },
+    reviews: {
+        on: "On: after 30 days the reviews show again, signed “Former customer”.",
+        off: "Off: the reviews stay hidden for good.",
+        offNote: " You can switch it back on at any time to show them again.",
+    },
+};
 
-// One on/off setting. Switching approval off asks for confirmation first (in-page, not a browser box),
-// because new businesses or listings then go public without review.
+// One on/off setting. Switching it off asks for confirmation first (in-page, not a browser box),
+// because new businesses or listings then go public without review, or reviews disappear.
 export function SettingToggle({ setting }: { setting: AdminSetting }) {
+    const wording = setting.group === "reviews" ? WORDING.reviews : WORDING.approval;
     const labelId = useId();
     const [value, setValue] = useState(setting.value === true);
     const [meta, setMeta] = useState({ updated_at: setting.updated_at, updated_by: setting.updated_by });
@@ -46,8 +60,8 @@ export function SettingToggle({ setting }: { setting: AdminSetting }) {
                 </p>
                 <p className="mt-1 text-sm text-muted">{setting.help}</p>
                 <p className="mt-1.5 text-xs text-soft">
-                    {value ? "On: an admin approves each one in Approvals." : "Off: they go public without review."}
-                    {meta.updated_at && ` Last changed ${when.format(new Date(meta.updated_at))}${meta.updated_by ? ` by ${meta.updated_by}` : ""}.`}
+                    {value ? wording.on : wording.off}
+                    {meta.updated_at && ` Last changed ${formatDayTime(meta.updated_at)}${meta.updated_by ? ` by ${meta.updated_by}` : ""}.`}
                 </p>
                 {error && (
                     <p role="alert" className="mt-1.5 text-xs text-error-ink">
@@ -74,7 +88,7 @@ export function SettingToggle({ setting }: { setting: AdminSetting }) {
             <ConfirmDialog
                 open={confirming}
                 title={`Turn off "${setting.label}"?`}
-                body={`${setting.help} Anything already waiting stays in Approvals.`}
+                body={`${setting.help}${wording.offNote}`}
                 confirmLabel="Turn off"
                 onConfirm={() => save(false)}
                 onCancel={() => setConfirming(false)}
