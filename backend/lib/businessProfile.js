@@ -1,5 +1,7 @@
 // Validation and normalisation for the Add / Edit Business form.
 
+const { normaliseAnyPhone } = require("./phone");
+
 const LIMITS = {
     nameMin: 2,
     nameMax: 120,
@@ -27,21 +29,8 @@ const HOURS_MODES = new Set(["open", "closed", "24h"]);
 // What a business's second number is (vendors.vendor_phone_alt_type).
 const ALT_PHONE_TYPES = ["landline", "mobile", "whatsapp"];
 
-// Normalises a Bangladeshi phone number to +880 form.
-function normalisePhone(raw) {
-    if (typeof raw !== "string") return null;
-    const compact = raw.replace(/[\s\-().]/g, "");
-    let national;
-    if (/^\+880\d+$/.test(compact)) national = compact.slice(4);
-    else if (/^880\d+$/.test(compact)) national = compact.slice(3);
-    else if (/^0\d+$/.test(compact)) national = compact.slice(1);
-    else return null;
-
-    if (national.startsWith("1")) {
-        return /^1[3-9]\d{8}$/.test(national) ? `+880${national}` : null;
-    }
-    return /^[2-9]\d{6,9}$/.test(national) ? `+880${national}` : null;
-}
+// A Bangladeshi mobile or landline in +880 form (lib/phone.js, shared with sign-in numbers).
+const normalisePhone = normaliseAnyPhone;
 
 /** Deliberately loose: one @, something either side, a dot in the domain. */
 function isEmail(value) {

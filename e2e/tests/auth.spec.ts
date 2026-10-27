@@ -1,6 +1,6 @@
 // Signing in through the real page: phone number, then the code the API sends (printed to its log here).
 
-import { test, expect, codeSince, logMark, allowConsoleError, sql } from "../fixtures";
+import { test, expect, codeSince, logMark, allowConsoleError, fillBusinessRegistration, sql } from "../fixtures";
 import { PHONES } from "../env";
 import type { Page } from "@playwright/test";
 
@@ -98,7 +98,7 @@ test("a new customer registers on the Bangla page, asks for a new code, and the 
     await page.clock.install();
     await page.goto("/register/customer?lang=bn");
     await expect(page.getByRole("heading", { level: 1, name: "গ্রাহক অ্যাকাউন্ট তৈরি করুন" })).toBeVisible();
-    await expect(page.getByText("আপনার বাংলাদেশি মোবাইল নম্বর লিখুন")).toBeVisible();
+    await expect(page.getByRole("textbox", { name: /মোবাইল নম্বর/ })).toHaveAttribute("placeholder", "১৭১২-৩৪৫৬৭৮");
     await page.locator("#customer-register-name").fill("নতুন গ্রাহক");
     await page.locator("#customer-register-phone").fill(phone);
     await page.getByRole("button", { name: "ফোন যাচাই করে এগিয়ে যান" }).click();
@@ -120,11 +120,7 @@ test("a new business can ask for a new code from the code step", async ({ page }
     const phone = `0178${Date.now().toString().slice(-7)}`;
     await page.clock.install();
     await page.goto("/vendors/register");
-    await page.getByRole("textbox", { name: "Business name" }).fill("Resend Check Stall");
-    await page.getByRole("textbox", { name: "Email address" }).fill("resend.check@example.com");
-    await page.getByRole("textbox", { name: "Phone number" }).fill(phone);
-    await page.getByRole("textbox", { name: "Street address" }).fill("1 Station Road");
-    await page.getByRole("textbox", { name: "City or area" }).fill("Rajshahi");
+    await fillBusinessRegistration(page, { name: "Resend Check Stall", phone, email: "resend.check@example.com" });
     await page.getByRole("button", { name: "Continue with phone verification" }).click();
     await expect(page.getByRole("button", { name: /Send a new code in \d+s/ })).toBeDisabled();
 
@@ -140,7 +136,7 @@ test("the login page is in Bangla with ?lang=bn, and links to registering in Ban
     await page.goto("/login?lang=bn");
     await expect(page.getByRole("heading", { level: 1, name: "সাহেববাজারে লগ ইন করুন" })).toBeVisible();
     await expect(page.getByRole("tab", { name: "ব্যবসার মালিক" })).toBeVisible();
-    await expect(page.getByText("আপনার বাংলাদেশি মোবাইল নম্বর লিখুন")).toBeVisible();
+    await expect(page.getByRole("textbox", { name: /মোবাইল নম্বর/ })).toHaveAttribute("placeholder", "১৭১২-৩৪৫৬৭৮");
     await page.getByRole("link", { name: "অ্যাকাউন্ট তৈরি করুন" }).click();
     await expect(page).toHaveURL(/\/register\/customer\?lang=bn$/);
 });
@@ -163,11 +159,7 @@ test("the code step gives the expiry, not development instructions, outside loca
     await hint();
 
     await page.goto("/vendors/register");
-    await page.getByRole("textbox", { name: "Business name" }).fill("Hint Check Stall");
-    await page.getByRole("textbox", { name: "Email address" }).fill("hint.check@example.com");
-    await page.getByRole("textbox", { name: "Phone number" }).fill(`0178${Date.now().toString().slice(-7)}`);
-    await page.getByRole("textbox", { name: "Street address" }).fill("1 Station Road");
-    await page.getByRole("textbox", { name: "City or area" }).fill("Rajshahi");
+    await fillBusinessRegistration(page, { name: "Hint Check Stall", phone: `0178${Date.now().toString().slice(-7)}`, email: "hint.check@example.com" });
     await page.getByRole("button", { name: "Continue with phone verification" }).click();
     await hint();
 });

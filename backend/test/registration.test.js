@@ -3,9 +3,13 @@
 
 const { describe, it, before, after } = require("node:test");
 const assert = require("node:assert/strict");
-const { query, call, requestCode, startApi, stopApi } = require("./support/harness");
+const { businessChoices, query, call, requestCode, startApi, stopApi } = require("./support/harness");
 
-before(startApi);
+let choices; // a seeded category and area, and a description
+before(async () => {
+    await startApi();
+    choices = await businessChoices();
+});
 after(stopApi);
 
 const business = (phone, overrides = {}) => ({
@@ -13,7 +17,7 @@ const business = (phone, overrides = {}) => ({
     vendor_email: null,
     vendor_phone: phone,
     vendor_address: "12 Station Road",
-    vendor_city: "Kazla",
+    ...choices,
     ...overrides,
 });
 
@@ -85,6 +89,20 @@ describe("business registration", () => {
             assert.equal(res.data.vendor.vendor_slug, "padma-test-sweets");
         });
 
+        it("saves the category, area and description, so it can be approved without more details", async () => {
+            const [vendor] = await query(
+                `SELECT v.location_id, v.vendor_description, array_agg(vc.category_id) AS categories
+                 FROM vendors v JOIN vendor_categories vc USING (vendor_id)
+                 WHERE v.vendor_id = $1 GROUP BY 1, 2`,
+                [res.data.vendor.vendor_id]
+            );
+            assert.deepEqual(vendor, {
+                location_id: choices.location_id,
+                vendor_description: choices.vendor_description,
+                categories: [choices.category_id],
+            });
+        });
+
         it("signs the new owner in, with access to their own business only", async () => {
             assert.match(cookie, /^shaheb_session=/);
             const mine = await call("GET", "/vendor-account/businesses", { cookie });
@@ -123,12 +141,28 @@ describe("business registration", () => {
             [{ vendor_phone: "not a phone" }, /Bangladesh mobile/],
             [{ vendor_phone: "0412345678" }, /Bangladesh mobile/],
             [{ vendor_email: "not-an-email" }, /valid email/],
+            [{ category_id: undefined }, /Choose a category/],
+            [{ location_id: "" }, /Choose the area/],
+            [{ vendor_description: "Too short." }, /at least 20 characters/],
+            [{ vendor_description: "x".repeat(501) }, /under 500 characters/],
+            [{ category_id: 999999 }, /category from the list/],
+            [{ location_id: 1 }, /area from the list/], // the country, not an area
         ];
         for (const [override, message] of cases) {
             const res = await call("POST", "/auth/register/vendor", { json: { ...business("+8801799000020", override), code: "123456" } });
             assert.equal(res.status, 400, JSON.stringify(override));
             assert.match(res.data.error, message);
         }
+        const [otp] = await query("SELECT count(*)::int AS n FROM otp_codes WHERE otp_phone = '+8801799000020'");
+        assert.equal(otp.n, 0, "no code was involved");
+    });
+
+    it("the form's categories and areas are public, grouped by main category", async () => {
+        const res = await call("GET", "/auth/register/vendor/options");
+        assert.equal(res.status, 200);
+        assert.ok(res.data.categories.length > 0 && res.data.areas.length > 0);
+        assert.ok(res.data.categories.every((c) => c.id && c.name && c.parent));
+        assert.ok(res.data.areas.some((a) => a.id === choices.location_id));
     });
 });
 

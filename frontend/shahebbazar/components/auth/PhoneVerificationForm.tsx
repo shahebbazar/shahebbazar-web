@@ -11,6 +11,8 @@ import { localeHref, type Locale } from "@/lib/i18n";
 import { safeNext } from "@/lib/safeNext";
 import { CodeHint } from "./CodeHint";
 import { ResendCodeButton } from "./ResendCodeButton";
+import { PhoneField } from "./PhoneField";
+import { toSubmitted } from "./phoneInput";
 
 type LoginAudience =
     | "customer"
@@ -28,14 +30,11 @@ type Stage = "phone" | "code";
 
 const copy = {
     en: {
-        phone: "Phone number",
-        phonePlaceholder: "e.g. 01700000100",
         sendCode: "Send verification code",
         code: "Verification code",
         codePlaceholder: "Enter the six-digit code",
         verify: "Verify and log in",
         changePhone: "Change phone number",
-        phoneHint: "Enter your Bangladesh mobile number, for example +8801712345678.",
         requesting: "Sending code...",
         verifying: "Verifying...",
         customerRegister: "New to Shahebbazar?",
@@ -48,14 +47,11 @@ const copy = {
             "This phone number is not connected to a vendor account.",
     },
     bn: {
-        phone: "ফোন নম্বর",
-        phonePlaceholder: "যেমন ০১৭০০০০০১০০",
         sendCode: "যাচাইকরণ কোড পাঠান",
         code: "যাচাইকরণ কোড",
         codePlaceholder: "ছয় সংখ্যার কোড লিখুন",
         verify: "যাচাই করে লগ ইন করুন",
         changePhone: "ফোন নম্বর পরিবর্তন করুন",
-        phoneHint: "আপনার বাংলাদেশি মোবাইল নম্বর লিখুন, যেমন +৮৮০১৭১২৩৪৫৬৭৮।",
         requesting: "কোড পাঠানো হচ্ছে...",
         verifying: "যাচাই করা হচ্ছে...",
         customerRegister: "সাহেববাজারে নতুন?",
@@ -80,6 +76,7 @@ export function PhoneVerificationForm({
     const text: AuthCopy = copy[locale];
 
     const [stage, setStage] = useState<Stage>("phone");
+    // The national number, the digits after +880 (PhoneField).
     const [phone, setPhone] = useState("");
     const [code, setCode] = useState("");
     //const [message, setMessage] = useState<string | null>(null);
@@ -91,7 +88,7 @@ export function PhoneVerificationForm({
         setError(null);
 
         const result = await requestVerification({
-            phone,
+            phone: toSubmitted(phone),
             purpose: "login",
             expectedRole: audience,
             language: locale,
@@ -129,7 +126,7 @@ export function PhoneVerificationForm({
         setError(null);
 
         const result = await verifyCode({
-            phone,
+            phone: toSubmitted(phone),
             purpose: "login",
             code,
             expectedRole: audience,
@@ -175,32 +172,12 @@ export function PhoneVerificationForm({
     if (stage === "phone") {
         return (
             <form onSubmit={handleRequest} className="space-y-4">
-                <div>
-                    <label
-                        htmlFor={`${audience}-login-phone`}
-                        className="mb-1.5 block text-sm font-medium text-ink"
-                    >
-                        {text.phone}
-                    </label>
-
-                    <input
-                        id={`${audience}-login-phone`}
-                        name="phone"
-                        type="tel"
-                        value={phone}
-                        onChange={(event) =>
-                            setPhone(event.target.value)
-                        }
-                        placeholder={text.phonePlaceholder}
-                        autoComplete="tel"
-                        className="form-input mb-0"
-                        required
-                    />
-                </div>
-
-                <p className="mt-1.5 text-xs leading-5 text-muted">
-                    {text.phoneHint}
-                </p>
+                <PhoneField
+                    id={`${audience}-login-phone`}
+                    value={phone}
+                    onChange={setPhone}
+                    locale={locale}
+                />
 
                 {error && (
                     <div

@@ -68,6 +68,19 @@ export async function codeSince(phone: string, mark: number): Promise<string> {
     throw new Error(`No new sign-in code for ${phone} in ${API_LOG}`);
 }
 
+/** Fills in the business registration form (/vendors/register), ready for "Continue with phone verification". */
+export async function fillBusinessRegistration(page: Page, business: { name: string; phone: string; email?: string }) {
+    await page.getByRole("textbox", { name: "Business name" }).fill(business.name);
+    // A new email each time unless given: an email address can only be registered once.
+    await page.getByRole("textbox", { name: "Email address" }).fill(business.email ?? `owner.${crypto.randomUUID()}@example.com`);
+    await page.getByRole("textbox", { name: "Mobile number" }).fill(business.phone);
+    await page.getByRole("textbox", { name: "Street address" }).fill("12 Station Road");
+    const area = page.getByRole("combobox", { name: "Area" });
+    await area.selectOption({ label: (await area.getByRole("option").nth(1).textContent())!.trim() });
+    await page.getByRole("combobox", { name: "Category" }).selectOption({ label: "Hospitals" });
+    await page.getByRole("textbox", { name: "Description" }).fill("A family business on Station Road, open every day.");
+}
+
 /** Fails when the page scrolls sideways, which means something is wider than the screen. */
 export async function expectNoSideScroll(page: Page) {
     const overflow = await page.evaluate(() => document.documentElement.scrollWidth - window.innerWidth);

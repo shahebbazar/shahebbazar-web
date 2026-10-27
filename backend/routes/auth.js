@@ -1,7 +1,7 @@
 const crypto = require("node:crypto");
 const express = require("express");
 const pool = require("../db");
-const { normalisePhone } = require("../lib/phone");
+const { PHONE_ERROR, normalisePhone } = require("../lib/phone");
 const {
     SESSION_COOKIE_NAME,
     hashSessionToken,
@@ -16,7 +16,7 @@ const {
     useVerificationCode,
     createSession,
 } = require("../lib/verification");
-const { validateVendorRegistration, createVendor, registeredMessage } = require("../lib/vendorRegistration");
+const { validateVendorRegistration, invalidChoice, businessOptions, createVendor, registeredMessage } = require("../lib/vendorRegistration");
 const { WITHIN_GRACE, reactivate } = require("../lib/accountDeletion");
 const { smsAdapter, codeMessage } = require("../integrations/sms");
 
@@ -82,7 +82,7 @@ router.post("/request-verification", async (req, res) => {
     if (!phone) {
         return res.status(400).json({
             success: false,
-            error: "Enter a Bangladesh mobile number, for example +8801712345678.",
+            error: PHONE_ERROR,
         });
     }
 
@@ -271,7 +271,7 @@ router.post("/verify", async (req, res) => {
     if (!phone) {
         return res.status(400).json({
             success: false,
-            error: "Enter a Bangladesh mobile number, for example +8801712345678.",
+            error: PHONE_ERROR,
         });
     }
 
@@ -574,7 +574,7 @@ router.post("/register/customer", async (req, res) => {
     if (!phone) {
         return res.status(400).json({
             success: false,
-            error: "Enter a Bangladesh mobile number, for example +8801712345678.",
+            error: PHONE_ERROR,
         });
     }
 
@@ -718,6 +718,16 @@ router.post("/register/customer", async (req, res) => {
 // Signed in (KAN-249):
 // A customer or existing vendor can add a business to the same account.
 // No second account or registration OTP is required.
+// The categories and areas the registration form offers.
+router.get("/register/vendor/options", async (req, res) => {
+    try {
+        res.json(await businessOptions(pool));
+    } catch (err) {
+        console.error("GET /api/auth/register/vendor/options failed:", err);
+        res.status(500).json({ error: "Could not load the categories and areas." });
+    }
+});
+
 router.post("/register/vendor", async (req, res) => {
     const fields = validateVendorRegistration(req.body);
 
@@ -726,6 +736,15 @@ router.post("/register/vendor", async (req, res) => {
             success: false,
             error: fields.error,
         });
+    }
+
+    // Checked before a code is used up, so a wrong choice can be fixed and sent again.
+    try {
+        const problem = await invalidChoice(pool, fields);
+        if (problem) return res.status(400).json({ success: false, error: problem });
+    } catch (err) {
+        console.error("POST /api/auth/register/vendor failed checking the category and area:", err);
+        return res.status(500).json({ success: false, error: "Unable to register the business." });
     }
 
     // KAN-249: add a business to the account that is already signed in.
