@@ -121,14 +121,29 @@ export function formatPhone(phone: string): string {
     return /^\+8801\d{9}$/.test(compact) ? compact : formatLocalPhone(phone);
 }
 
-// Formats a timestamp as a short date and time in Dhaka time.
+const MONTHS = ["Jan", "Feb", "Mar", "Apr", "May", "Jun", "Jul", "Aug", "Sep", "Oct", "Nov", "Dec"];
+
+// A timestamp's parts in Dhaka time (UTC+6 all year, no daylight saving). Built by hand rather than
+// with Intl, because browsers differ from the server on the hour ("02:47" against "2:47"), which makes
+// pages rendered on the server fail to hydrate.
+function dhaka(iso: string) {
+    const d = new Date(new Date(iso).getTime() + 6 * 60 * 60 * 1000);
+    return {
+        day: d.getUTCDate(),
+        month: MONTHS[d.getUTCMonth()],
+        year: d.getUTCFullYear(),
+        time: `${d.getUTCHours()}:${String(d.getUTCMinutes()).padStart(2, "0")}`,
+    };
+}
+
+// A short date and time in Dhaka time, e.g. "26 Oct 2026, 14:47".
 export function formatDateTime(iso: string): string {
-    return new Date(iso).toLocaleString("en-GB", {
-        timeZone: "Asia/Dhaka",
-        day: "numeric",
-        month: "short",
-        year: "numeric",
-        hour: "numeric",
-        minute: "2-digit",
-    });
+    const { day, month, year, time } = dhaka(iso);
+    return `${day} ${month} ${year}, ${time}`;
+}
+
+// The same without the year, e.g. "26 Oct, 14:47".
+export function formatDayTime(iso: string): string {
+    const { day, month, time } = dhaka(iso);
+    return `${day} ${month}, ${time}`;
 }
