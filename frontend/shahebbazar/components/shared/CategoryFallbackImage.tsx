@@ -1,7 +1,7 @@
 "use client";
 
 import { useState } from "react";
-import { assetUrl } from "@/lib/api";
+import { browserAssetUrl } from "@/lib/apiBase";
 
 // Use clean, text-free stock photography for each category. If a child category
 // is not mapped yet, use its parent category before falling back to local artwork.
@@ -116,8 +116,8 @@ export function CategoryFallbackImage({
     const [logoFailed, setLogoFailed] = useState(false);
     const [photoIndex, setPhotoIndex] = useState(0);
     const photoCandidates = categoryPhotoCandidates(slug, businessName);
-    const preferred = preferredImageUrl && !preferredFailed ? assetUrl(preferredImageUrl) : null;
-    const logo = logoUrl && !logoFailed ? assetUrl(logoUrl) : null;
+    const preferred = preferredImageUrl && !preferredFailed ? browserAssetUrl(preferredImageUrl) : null;
+    const logo = logoUrl && !logoFailed ? browserAssetUrl(logoUrl) : null;
     const photo = photoCandidates[Math.min(photoIndex, photoCandidates.length - 1)] ?? "/images/category-default.svg";
     const src = preferred ?? logo ?? photo;
 
