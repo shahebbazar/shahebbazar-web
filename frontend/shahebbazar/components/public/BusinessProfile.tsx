@@ -23,6 +23,7 @@ import { formatClockTime, formatLocalPhone, formatPhone, formatRating, localiseD
 import type { BusinessDetail, SocialPlatform } from "@/lib/types";
 import { SaveButton } from "@/components/customer/SaveButton";
 import { ShareMenu } from "@/components/shared/ShareMenu";
+import { CategoryFallbackImage } from "@/components/shared/CategoryFallbackImage";
 import { ReviewForm } from "@/components/customer/ReviewForm";
 
 // Brand marks come from Simple Icons; lucide excludes logos.
@@ -45,7 +46,6 @@ export function BusinessProfile({
     const { business, categories, photos, listings, facts, reviews, ratingDistribution } = detail;
 
     const name = pick(locale, business.vendor_name, business.vendor_name_bn);
-    const cover = assetUrl(business.vendor_cover_url);
     const aboutFacts = facts.filter((f) => f.group === "about");
     // Older API responses have no social field.
     const social = detail.social ?? [];
@@ -65,14 +65,13 @@ export function BusinessProfile({
             {/* Not overflow-hidden, so the share menu can open past the card's edge; the cover clips its own corners. */}
             <section className="rounded-xl border border-line bg-surface shadow-card">
                 <div className="relative h-[200px] overflow-hidden rounded-t-xl bg-gradient-to-br from-brand-100 to-brand-200 sm:h-[260px]">
-                    {cover && (
-                        // eslint-disable-next-line @next/next/no-img-element
-                        <img
-                            src={cover}
-                            alt={`${name} — cover photograph`}
-                            className="size-full object-cover"
-                        />
-                    )}
+                    <CategoryFallbackImage
+                        slug={categories[0]?.slug ?? business.primary_category_slug}
+                        businessName={business.vendor_name}
+                        preferredImageUrl={business.vendor_cover_url}
+                        className="size-full object-cover"
+                        alt={`${name} — cover photograph`}
+                    />
 
                     {photos.length > 0 && (
                         <a
@@ -88,18 +87,13 @@ export function BusinessProfile({
                 <div className="px-5 pb-5 sm:px-6">
                     <div className="relative z-10 -mt-10 flex items-end gap-4 sm:-mt-12">
                         <div className="grid size-20 shrink-0 place-items-center overflow-hidden rounded-full border-4 border-surface bg-brand-50 sm:size-24">
-                            {business.vendor_logo_url ? (
-                                // eslint-disable-next-line @next/next/no-img-element
-                                <img
-                                    src={assetUrl(business.vendor_logo_url) ?? ""}
-                                    alt=""
-                                    className="size-full object-cover"
-                                />
-                            ) : (
-                                <span className="text-2xl font-bold text-brand-600">
-                                    {name.charAt(0).toUpperCase()}
-                                </span>
-                            )}
+                            <CategoryFallbackImage
+                                slug={categories[0]?.slug ?? business.primary_category_slug}
+                                businessName={business.vendor_name}
+                                logoUrl={business.vendor_logo_url}
+                                className="size-full object-cover"
+                                alt=""
+                            />
                         </div>
                     </div>
 
