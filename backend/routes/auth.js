@@ -554,6 +554,9 @@ router.post("/register/customer", async (req, res) => {
             ? req.body.code.trim()
             : "";
 
+    // Registering on the Bangla page makes Bangla the account's language (later codes and offers).
+    const language = req.body?.language === "bn" ? "bn" : "en";
+
     if (!name) {
         return res.status(400).json({
             success: false,
@@ -641,14 +644,16 @@ router.post("/register/customer", async (req, res) => {
                 user_phone,
                 user_email,
                 user_role,
-                user_phone_verified_at
+                user_phone_verified_at,
+                user_language
              )
              VALUES (
                 $1,
                 $2,
                 $3,
                 'customer',
-                NOW()
+                NOW(),
+                $4
              )
              RETURNING
                 user_id,
@@ -656,7 +661,7 @@ router.post("/register/customer", async (req, res) => {
                 user_phone,
                 user_email,
                 user_role`,
-            [name, phone, email]
+            [name, phone, email, language]
         );
 
         const user = userResult.rows[0];

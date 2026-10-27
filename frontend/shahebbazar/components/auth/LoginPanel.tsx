@@ -4,6 +4,7 @@ import { useState } from "react";
 import Link from "next/link";
 import { Building2, ShieldCheck, UserRound, Copy, Check } from "lucide-react";
 import { PhoneVerificationForm } from "@/components/auth/PhoneVerificationForm";
+import type { Locale } from "@/lib/i18n";
 
 type AccountType = "customer" | "vendor";
 
@@ -11,10 +12,42 @@ type AccountType = "customer" | "vendor";
 const DEVELOPMENT = process.env.NODE_ENV === "development";
 const TEST_BUILD = process.env.NEXT_PUBLIC_TEST_BUILD === "true";
 
+const COPY = {
+    en: {
+        title: "Log in to Shahebbazar",
+        intro: "Choose your account type, then verify your phone number to continue.",
+        tabs: "Choose account type",
+        customer: "Customer",
+        vendor: "Business owner",
+        customerTitle: "Customer login",
+        vendorTitle: "Business owner login",
+        customerIntro: "Use the phone number connected to your customer account.",
+        vendorIntro: "Use the phone number connected to your registered business account.",
+        testTitle: "Test site",
+        testBody: "Text messages aren't sent yet. Use the demo sign-in code the project team gave you.",
+        admin: "Administrator login",
+    },
+    bn: {
+        title: "সাহেববাজারে লগ ইন করুন",
+        intro: "অ্যাকাউন্টের ধরন বেছে নিন, তারপর ফোন নম্বর যাচাই করে এগিয়ে যান।",
+        tabs: "অ্যাকাউন্টের ধরন বেছে নিন",
+        customer: "গ্রাহক",
+        vendor: "ব্যবসার মালিক",
+        customerTitle: "গ্রাহক লগ ইন",
+        vendorTitle: "ব্যবসার মালিক লগ ইন",
+        customerIntro: "আপনার গ্রাহক অ্যাকাউন্টের সঙ্গে যুক্ত ফোন নম্বরটি ব্যবহার করুন।",
+        vendorIntro: "আপনার নিবন্ধিত ব্যবসায়িক অ্যাকাউন্টের সঙ্গে যুক্ত ফোন নম্বরটি ব্যবহার করুন।",
+        testTitle: "পরীক্ষামূলক সাইট",
+        testBody: "এখনও এসএমএস পাঠানো হয় না। প্রকল্প দলের দেওয়া ডেমো কোডটি ব্যবহার করুন।",
+        admin: "অ্যাডমিনিস্ট্রেটর লগ ইন",
+    },
+};
+
 /** next: where to go after logging in, if the visitor was on their way somewhere (e.g. messaging a business). */
-export function LoginPanel({ next = null }: { next?: string | null }) {
+export function LoginPanel({ next = null, locale = "en" }: { next?: string | null; locale?: Locale }) {
     const [accountType, setAccountType] = useState<AccountType>("customer");
     const [copied, setCopied] = useState(false);
+    const text = COPY[locale];
 
     const isCustomer = accountType === "customer";
 
@@ -34,10 +67,10 @@ export function LoginPanel({ next = null }: { next?: string | null }) {
         <section className="mx-auto w-full max-w-xl rounded-xl border border-line bg-surface p-6 shadow-raised sm:p-8">
             <header className="text-center">
                 <h1 className="text-2xl font-semibold text-ink">
-                    Log in to Shahebbazar
+                    {text.title}
                 </h1>
                 <p className="mt-2 text-sm leading-6 text-muted">
-                    Choose your account type, then verify your phone number to continue.
+                    {text.intro}
                 </p>
             </header>
 
@@ -45,7 +78,7 @@ export function LoginPanel({ next = null }: { next?: string | null }) {
             <div
                 className="mt-6 grid grid-cols-2 gap-2 rounded-xl bg-surface-2 p-1.5"
                 role="tablist"
-                aria-label="Choose account type"
+                aria-label={text.tabs}
             >
                 <button
                     type="button"
@@ -59,7 +92,7 @@ export function LoginPanel({ next = null }: { next?: string | null }) {
                     }
                 >
                     <UserRound className="size-4" />
-                    Customer
+                    {text.customer}
                 </button>
 
                 <button
@@ -74,7 +107,7 @@ export function LoginPanel({ next = null }: { next?: string | null }) {
                     }
                 >
                     <Building2 className="size-4" />
-                    Business owner
+                    {text.vendor}
                 </button>
             </div>
 
@@ -82,16 +115,14 @@ export function LoginPanel({ next = null }: { next?: string | null }) {
             <div key={accountType} className="mt-6" role="tabpanel">
                 <div className="mb-5">
                     <h2 className="text-lg font-semibold text-ink">
-                        {isCustomer ? "Customer login" : "Business owner login"}
+                        {isCustomer ? text.customerTitle : text.vendorTitle}
                     </h2>
                     <p className="mt-1 text-sm leading-6 text-muted">
-                        {isCustomer
-                            ? "Use the phone number connected to your customer account."
-                            : "Use the phone number connected to your registered business account."}
+                        {isCustomer ? text.customerIntro : text.vendorIntro}
                     </p>
                 </div>
 
-                <PhoneVerificationForm locale="en" audience={accountType} next={next} />
+                <PhoneVerificationForm locale={locale} audience={accountType} next={next} />
             </div>
 
             {/* Local development: where the code appears. The test server: the team's demo code. Neither on the live site. */}
@@ -109,9 +140,9 @@ export function LoginPanel({ next = null }: { next?: string | null }) {
             )}
             {TEST_BUILD && (
                 <aside className="mt-6 rounded-lg border border-sponsor-ink/30 bg-sponsor-bg p-4">
-                    <h2 className="text-sm font-semibold text-sponsor-ink">Test site</h2>
+                    <h2 className="text-sm font-semibold text-sponsor-ink">{text.testTitle}</h2>
                     <p className="mt-1 text-sm leading-6 text-sponsor-ink">
-                        Text messages aren&apos;t sent yet. Use the demo sign-in code the project team gave you.
+                        {text.testBody}
                     </p>
                 </aside>
             )}
@@ -123,7 +154,7 @@ export function LoginPanel({ next = null }: { next?: string | null }) {
                     className="inline-flex items-center gap-2 text-sm font-medium text-muted transition-colors hover:text-ink"
                 >
                     <ShieldCheck className="size-4" aria-hidden="true" />
-                    Administrator login
+                    {text.admin}
                 </Link>
 
                 {DEVELOPMENT && (
