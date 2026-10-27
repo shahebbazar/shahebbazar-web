@@ -25,13 +25,32 @@ export const userIdOf = async (who: Who) =>
  * than the code flow. The sign-in page itself is tested in auth.spec.ts.
  */
 export async function signIn(context: BrowserContext, who: Who) {
+    await signInUser(context, await userIdOf(who));
+}
+
+/** The same for any account, for example one made with newCustomer(). */
+export async function signInUser(context: BrowserContext, userId: number) {
     const token = crypto.randomBytes(32).toString("hex");
     await sql(
         `INSERT INTO sessions (user_id, session_token_hash, session_expires_at)
          VALUES ($1, $2, NOW() + INTERVAL '1 hour')`,
-        [await userIdOf(who), crypto.createHash("sha256").update(token).digest("hex")]
+        [userId, crypto.createHash("sha256").update(token).digest("hex")]
     );
     await context.addCookies([{ name: "shaheb_session", value: token, domain: "localhost", path: "/", httpOnly: true, sameSite: "Lax" }]);
+}
+
+/**
+ * A new verified customer of its own, so a test can review or report without meeting what other tests
+ * (or the seed) left behind. Returns its id and phone.
+ */
+export async function newCustomer(name: string): Promise<{ id: number; phone: string }> {
+    const phone = `+880179${crypto.randomInt(0, 1e7).toString().padStart(7, "0")}`;
+    const [{ user_id }] = await sql<{ user_id: number }>(
+        `INSERT INTO users (user_phone, user_name, user_role, user_phone_verified_at)
+         VALUES ($1, $2, 'customer', now()) RETURNING user_id`,
+        [phone, name]
+    );
+    return { id: user_id, phone };
 }
 
 /** Where the API log ends now. Pass it to codeSince() so an earlier code is never picked up. */
