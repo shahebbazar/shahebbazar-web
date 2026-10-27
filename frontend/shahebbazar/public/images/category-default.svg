@@ -1,0 +1,10 @@
+<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 800 600" role="img" aria-label="">
+<defs><linearGradient id="bg" x1="0" y1="0" x2="1" y2="1"><stop offset="0" stop-color="#dbeafe"/><stop offset="1" stop-color="#c7d2fe"/></linearGradient><linearGradient id="building" x1="0" y1="0" x2="0" y2="1"><stop offset="0" stop-color="#ffffff"/><stop offset="1" stop-color="#e2e8f0"/></linearGradient></defs>
+<rect width="800" height="600" fill="url(#bg)"/><circle cx="650" cy="112" r="62" fill="#fef3c7" opacity=".9"/><path d="M0 450 Q180 390 350 448 T800 430 V600 H0Z" fill="#bfdbfe"/>
+<rect x="185" y="195" width="430" height="300" rx="18" fill="url(#building)" stroke="#64748b" stroke-width="8"/><path d="M150 210 L400 92 L650 210Z" fill="#3b82f6" stroke="#1e40af" stroke-width="8" stroke-linejoin="round"/>
+<rect x="350" y="360" width="100" height="135" rx="8" fill="#93c5fd" stroke="#64748b" stroke-width="7"/>
+<g fill="#bfdbfe" stroke="#64748b" stroke-width="6"><rect x="225" y="250" width="80" height="70" rx="6"/><rect x="495" y="250" width="80" height="70" rx="6"/></g>
+<path d="M265 250 V320 M225 285 H305 M535 250 V320 M495 285 H575" stroke="#64748b" stroke-width="5"/>
+<g fill="#22c55e"><path d="M108 455 C72 410 85 370 123 355 C141 395 136 426 108 455Z"/><path d="M115 460 C130 410 170 397 196 414 C179 450 151 465 115 460Z"/></g><path d="M115 482 V425" stroke="#15803d" stroke-width="8" stroke-linecap="round"/>
+<g fill="#60a5fa" opacity=".7"><circle cx="92" cy="120" r="12"/><circle cx="700" cy="330" r="16"/><circle cx="150" cy="280" r="9"/></g>
+</svg>
