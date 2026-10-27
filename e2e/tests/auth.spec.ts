@@ -73,6 +73,26 @@ test("a wrong code is refused with a message", async ({ page, consoleErrors }) =
     await expect(page).toHaveURL(/\/login/);
 });
 
+test("a customer asks for a new code after a minute and signs in with it @phone", async ({ page }, testInfo) => {
+    // Two codes per run, so each browser gets its own customer to stay under the limit of three:
+    // Tania Sultana on the desktop, Mahmud Hasan on the phone.
+    const phone = testInfo.project.name === "phone" ? "+8801722000006" : "+8801722000005";
+    await page.clock.install();
+    await page.goto("/login");
+    await page.locator("#customer-login-phone").fill(phone);
+    await page.getByRole("button", { name: "Send verification code" }).click();
+    await expect(page.getByRole("button", { name: /Send a new code in \d+s/ })).toBeDisabled();
+
+    await page.clock.fastForward("01:01");
+    const mark = logMark();
+    await page.getByRole("button", { name: "Send a new code" }).click();
+    await expect(page.getByRole("status").filter({ hasText: "A new code is on its way." })).toBeVisible();
+    const resent = await codeSince(phone, mark);
+    await page.locator("#customer-login-code").fill(resent);
+    await page.getByRole("button", { name: "Verify and log in" }).click();
+    await expect(page).toHaveURL(/\/account$/);
+});
+
 test("the code step gives the expiry, not development instructions, outside local development", async ({ page }) => {
     const hint = async () => {
         await expect(page.getByText("The code expires after five minutes.")).toBeVisible();

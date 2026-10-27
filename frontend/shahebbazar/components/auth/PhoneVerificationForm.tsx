@@ -2,7 +2,7 @@
 
 import Link from "next/link";
 import { useRouter } from "next/navigation";
-import { useState, type FormEvent } from "react";
+import { useEffect, useState, type FormEvent } from "react";
 import {
     requestVerification,
     verifyCode,
@@ -25,6 +25,9 @@ type PhoneVerificationFormProps = {
 
 type Stage = "phone" | "code";
 
+// How long the "Send a new code" button waits after a code is sent. The API still limits requests per hour.
+const RESEND_SECONDS = 60;
+
 const copy = {
     en: {
         phone: "Phone number",
@@ -34,6 +37,9 @@ const copy = {
         codePlaceholder: "Enter the six-digit code",
         verify: "Verify and log in",
         changePhone: "Change phone number",
+        resend: "Send a new code",
+        resendIn: (seconds: number) => `Send a new code in ${seconds}s`,
+        resent: "A new code is on its way.",
         requesting: "Sending code...",
         verifying: "Verifying...",
         customerRegister: "New to Shahebbazar?",
@@ -53,6 +59,9 @@ const copy = {
         codePlaceholder: "ছয় সংখ্যার কোড লিখুন",
         verify: "যাচাই করে লগ ইন করুন",
         changePhone: "ফোন নম্বর পরিবর্তন করুন",
+        resend: "নতুন কোড পাঠান",
+        resendIn: (seconds: number) => `${seconds} সেকেন্ড পরে নতুন কোড পাঠান`,
+        resent: "নতুন কোড পাঠানো হয়েছে।",
         requesting: "কোড পাঠানো হচ্ছে...",
         verifying: "যাচাই করা হচ্ছে...",
         customerRegister: "সাহেববাজারে নতুন?",
@@ -82,15 +91,22 @@ export function PhoneVerificationForm({
     //const [message, setMessage] = useState<string | null>(null);
     const [error, setError] = useState<string | null>(null);
     const [busy, setBusy] = useState(false);
+    const [resendAt, setResendAt] = useState(0);
+    const [resendIn, setResendIn] = useState(0);
+    const [resent, setResent] = useState(false);
 
-    async function handleRequest(
-        event: FormEvent<HTMLFormElement>
-    ) {
-        event.preventDefault();
+    // Counted from the deadline, so it stays right when a phone slows timers in a background tab.
+    useEffect(() => {
+        if (!resendAt) return;
+        const tick = () => setResendIn(Math.max(0, Math.ceil((resendAt - Date.now()) / 1000)));
+        tick();
+        const timer = setInterval(tick, 1000);
+        return () => clearInterval(timer);
+    }, [resendAt]);
 
+    async function sendCode() {
         setBusy(true);
         setError(null);
-        //setMessage(null);
 
         const result = await requestVerification({
             phone,
@@ -103,11 +119,25 @@ export function PhoneVerificationForm({
 
         if (!result.ok) {
             setError(result.error);
-            return;
+            return false;
         }
 
-        //setMessage(null);
-        setStage("code");
+        setResendAt(Date.now() + RESEND_SECONDS * 1000);
+        return true;
+    }
+
+    async function handleRequest(
+        event: FormEvent<HTMLFormElement>
+    ) {
+        event.preventDefault();
+
+        setResent(false);
+        if (await sendCode()) setStage("code");
+    }
+
+    async function handleResend() {
+        setCode("");
+        setResent(await sendCode());
     }
 
     async function handleVerify(
@@ -159,6 +189,7 @@ export function PhoneVerificationForm({
         setStage("phone");
         setCode("");
         setError(null);
+        setResent(false);
         //setMessage(null);
     }
 
@@ -264,12 +295,27 @@ export function PhoneVerificationForm({
                 </div>
             )}
 
+            {resent && !error && (
+                <p role="status" className="text-sm text-muted">
+                    {text.resent}
+                </p>
+            )}
+
             <button
                 type="submit"
                 className="form-button-primary disabled:cursor-not-allowed disabled:opacity-60"
                 disabled={busy || code.length !== 6}
             >
                 {busy ? text.verifying : text.verify}
+            </button>
+
+            <button
+                type="button"
+                className="form-button-secondary disabled:cursor-not-allowed disabled:opacity-60"
+                onClick={handleResend}
+                disabled={busy || resendIn > 0}
+            >
+                {resendIn > 0 ? text.resendIn(resendIn) : text.resend}
             </button>
 
             <button
