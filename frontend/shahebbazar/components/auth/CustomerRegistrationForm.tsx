@@ -4,12 +4,56 @@ import Link from "next/link";
 import { useRouter } from "next/navigation";
 import { useState, type FormEvent } from "react";
 import { registerCustomer, requestVerification } from "@/lib/auth-client";
+import { localeHref, type Locale } from "@/lib/i18n";
 import { CodeHint } from "./CodeHint";
+import { ResendCodeButton } from "./ResendCodeButton";
 
 type Stage = "details" | "verification";
 
-export function CustomerRegistrationForm() {
+const copy = {
+    en: {
+        name: "Full name",
+        namePlaceholder: "Your full name",
+        phone: "Phone number",
+        phonePlaceholder: "Local or international mobile number",
+        phoneHint: "Enter your Bangladesh mobile number, for example +8801712345678.",
+        email: "Email address",
+        optional: "(optional)",
+        requesting: "Sending verification code...",
+        continue: "Continue with phone verification",
+        haveAccount: "Already have an account?",
+        login: "Return to login",
+        code: "Verification code",
+        codePlaceholder: "Enter the six-digit code",
+        creatingFor: "Creating customer account for:",
+        verifying: "Verifying...",
+        complete: "Complete registration",
+        changeDetails: "Change details",
+    },
+    bn: {
+        name: "পুরো নাম",
+        namePlaceholder: "আপনার পুরো নাম",
+        phone: "ফোন নম্বর",
+        phonePlaceholder: "আপনার মোবাইল নম্বর",
+        phoneHint: "আপনার বাংলাদেশি মোবাইল নম্বর লিখুন, যেমন +৮৮০১৭১২৩৪৫৬৭৮।",
+        email: "ইমেইল ঠিকানা",
+        optional: "(ঐচ্ছিক)",
+        requesting: "যাচাইকরণ কোড পাঠানো হচ্ছে...",
+        continue: "ফোন যাচাই করে এগিয়ে যান",
+        haveAccount: "আগে থেকেই অ্যাকাউন্ট আছে?",
+        login: "লগ ইনে ফিরে যান",
+        code: "যাচাইকরণ কোড",
+        codePlaceholder: "ছয় সংখ্যার কোড লিখুন",
+        creatingFor: "যাঁর জন্য গ্রাহক অ্যাকাউন্ট তৈরি হচ্ছে:",
+        verifying: "যাচাই করা হচ্ছে...",
+        complete: "নিবন্ধন সম্পন্ন করুন",
+        changeDetails: "তথ্য পরিবর্তন করুন",
+    },
+} as const;
+
+export function CustomerRegistrationForm({ locale = "en" }: { locale?: Locale }) {
     const router = useRouter();
+    const text = copy[locale];
 
     const [stage, setStage] = useState<Stage>("details");
     const [name, setName] = useState("");
@@ -19,24 +63,29 @@ export function CustomerRegistrationForm() {
     const [error, setError] = useState<string | null>(null);
     const [busy, setBusy] = useState(false);
 
-    async function handleRequestCode(event: FormEvent<HTMLFormElement>) {
-        event.preventDefault();
-        setBusy(true);
+    // Sends a code to the phone number; the SMS is in the page's language.
+    async function sendCode() {
         setError(null);
-
         const result = await requestVerification({
             phone,
             purpose: "register",
+            language: locale,
         });
+        if (!result.ok) setError(result.error);
+        return result.ok;
+    }
 
+    async function handleRequestCode(event: FormEvent<HTMLFormElement>) {
+        event.preventDefault();
+        setBusy(true);
+        const sent = await sendCode();
         setBusy(false);
+        if (sent) setStage("verification");
+    }
 
-        if (!result.ok) {
-            setError(result.error);
-            return;
-        }
-
-        setStage("verification");
+    async function handleResend() {
+        setCode("");
+        return sendCode();
     }
 
     async function handleRegistration(event: FormEvent<HTMLFormElement>) {
@@ -49,6 +98,7 @@ export function CustomerRegistrationForm() {
             phone,
             email,
             code,
+            language: locale,
         });
 
         setBusy(false);
@@ -58,7 +108,7 @@ export function CustomerRegistrationForm() {
             return;
         }
 
-        router.push("/account");
+        router.push(localeHref("/account", locale));
         router.refresh();
     }
 
@@ -76,7 +126,7 @@ export function CustomerRegistrationForm() {
                         htmlFor="customer-register-name"
                         className="mb-1.5 block text-sm font-medium text-ink"
                     >
-                        Full name
+                        {text.name}
                     </label>
                     <input
                         id="customer-register-name"
@@ -84,7 +134,7 @@ export function CustomerRegistrationForm() {
                         type="text"
                         value={name}
                         onChange={(event) => setName(event.target.value)}
-                        placeholder="Your full name"
+                        placeholder={text.namePlaceholder}
                         autoComplete="name"
                         className="form-input mb-0"
                         maxLength={120}
@@ -97,7 +147,7 @@ export function CustomerRegistrationForm() {
                         htmlFor="customer-register-phone"
                         className="mb-1.5 block text-sm font-medium text-ink"
                     >
-                        Phone number
+                        {text.phone}
                     </label>
                     <input
                         id="customer-register-phone"
@@ -105,13 +155,13 @@ export function CustomerRegistrationForm() {
                         type="tel"
                         value={phone}
                         onChange={(event) => setPhone(event.target.value)}
-                        placeholder="Local or international mobile number"
+                        placeholder={text.phonePlaceholder}
                         autoComplete="tel"
                         className="form-input mb-0"
                         required
                     />
                     <p className="mt-1.5 text-xs leading-5 text-muted">
-                        Enter your Bangladesh mobile number, for example +8801712345678.
+                        {text.phoneHint}
                     </p>
                 </div>
 
@@ -120,8 +170,8 @@ export function CustomerRegistrationForm() {
                         htmlFor="customer-register-email"
                         className="mb-1.5 block text-sm font-medium text-ink"
                     >
-                        Email address{" "}
-                        <span className="font-normal text-muted">(optional)</span>
+                        {text.email}{" "}
+                        <span className="font-normal text-muted">{text.optional}</span>
                     </label>
                     <input
                         id="customer-register-email"
@@ -146,13 +196,13 @@ export function CustomerRegistrationForm() {
                     className="form-button-primary disabled:cursor-not-allowed disabled:opacity-60"
                     disabled={busy}
                 >
-                    {busy ? "Sending verification code..." : "Continue with phone verification"}
+                    {busy ? text.requesting : text.continue}
                 </button>
 
                 <div className="border-t border-line pt-4 text-center">
-                    <p className="mb-3 text-sm text-muted">Already have an account?</p>
-                    <Link href="/login" className="text-sm font-medium text-brand hover:underline">
-                        Return to login
+                    <p className="mb-3 text-sm text-muted">{text.haveAccount}</p>
+                    <Link href={localeHref("/login", locale)} className="text-sm font-medium text-brand hover:underline">
+                        {text.login}
                     </Link>
                 </div>
             </form>
@@ -161,14 +211,14 @@ export function CustomerRegistrationForm() {
 
     return (
         <form onSubmit={handleRegistration} className="space-y-4">
-            <CodeHint />
+            <CodeHint locale={locale} />
 
             <div>
                 <label
                     htmlFor="customer-register-code"
                     className="mb-1.5 block text-sm font-medium text-ink"
                 >
-                    Verification code
+                    {text.code}
                 </label>
                 <input
                     id="customer-register-code"
@@ -178,7 +228,7 @@ export function CustomerRegistrationForm() {
                     onChange={(event) =>
                         setCode(event.target.value.replace(/\D/g, "").slice(0, 6))
                     }
-                    placeholder="Enter the six-digit code"
+                    placeholder={text.codePlaceholder}
                     inputMode="numeric"
                     autoComplete="one-time-code"
                     pattern="[0-9]{6}"
@@ -189,7 +239,7 @@ export function CustomerRegistrationForm() {
             </div>
 
             <div className="rounded-lg border border-line bg-surface-2 p-3 text-sm text-muted">
-                <p>Creating customer account for:</p>
+                <p>{text.creatingFor}</p>
                 <p className="mt-1 font-medium text-ink">{name}</p>
                 <p>{phone}</p>
                 {email && <p>{email}</p>}
@@ -207,16 +257,18 @@ export function CustomerRegistrationForm() {
                     className="form-button-primary disabled:cursor-not-allowed disabled:opacity-60"
                     disabled={busy || code.length !== 6}
                 >
-                    {busy ? "Verifying..." : "Complete registration"}
+                    {busy ? text.verifying : text.complete}
                 </button>
-                
+
+                <ResendCodeButton onResend={handleResend} disabled={busy} locale={locale} />
+
                 <button
                     type="button"
                     onClick={returnToDetails}
                     className="text-sm text-muted hover:text-ink underline"
                     disabled={busy}
                 >
-                    Change details / Resend code
+                    {text.changeDetails}
                 </button>
             </div>
         </form>

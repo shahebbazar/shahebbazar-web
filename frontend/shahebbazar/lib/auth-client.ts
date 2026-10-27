@@ -225,6 +225,8 @@ export async function registerCustomer(input: {
     phone: string;
     email: string;
     code: string;
+    /** "bn" makes Bangla the account's language. */
+    language?: "en" | "bn";
 }): Promise<RegisterCustomerResult> {
     try {
         const response = await fetch(
@@ -241,6 +243,7 @@ export async function registerCustomer(input: {
                     phone: input.phone,
                     email: input.email || null,
                     code: input.code,
+                    language: input.language ?? "en",
                 }),
             }
         );

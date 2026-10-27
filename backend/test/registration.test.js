@@ -141,6 +141,23 @@ describe("customer registration still works", () => {
         assert.equal(res.data.user.user_role, "customer");
         const cookie = (res.headers.get("set-cookie") || "").split(";")[0];
         assert.equal((await call("GET", "/me", { cookie })).status, 200);
+        assert.equal((await query("SELECT user_language FROM users WHERE user_phone = $1", [phone]))[0].user_language, "en");
+    });
+
+    it("registering on the Bangla page makes Bangla the account's language", async () => {
+        const phone = "+8801799000032";
+        const code = await requestCode(phone, "register");
+        const res = await call("POST", "/auth/register/customer", { json: { name: "বাংলা গ্রাহক", phone, code, language: "bn" } });
+        assert.equal(res.status, 201, JSON.stringify(res.data));
+        assert.equal((await query("SELECT user_language FROM users WHERE user_phone = $1", [phone]))[0].user_language, "bn");
+    });
+
+    it("an unknown language is saved as English", async () => {
+        const phone = "+8801799000033";
+        const code = await requestCode(phone, "register");
+        const res = await call("POST", "/auth/register/customer", { json: { name: "Test Customer", phone, code, language: "fr" } });
+        assert.equal(res.status, 201, JSON.stringify(res.data));
+        assert.equal((await query("SELECT user_language FROM users WHERE user_phone = $1", [phone]))[0].user_language, "en");
     });
 
     it("refuses a wrong code", async () => {

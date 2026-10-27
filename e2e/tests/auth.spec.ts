@@ -1,6 +1,6 @@
 // Signing in through the real page: phone number, then the code the API sends (printed to its log here).
 
-import { test, expect, codeSince, logMark, allowConsoleError } from "../fixtures";
+import { test, expect, codeSince, logMark, allowConsoleError, sql } from "../fixtures";
 import { PHONES } from "../env";
 import type { Page } from "@playwright/test";
 
@@ -91,6 +91,58 @@ test("a customer asks for a new code after a minute and signs in with it @phone"
     await page.locator("#customer-login-code").fill(resent);
     await page.getByRole("button", { name: "Verify and log in" }).click();
     await expect(page).toHaveURL(/\/account$/);
+});
+
+test("a new customer registers on the Bangla page, asks for a new code, and the account is in Bangla @phone", async ({ page }) => {
+    const phone = `0179${Date.now().toString().slice(-7)}`;
+    await page.clock.install();
+    await page.goto("/register/customer?lang=bn");
+    await expect(page.getByRole("heading", { level: 1, name: "গ্রাহক অ্যাকাউন্ট তৈরি করুন" })).toBeVisible();
+    await expect(page.getByText("আপনার বাংলাদেশি মোবাইল নম্বর লিখুন")).toBeVisible();
+    await page.locator("#customer-register-name").fill("নতুন গ্রাহক");
+    await page.locator("#customer-register-phone").fill(phone);
+    await page.getByRole("button", { name: "ফোন যাচাই করে এগিয়ে যান" }).click();
+    await expect(page.getByRole("button", { name: /সেকেন্ড পরে নতুন কোড পাঠান/ })).toBeDisabled();
+
+    await page.clock.fastForward("01:01");
+    const stored = `+880${phone.slice(1)}`;
+    const mark = logMark();
+    await page.getByRole("button", { name: "নতুন কোড পাঠান" }).click();
+    await expect(page.getByRole("status").filter({ hasText: "নতুন কোড পাঠানো হয়েছে।" })).toBeVisible();
+    await page.locator("#customer-register-code").fill(await codeSince(stored, mark));
+    await page.getByRole("button", { name: "নিবন্ধন সম্পন্ন করুন" }).click();
+    await expect(page).toHaveURL(/\/account\?lang=bn$/);
+    const [user] = await sql<{ user_language: string }>("SELECT user_language FROM users WHERE user_phone = $1", [stored]);
+    expect(user.user_language).toBe("bn");
+});
+
+test("a new business can ask for a new code from the code step", async ({ page }) => {
+    const phone = `0178${Date.now().toString().slice(-7)}`;
+    await page.clock.install();
+    await page.goto("/vendors/register");
+    await page.getByRole("textbox", { name: "Business name" }).fill("Resend Check Stall");
+    await page.getByRole("textbox", { name: "Email address" }).fill("resend.check@example.com");
+    await page.getByRole("textbox", { name: "Phone number" }).fill(phone);
+    await page.getByRole("textbox", { name: "Street address" }).fill("1 Station Road");
+    await page.getByRole("textbox", { name: "City or area" }).fill("Rajshahi");
+    await page.getByRole("button", { name: "Continue with phone verification" }).click();
+    await expect(page.getByRole("button", { name: /Send a new code in \d+s/ })).toBeDisabled();
+
+    await page.clock.fastForward("01:01");
+    const mark = logMark();
+    await page.getByRole("button", { name: "Send a new code" }).click();
+    await expect(page.getByRole("status").filter({ hasText: "A new code is on its way." })).toBeVisible();
+    expect(await codeSince(`+880${phone.slice(1)}`, mark)).toMatch(/^\d{6}$/);
+    await expect(page.getByRole("button", { name: "Change details" })).toBeVisible();
+});
+
+test("the login page is in Bangla with ?lang=bn, and links to registering in Bangla", async ({ page }) => {
+    await page.goto("/login?lang=bn");
+    await expect(page.getByRole("heading", { level: 1, name: "সাহেববাজারে লগ ইন করুন" })).toBeVisible();
+    await expect(page.getByRole("tab", { name: "ব্যবসার মালিক" })).toBeVisible();
+    await expect(page.getByText("আপনার বাংলাদেশি মোবাইল নম্বর লিখুন")).toBeVisible();
+    await page.getByRole("link", { name: "অ্যাকাউন্ট তৈরি করুন" }).click();
+    await expect(page).toHaveURL(/\/register\/customer\?lang=bn$/);
 });
 
 test("the code step gives the expiry, not development instructions, outside local development", async ({ page }) => {

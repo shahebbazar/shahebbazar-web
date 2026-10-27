@@ -2,6 +2,7 @@
 
 import { BROWSER_API_BASE } from "@/lib/apiBase";
 import { CodeHint } from "./CodeHint";
+import { ResendCodeButton } from "./ResendCodeButton";
 import { useRouter } from "next/navigation";
 import {
     useState,
@@ -204,6 +205,18 @@ export function VendorRegistrationForm({
         setStatus(null);
     }
 
+    // A new code to the same number, from the code step.
+    async function resendCode() {
+        setStatus(null);
+        setCode("");
+        const result = await requestVerification({
+            phone: form.vendor_phone,
+            purpose: "register",
+        });
+        if (!result.ok) setStatus({ type: "error", message: result.error });
+        return result.ok;
+    }
+
     if (stage === "verification") {
         return (
             <form
@@ -286,13 +299,15 @@ export function VendorRegistrationForm({
                             : "Complete registration"}
                     </button>
 
+                    <ResendCodeButton onResend={resendCode} disabled={submitting} />
+
                     <button
                         type="button"
                         onClick={returnToDetails}
                         className="text-sm text-muted underline hover:text-ink"
                         disabled={submitting}
                     >
-                        Change details / Resend code
+                        Change details
                     </button>
                 </div>
             </form>
