@@ -33,6 +33,15 @@ const SETTINGS = {
         label: "Free email campaigns a month",
         help: "For businesses without a Marketing pass. 0 switches the free email off.",
     },
+    // KAN-321: a deleted account's reviews stay, from a "Former customer", unless this is switched off.
+    show_removed_account_reviews: {
+        type: "boolean",
+        group: "reviews",
+        default: true,
+        label: "Show reviews from deleted accounts",
+        help: "When a customer deletes their account, their reviews are hidden for 30 days in case they come back. " +
+            "This decides what happens after that.",
+    },
 };
 
 /** The current value of one setting. */

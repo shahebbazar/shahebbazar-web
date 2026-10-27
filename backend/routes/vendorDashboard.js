@@ -4,6 +4,7 @@ const pool = require("../db");
 const { requireVendorOwnership } = require("../lib/middleware/auth");
 const { requireFeature } = require("../lib/access");
 const { memberBusinesses } = require("../lib/membership");
+const { reviewerShown } = require("../lib/accountDeletion");
 // Provider dashboard data.
 
 
@@ -105,10 +106,10 @@ router.get("/vendors/:vendorId/dashboard",
                       WHERE vendor_id = $1 AND listing_status = 'pending') AS listings_pending,
                      (SELECT COUNT(*)::int FROM vendor_listings
                       WHERE vendor_id = $1) AS listings_total,
-                     (SELECT ROUND(AVG(review_rating), 1) FROM reviews
-                      WHERE vendor_id = $1 AND review_status = 'published') AS rating,
-                     (SELECT COUNT(*)::int FROM reviews
-                      WHERE vendor_id = $1 AND review_status = 'published') AS review_count`,
+                     (SELECT ROUND(AVG(r.review_rating), 1) FROM reviews r JOIN users u USING (user_id)
+                      WHERE r.vendor_id = $1 AND r.review_status = 'published' AND ${reviewerShown("u")}) AS rating,
+                     (SELECT COUNT(*)::int FROM reviews r JOIN users u USING (user_id)
+                      WHERE r.vendor_id = $1 AND r.review_status = 'published' AND ${reviewerShown("u")}) AS review_count`,
                     [vendorId, days]
                 ),
 

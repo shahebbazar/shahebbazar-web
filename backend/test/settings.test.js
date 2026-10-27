@@ -30,8 +30,9 @@ describe("defaults", () => {
             ["require_listing_approval", true],
             ["require_event_approval", false],
             ["free_marketing_emails_per_month", 1],
+            ["show_removed_account_reviews", true],
         ]);
-        assert.deepEqual(res.data.settings.map((s) => s.group), ["approval", "approval", "approval", "marketing"]);
+        assert.deepEqual(res.data.settings.map((s) => s.group), ["approval", "approval", "approval", "marketing", "reviews"]);
         assert.ok(res.data.settings.every((s) => s.label && s.help));
         assert.equal(typeof res.data.waiting.businesses, "number");
         assert.equal(typeof res.data.waiting.listings, "number");

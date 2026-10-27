@@ -346,6 +346,17 @@ describe("deleting an account", () => {
                 (SELECT count(*)::int FROM reviews WHERE user_id = $1) AS reviews`,
         [id]
     ))[0];
+    // What the business page shows of the review left below, and its review count (from v_business_cards,
+    // as on every business card) and star breakdown.
+    const shown = async () => {
+        const { data } = await call("GET", `/businesses/${target.vendor_slug}`);
+        return {
+            listed: data.reviews.some((r) => r.body === "Left before deleting."),
+            count: Number(data.business.review_count),
+            fiveStars: data.ratingDistribution.find((d) => d.rating === 5).count,
+        };
+    };
+    let visible;
 
     before(async () => {
         [{ user_id: id }] = await query(
@@ -361,6 +372,8 @@ describe("deleting an account", () => {
         await query(
             `INSERT INTO reviews (vendor_id, user_id, review_rating, review_body) VALUES ($1, $2, 5, 'Left before deleting.')`, [target.vendor_id, id]
         );
+        visible = await shown();
+        assert.equal(visible.listed, true);
     });
 
     it("asks for confirmation first", async () => {
@@ -397,6 +410,10 @@ describe("deleting an account", () => {
         assert.equal(audience.length, 0, "not in any business's audience while deactivated");
     });
 
+    it("hides their reviews from the business page and its rating while deactivated", async () => {
+        assert.deepEqual(await shown(), { listed: false, count: visible.count - 1, fiveStars: visible.fiveStars - 1 });
+    });
+
     it("signing in again within the 30 days brings the account back as it was", async () => {
         const code = await requestCode(phone, "login", "customer");
         const verified = await call("POST", "/auth/verify", { json: { phone, purpose: "login", expectedRole: "customer", code } });
@@ -405,6 +422,7 @@ describe("deleting an account", () => {
         const [user] = await query("SELECT user_status, user_deactivated_at FROM users WHERE user_id = $1", [id]);
         assert.deepEqual(user, { user_status: "active", user_deactivated_at: null });
         assert.deepEqual({ ...(await counts()), sessions: 0 }, { saved: 1, consents: 1, sessions: 0, open_chats: 1, reviews: 1 });
+        assert.deepEqual(await shown(), visible, "their reviews show again");
         const actions = (await query("SELECT audit_action FROM audit_logs WHERE audit_target_id = $1 AND audit_action LIKE 'account.%' ORDER BY audit_id", [id]))
             .map((r) => r.audit_action);
         assert.deepEqual(actions, ["account.deactivate", "account.reactivate"]);
@@ -441,6 +459,18 @@ describe("deleting an account", () => {
         const kept = business.data.reviews.find((r) => r.body === "Left before deleting.");
         assert.ok(kept, "the review is still on the business page");
         assert.deepEqual([kept.author, kept.author_verified, kept.author_avatar], ["Former customer", false, null]);
+        assert.deepEqual(await shown(), visible, "counted in the rating again");
         assert.equal((await query("SELECT count(*)::int AS n FROM users WHERE user_phone = $1", [phone]))[0].n, 0, "the mobile number is free again");
+    });
+
+    it("an admin can hide reviews from removed accounts for good, and bring them back", async () => {
+        const keep = (value) => call("PUT", "/admin/settings/show_removed_account_reviews", { as: "admin", json: { value } });
+        try {
+            assert.equal((await keep(false)).status, 200);
+            assert.deepEqual(await shown(), { listed: false, count: visible.count - 1, fiveStars: visible.fiveStars - 1 });
+        } finally {
+            assert.equal((await keep(true)).status, 200);
+        }
+        assert.deepEqual(await shown(), visible);
     });
 });

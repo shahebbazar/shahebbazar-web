@@ -62,6 +62,73 @@ test("turning business approval off asks first in the page, and Approvals then w
     }
 });
 
+const reviewsSetting = async () =>
+    (await sql<{ setting_value: boolean }>("SELECT setting_value FROM platform_settings WHERE setting_key = 'show_removed_account_reviews'"))[0]?.setting_value ?? true;
+
+test("an admin can hide reviews from deleted accounts on Settings, and show them again @phone", async ({ page }) => {
+    // A review from an account removed after its 30 days, shown as from a "Former customer".
+    const body = `E2E review from a deleted account ${Date.now() % 100000}`;
+    const [{ user_id }] = await sql<{ user_id: number }>(
+        `INSERT INTO users (user_phone, user_name, user_role, user_status)
+         VALUES ('deleted-e' || floor(random() * 1e9)::text, 'Former customer', 'customer', 'deleted') RETURNING user_id`
+    );
+    await sql(
+        `INSERT INTO reviews (vendor_id, user_id, review_rating, review_body)
+         VALUES ((SELECT vendor_id FROM vendors WHERE vendor_slug = 'rajshahi-mango-traders'), $1, 4, $2)`,
+        [user_id, body]
+    );
+    const review = page.getByText(body);
+
+    try {
+        await page.goto("/business/rajshahi-mango-traders");
+        await expect(review).toBeVisible();
+
+        await page.goto("/admin/settings");
+        const reviews = page.getByRole("region", { name: "Reviews" });
+        const toggle = reviews.getByRole("switch", { name: "Show reviews from deleted accounts" });
+        await expect(toggle).toBeChecked();
+        await expect(reviews.getByText(/after 30 days the reviews show again/)).toBeVisible();
+
+        await toggle.click();
+        const dialog = page.getByRole("dialog", { name: /Turn off/ });
+        await expect(dialog).toContainText("switch it back on at any time");
+        await expect(dialog).not.toContainText("Approvals");
+        await dialog.getByRole("button", { name: "Turn off" }).click();
+        await expect(reviews.getByText("Off: the reviews stay hidden for good.")).toBeVisible();
+        await expect.poll(() => reviewsSetting()).toBe(false);
+
+        await page.goto("/business/rajshahi-mango-traders");
+        await expect(page.getByRole("heading", { level: 1 })).toBeVisible();
+        await expect(review).toHaveCount(0);
+
+        await page.goto("/admin/settings");
+        await page.getByRole("switch", { name: "Show reviews from deleted accounts" }).click(); // back on: no question
+        await expect.poll(() => reviewsSetting()).toBe(true);
+        await page.goto("/business/rajshahi-mango-traders");
+        await expect(review).toBeVisible();
+    } finally {
+        await sql("DELETE FROM platform_settings WHERE setting_key = 'show_removed_account_reviews'");
+        await sql("DELETE FROM reviews WHERE user_id = $1", [user_id]);
+        await sql("DELETE FROM users WHERE user_id = $1", [user_id]);
+    }
+});
+
+test("Settings shows when each setting last changed in Dhaka time, the same on the server and in the browser", async ({ page }) => {
+    // 20:47 UTC on 25 October is 2:47 the next morning in Dhaka. Browsers can write that hour as
+    // "02:47" where the server writes "2:47", which broke the page (a hydration error).
+    await sql(
+        `INSERT INTO platform_settings (setting_key, setting_value, setting_updated_at, setting_updated_by)
+         VALUES ('show_removed_account_reviews', 'true', '2026-10-25T20:47:00Z', $1)`,
+        [await userIdOf("admin")]
+    );
+    try {
+        await page.goto("/admin/settings");
+        await expect(page.getByRole("region", { name: "Reviews" })).toContainText(/Last changed 26 Oct, 2:47 by /);
+    } finally {
+        await sql("DELETE FROM platform_settings WHERE setting_key = 'show_removed_account_reviews'");
+    }
+});
+
 test("ending a marketing pass asks first, and Cancel keeps it running", async ({ page }) => {
     const [pass] = await sql<{ subscription_id: number; vendor_name: string }>(
         `SELECT s.subscription_id, v.vendor_name FROM vendor_marketing_subscriptions s JOIN vendors v USING (vendor_id)
