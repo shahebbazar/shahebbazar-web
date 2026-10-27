@@ -12,17 +12,18 @@ const {
      requestCode,
      signIn, 
      startApi, 
-     stopApi, 
+     stopApi,
      userIdOf,
+     businessChoices,
 } = require("./support/harness");
 
 const OWNED = 1; // business 1 belongs to the "owner" account
 const OTHER = 6; // business 6 belongs to "otherVendor"
 
+// The category, area and description are added before the tests run.
 const BUSINESS = {
     vendor_name: "Farhana's Tailoring",
     vendor_phone: "01722000099",
-    vendor_city: "Rajshahi",
 };
 
 // Filled in before the tests run.
@@ -32,6 +33,7 @@ before(async () => {
     PHONES.upgrader = "+8801722000002";
     ROLES.upgrader = "customer";
     await startApi();
+    Object.assign(BUSINESS, await businessChoices());
     
 
     // A second admin, so the audit tests can tell "the signed-in admin" apart from "the first admin".

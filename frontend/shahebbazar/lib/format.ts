@@ -100,15 +100,20 @@ export function formatLocalPhone(phone: string): string {
 }
 
 /**
- * A Bangladeshi number typed any common way ("01811 223344", "+880 721-775544") in its stored +880
- * form, or null when it isn't one. The same as normalisePhone in backend/lib/businessProfile.js.
+ * A Bangladeshi mobile or landline typed or pasted any common way ("01811 223344", "+880 721-775544",
+ * "০১৮১১-২২৩৩৪৪", "00880 01811…") in its stored +880 form, or null when it isn't one. The same as
+ * normaliseAnyPhone in backend/lib/phone.js; backend/test/phone.test.js checks they agree.
  */
 export function toStoredPhone(raw: string): string | null {
-    const compact = raw.replace(/[\s\-().]/g, "");
-    const national = /^\+880(\d+)$/.exec(compact)?.[1] ?? /^880(\d+)$/.exec(compact)?.[1] ?? /^0(\d+)$/.exec(compact)?.[1];
+    let phone = raw
+        .replace(/[০-৯]/g, (d) => String(d.charCodeAt(0) - 0x09e6))
+        .replace(/[\s​-‍⁠\-‐-―−().]/g, "");
+    if (phone.startsWith("00")) phone = `+${phone.slice(2)}`;
+    const international = /^\+?880(\d+)$/.exec(phone)?.[1];
+    const national = international !== undefined ? international.replace(/^0/, "") : /^0(\d+)$/.exec(phone)?.[1];
     if (!national) return null;
-    if (national.startsWith("1")) return /^1[3-9]\d{8}$/.test(national) ? `+880${national}` : null;
-    return /^[2-9]\d{6,9}$/.test(national) ? `+880${national}` : null;
+    if (/^1[3-9]\d{8}$/.test(national) || /^[2-9]\d{6,9}$/.test(national)) return `+880${national}`;
+    return null;
 }
 
 /**

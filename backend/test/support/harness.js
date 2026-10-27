@@ -196,9 +196,19 @@ const apiOutput = () => serverLog;
 const userIdOf = async (role) =>
     (await query("SELECT user_id FROM users WHERE user_phone = $1", [PHONES[role]]))[0].user_id;
 
+/** What registering a business needs besides its name and phone: a seeded category and area, and a description. */
+async function businessChoices() {
+    const [row] = await query(
+        `SELECT (SELECT category_id FROM categories WHERE category_is_active ORDER BY category_id LIMIT 1) AS category_id,
+                (SELECT location_id FROM locations WHERE location_type = 'area' ORDER BY location_id LIMIT 1) AS location_id`
+    );
+    return { ...row, vendor_description: "A family shop on Station Road, open every day." };
+}
+
 module.exports = {
     apiOutput,
     BACKEND_DIR,
+    businessChoices,
     TEST_DB,
     ORIGIN,
     UPLOAD_DIR,

@@ -1,7 +1,7 @@
 const express = require("express");
 const pool = require("../db");
 const { parseId, cleanText } = require("../lib/currentUser");
-const { normalisePhone } = require("../lib/phone");
+const { PHONE_ERROR, normalisePhone } = require("../lib/phone");
 const { requireVendorOwnership } = require("../lib/middleware/auth");
 const { requireFeature } = require("../lib/access");
 const { withdrawChannelEverywhere } = require("../services/marketing/consent");
@@ -114,7 +114,7 @@ router.get("/vendors/:vendorId/members", ...readAccess, async (req, res) => {
 
 router.post("/vendors/:vendorId/members", ...teamAccess, ownerOnly, async (req, res) => {
     const phone = normalisePhone(req.body?.phone);
-    if (!phone) return res.status(400).json({ error: "Enter a valid phone number." });
+    if (!phone) return res.status(400).json({ error: PHONE_ERROR });
     const vendorId = req.vendor.vendor_id;
 
     const client = await pool.connect();

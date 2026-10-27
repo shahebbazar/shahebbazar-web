@@ -5,6 +5,7 @@ const { imageUpload, receive, discard, storedPath, checkUploads, removeUnreferen
 const { requireVendorOwnership } = require("../lib/middleware/auth");
 const { requireFeature } = require("../lib/access");
 const { getSetting } = require("../lib/settings");
+const { businessOptions } = require("../lib/vendorRegistration");
 const router = express.Router();
 
 // Add / Edit Business: the provider's own profile.
@@ -86,31 +87,8 @@ async function loadProfile(db, vendorId) {
     };
 }
 
-async function loadOptions() {
-    const [categories, areas] = await Promise.all([
-        // Grouped by top-level category.
-        pool.query(
-            `SELECT c.category_id AS id,
-                    CASE WHEN c.category_parent_id IS NULL
-                         THEN c.category_name || ' (general)' ELSE c.category_name END AS name,
-                    COALESCE(p.category_name, c.category_name) AS parent
-             FROM categories c
-             LEFT JOIN categories p ON p.category_id = c.category_parent_id
-             WHERE c.category_is_active AND (p.category_id IS NULL OR p.category_is_active)
-             ORDER BY COALESCE(p.category_sort_order, c.category_sort_order),
-                      COALESCE(p.category_id, c.category_id),
-                      c.category_parent_id IS NOT NULL, c.category_sort_order, c.category_id`
-        ),
-        pool.query(
-            `SELECT a.location_id AS id, a.location_name AS name, city.location_name AS city
-             FROM locations a
-             JOIN locations city ON city.location_id = a.location_parent_id
-             WHERE a.location_type = 'area'
-             ORDER BY city.location_name, a.location_name`
-        ),
-    ]);
-    return { categories: categories.rows, areas: areas.rows };
-}
+// The same lists the registration form uses (lib/vendorRegistration.js).
+const loadOptions = () => businessOptions(pool);
 
 router.get(
     "/vendors/:vendorId/profile",

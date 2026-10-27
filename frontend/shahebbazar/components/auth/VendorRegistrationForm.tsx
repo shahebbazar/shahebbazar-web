@@ -3,6 +3,8 @@
 import { BROWSER_API_BASE } from "@/lib/apiBase";
 import { CodeHint } from "./CodeHint";
 import { ResendCodeButton } from "./ResendCodeButton";
+import { PhoneField } from "./PhoneField";
+import { COUNTRY_CODE, displayNational, toNational, toSubmitted } from "./phoneInput";
 import { useRouter } from "next/navigation";
 import {
     useState,
@@ -11,11 +13,13 @@ import {
 } from "react";
 import {
     MapPin,
+    Store,
     UserRound,
 } from "lucide-react";
 import {
     registerVendor,
     requestVerification,
+    type BusinessOptions,
 } from "@/lib/auth-client";
 
 const EMPTY_FORM = {
@@ -23,8 +27,14 @@ const EMPTY_FORM = {
     vendor_email: "",
     vendor_phone: "",
     vendor_address: "",
-    vendor_city: "",
+    location_id: "",
+    category_id: "",
+    vendor_description: "",
 };
+
+// The same limits as the dashboard's business form, which an admin's approval needs.
+const DESCRIPTION_MIN = 20;
+const DESCRIPTION_MAX = 500;
 
 type VendorForm = typeof EMPTY_FORM;
 
@@ -35,7 +45,8 @@ type FormStatus =
       }
     | null;
 
-// Step 1 collects the business details and sends a code to the phone.
+// Step 1 collects the business details, including the category, area and description an admin's
+// approval needs, and sends a code to the phone.
 // Step 2 verifies the code, creates the account and business (pending, unless an admin
 // has switched business approval off), and signs the owner in.
 //
@@ -44,17 +55,20 @@ type FormStatus =
 // creating another account or requiring another registration OTP.
 export function VendorRegistrationForm({
     account,
+    options,
 }: {
     account?: {
         name: string;
         phone: string;
     };
+    options: BusinessOptions;
 }) {
     const router = useRouter();
 
     const [form, setForm] = useState<VendorForm>({
         ...EMPTY_FORM,
-        vendor_phone: account?.phone ?? "",
+        // The digits after +880 (PhoneField); a signed-in owner's own number to start with.
+        vendor_phone: account?.phone ? toNational(account.phone) : "",
     });
 
     const [stage, setStage] =
@@ -66,8 +80,18 @@ export function VendorRegistrationForm({
     const [submitting, setSubmitting] =
         useState(false);
 
+    // Categories grouped under their main category, as on the dashboard.
+    const categoryGroups = [
+        ...options.categories.reduce((groups, category) => {
+            groups.set(category.parent, [...(groups.get(category.parent) ?? []), category]);
+            return groups;
+        }, new Map<string, BusinessOptions["categories"]>()),
+    ];
+    const areaName = options.areas.find((a) => String(a.id) === form.location_id)?.name;
+    const descriptionLength = form.vendor_description.trim().length;
+
     function handleChange(
-        event: ChangeEvent<HTMLInputElement>
+        event: ChangeEvent<HTMLInputElement | HTMLSelectElement | HTMLTextAreaElement>
     ) {
         const { name, value } = event.target;
 
@@ -99,7 +123,7 @@ export function VendorRegistrationForm({
                         Accept: "application/json",
                         "Content-Type": "application/json",
                     },
-                    body: JSON.stringify(form),
+                    body: JSON.stringify({ ...form, vendor_phone: toSubmitted(form.vendor_phone) }),
                  }
             );
 
@@ -156,7 +180,7 @@ export function VendorRegistrationForm({
         // Signed-out users continue through the normal
         // phone verification registration flow.
         const result = await requestVerification({
-            phone: form.vendor_phone,
+            phone: toSubmitted(form.vendor_phone),
             purpose: "register",
         });
 
@@ -183,6 +207,7 @@ export function VendorRegistrationForm({
 
         const result = await registerVendor({
             ...form,
+            vendor_phone: toSubmitted(form.vendor_phone),
             code,
         });
 
@@ -210,7 +235,7 @@ export function VendorRegistrationForm({
         setStatus(null);
         setCode("");
         const result = await requestVerification({
-            phone: form.vendor_phone,
+            phone: toSubmitted(form.vendor_phone),
             purpose: "register",
         });
         if (!result.ok) setStatus({ type: "error", message: result.error });
@@ -231,7 +256,7 @@ export function VendorRegistrationForm({
                         className="mb-1.5 block text-sm font-medium text-ink"
                     >
                         Verification code sent to{" "}
-                        {form.vendor_phone}
+                        {COUNTRY_CODE} {displayNational(form.vendor_phone)}
                     </label>
 
                     <input
@@ -270,7 +295,7 @@ export function VendorRegistrationForm({
                     <p>
                         {[
                             form.vendor_address,
-                            form.vendor_city,
+                            areaName,
                         ]
                             .filter(Boolean)
                             .join(", ")}
@@ -374,20 +399,12 @@ export function VendorRegistrationForm({
                         onChange={handleChange}
                     />
 
-                    <div className="sm:col-span-2">
-                        <Field
-                            id="vendor_phone"
-                            label="Phone number"
-                            type="tel"
-                            value={form.vendor_phone}
-                            placeholder="Local or international mobile number"
-                            onChange={handleChange}
-                        />
-
-                        <p className="mt-1.5 text-xs leading-5 text-muted">
-                            Enter your Bangladesh mobile number, for example 01712-345678.
-                        </p>
-                    </div>
+                    <PhoneField
+                        id="vendor_phone"
+                        value={form.vendor_phone}
+                        onChange={(national) => setForm((current) => ({ ...current, vendor_phone: national }))}
+                        requiredMark
+                    />
                 </div>
             </section>
 
@@ -407,13 +424,80 @@ export function VendorRegistrationForm({
                         onChange={handleChange}
                     />
 
-                    <Field
-                        id="vendor_city"
-                        label="City or area"
-                        value={form.vendor_city}
-                        placeholder="For example, Kazla"
-                        onChange={handleChange}
-                    />
+                    <div>
+                        <Label id="location_id" text="Area" />
+                        <select
+                            id="location_id"
+                            name="location_id"
+                            value={form.location_id}
+                            onChange={handleChange}
+                            className="form-input mb-0"
+                            required
+                        >
+                            <option value="">Choose an area</option>
+                            {options.areas.map((area) => (
+                                <option key={area.id} value={area.id}>
+                                    {area.name}, {area.city}
+                                </option>
+                            ))}
+                        </select>
+                    </div>
+                </div>
+            </section>
+
+            <section className="rounded-xl border border-line bg-surface p-5 shadow-raised sm:p-6">
+                <SectionHeading
+                    icon={<Store className="size-5" />}
+                    title="About the business"
+                    description="Customers find businesses by category, and an administrator checks this before approving it. More categories, photos and opening hours can be added later from the dashboard."
+                />
+
+                <div className="mt-5 grid gap-4">
+                    <div>
+                        <Label id="category_id" text="Category" />
+                        <select
+                            id="category_id"
+                            name="category_id"
+                            value={form.category_id}
+                            onChange={handleChange}
+                            className="form-input mb-0"
+                            required
+                        >
+                            <option value="">Choose a category</option>
+                            {categoryGroups.map(([parent, items]) => (
+                                <optgroup key={parent} label={parent}>
+                                    {items.map((category) => (
+                                        <option key={category.id} value={category.id}>
+                                            {category.name}
+                                        </option>
+                                    ))}
+                                </optgroup>
+                            ))}
+                        </select>
+                    </div>
+
+                    <div>
+                        <Label id="vendor_description" text="Description" />
+                        <textarea
+                            id="vendor_description"
+                            name="vendor_description"
+                            value={form.vendor_description}
+                            onChange={handleChange}
+                            rows={4}
+                            minLength={DESCRIPTION_MIN}
+                            maxLength={DESCRIPTION_MAX}
+                            placeholder="What the business sells or does, for example: Fresh Rajshahi mangoes and lychees, delivered across the city in season."
+                            aria-describedby="vendor_description-help"
+                            className="form-input mb-0"
+                            required
+                        />
+                        <p id="vendor_description-help" className="mt-1.5 flex justify-between text-xs leading-5 text-muted">
+                            <span>At least {DESCRIPTION_MIN} characters.</span>
+                            <span className="tabular-nums">
+                                {descriptionLength} / {DESCRIPTION_MAX}
+                            </span>
+                        </p>
+                    </div>
                 </div>
             </section>
 
@@ -464,6 +548,24 @@ function SectionHeading({
     );
 }
 
+// A required field's label, with its red star.
+function Label({ id, text }: { id: keyof VendorForm; text: string }) {
+    return (
+        <label
+            htmlFor={id}
+            className="mb-1.5 block text-sm font-medium text-ink"
+        >
+            {text}
+            <span
+                className="ml-1 text-error-ink"
+                aria-hidden="true"
+            >
+                *
+            </span>
+        </label>
+    );
+}
+
 function Field({
     id,
     label,
@@ -483,18 +585,7 @@ function Field({
 }) {
     return (
         <div>
-            <label
-                htmlFor={id}
-                className="mb-1.5 block text-sm font-medium text-ink"
-            >
-                {label}
-                <span
-                    className="ml-1 text-error-ink"
-                    aria-hidden="true"
-                >
-                    *
-                </span>
-            </label>
+            <Label id={id} text={label} />
 
             <input
                 id={id}
@@ -504,13 +595,7 @@ function Field({
                 placeholder={placeholder}
                 onChange={onChange}
                 className="form-input mb-0"
-                autoComplete={
-                    type === "email"
-                        ? "email"
-                        : type === "tel"
-                          ? "tel"
-                          : "off"
-                }
+                autoComplete={type === "email" ? "email" : "off"}
                 required
             />
         </div>

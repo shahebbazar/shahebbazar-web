@@ -3,7 +3,7 @@
 // category, and the admin sign-in.
 
 import type { Browser, BrowserContext } from "@playwright/test";
-import { test, expect, codeSince, logMark, newCustomer, signIn, signInUser, sql } from "../fixtures";
+import { test, expect, codeSince, fillBusinessRegistration, logMark, newCustomer, signIn, signInUser, sql } from "../fixtures";
 import { PHONES } from "../env";
 
 const MANGO = "rajshahi-mango-traders"; // business 1, owned by PHONES.owner
@@ -125,11 +125,7 @@ test("a new business registers, is rejected with a reason, fixes it, and goes pu
 
     // Registering signs the owner in.
     await page.goto("/vendors/register");
-    await page.getByRole("textbox", { name: "Business name" }).fill(name);
-    await page.getByRole("textbox", { name: "Email address" }).fill("fresh.mangoes@example.com");
-    await page.getByRole("textbox", { name: "Phone number" }).fill(phone);
-    await page.getByRole("textbox", { name: "Street address" }).fill("12 Station Road");
-    await page.getByRole("textbox", { name: "City or area" }).fill("Rajshahi");
+    await fillBusinessRegistration(page, { name, phone });
     const mark = logMark();
     await page.getByRole("button", { name: "Continue with phone verification" }).click();
     await page.locator("#vendor-register-code").fill(await codeSince(stored(phone), mark));
@@ -153,11 +149,7 @@ test("a new business registers, is rejected with a reason, fixes it, and goes pu
     await page.goto(`/vendors/dashboard/business?vendor=${vendor.vendor_id}`);
     await expect(page.getByText("Your business was not approved.")).toBeVisible();
     await expect(page.getByText(`Reason: ${reason}`)).toBeVisible();
-    // Registering asks only for the basics; a category, area and description are needed to submit it.
-    await page.getByRole("combobox", { name: "Category", exact: true }).selectOption({ label: "Hospitals" });
-    const area = page.getByRole("combobox", { name: "Area / Location" });
-    await area.selectOption({ label: (await area.getByRole("option").nth(1).textContent())!.trim() });
-    await page.getByRole("textbox", { name: "Description" }).fill("Fresh Rajshahi mangoes picked each morning in season.");
+    // Registering asked for the category, area and description, so it can go back as it is.
     await page.getByRole("button", { name: "Save & submit for approval" }).click();
     await expect.poll(async () => (await sql<{ vendor_status: string }>("SELECT vendor_status FROM vendors WHERE vendor_id = $1", [vendor.vendor_id]))[0].vendor_status).toBe("pending");
 
@@ -170,6 +162,7 @@ test("a new business registers, is rejected with a reason, fixes it, and goes pu
 
     await page.goto(`/business/${vendor.vendor_slug}`);
     await expect(page.getByRole("heading", { level: 1, name })).toBeVisible();
+    await expect(page.getByText("Hospitals").first(), "the category chosen when registering").toBeVisible();
     await page.goto(`/search?q=${encodeURIComponent(name)}`);
     await expect(page.getByRole("link", { name }).first()).toBeVisible();
 });

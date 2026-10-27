@@ -3,11 +3,12 @@
 
 const { describe, it, before, after } = require("node:test");
 const assert = require("node:assert/strict");
-const { PHONES, ROLES, query, call, signIn, startApi, stopApi, userIdOf } = require("./support/harness");
+const { PHONES, ROLES, businessChoices, query, call, signIn, startApi, stopApi, userIdOf } = require("./support/harness");
 
+let choices;
 const setting = (key, value) => call("PUT", `/admin/settings/${key}`, { as: "admin", json: { value } });
 const register = (name) =>
-    call("POST", "/auth/register/vendor", { as: "applicant", json: { vendor_name: name, vendor_phone: "01722000098", vendor_city: "Rajshahi" } });
+    call("POST", "/auth/register/vendor", { as: "applicant", json: { vendor_name: name, vendor_phone: "01722000098", ...choices } });
 const lastAudit = async (action) =>
     (await query("SELECT * FROM audit_logs WHERE audit_action = $1 ORDER BY audit_id DESC LIMIT 1", [action]))[0];
 const newListing = (title) =>
@@ -15,6 +16,7 @@ const newListing = (title) =>
 
 before(async () => {
     await startApi();
+    choices = await businessChoices();
     PHONES.applicant = "+8801722000002";
     ROLES.applicant = "customer";
     await signIn("applicant");
@@ -163,7 +165,7 @@ describe("NID is no longer collected (client decision, 20 October)", () => {
     it("an NID sent by an old form is ignored", async () => {
         const res = await call("POST", "/auth/register/vendor", {
             as: "applicant",
-            json: { vendor_name: "Old Form Tailors", vendor_phone: "01722000098", vendor_nid_reference: "1234567890" },
+            json: { vendor_name: "Old Form Tailors", vendor_phone: "01722000098", vendor_nid_reference: "1234567890", ...choices },
         });
         assert.equal(res.status, 201, JSON.stringify(res.data));
         const [vendor] = await query("SELECT vendor_nid_reference FROM vendors WHERE vendor_id = $1", [res.data.vendor.vendor_id]);

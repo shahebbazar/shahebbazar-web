@@ -322,13 +322,15 @@ paths:
           application/json:
             schema:
               type: object
-              required: [vendor_name, vendor_phone]
+              required: [vendor_name, vendor_phone, category_id, location_id, vendor_description]
               properties:
                 vendor_name: { type: string }
                 vendor_phone: { type: string }
                 vendor_email: { type: string, format: email }
                 vendor_address: { type: string }
-                vendor_city: { type: string, description: "Area or city name, matched to a location." }
+                category_id: { type: integer, description: "An active category, from GET /auth/register/vendor/options." }
+                location_id: { type: integer, description: "An area, from GET /auth/register/vendor/options." }
+                vendor_description: { type: string, minLength: 20, maxLength: 500 }
       responses:
         "201":
           description: Created, awaiting approval.

@@ -293,7 +293,16 @@ export type VendorRegistrationInput = {
     vendor_email: string;
     vendor_phone: string;
     vendor_address: string;
-    vendor_city: string;
+    /** The ids are sent as chosen in the form's lists (GET /api/auth/register/vendor/options). */
+    category_id: string;
+    location_id: string;
+    vendor_description: string;
+};
+
+/** What the registration form offers: categories grouped by main category, and areas. */
+export type BusinessOptions = {
+    categories: { id: number; name: string; parent: string }[];
+    areas: { id: number; name: string; city: string }[];
 };
 
 /** Creates the business owner's account and business, and signs them in. */

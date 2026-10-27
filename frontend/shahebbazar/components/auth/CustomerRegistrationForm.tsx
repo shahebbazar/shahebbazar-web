@@ -7,6 +7,8 @@ import { registerCustomer, requestVerification } from "@/lib/auth-client";
 import { localeHref, type Locale } from "@/lib/i18n";
 import { CodeHint } from "./CodeHint";
 import { ResendCodeButton } from "./ResendCodeButton";
+import { PhoneField } from "./PhoneField";
+import { COUNTRY_CODE, displayNational, toSubmitted } from "./phoneInput";
 
 type Stage = "details" | "verification";
 
@@ -14,9 +16,6 @@ const copy = {
     en: {
         name: "Full name",
         namePlaceholder: "Your full name",
-        phone: "Phone number",
-        phonePlaceholder: "Local or international mobile number",
-        phoneHint: "Enter your Bangladesh mobile number, for example +8801712345678.",
         email: "Email address",
         optional: "(optional)",
         requesting: "Sending verification code...",
@@ -33,9 +32,6 @@ const copy = {
     bn: {
         name: "পুরো নাম",
         namePlaceholder: "আপনার পুরো নাম",
-        phone: "ফোন নম্বর",
-        phonePlaceholder: "আপনার মোবাইল নম্বর",
-        phoneHint: "আপনার বাংলাদেশি মোবাইল নম্বর লিখুন, যেমন +৮৮০১৭১২৩৪৫৬৭৮।",
         email: "ইমেইল ঠিকানা",
         optional: "(ঐচ্ছিক)",
         requesting: "যাচাইকরণ কোড পাঠানো হচ্ছে...",
@@ -57,6 +53,7 @@ export function CustomerRegistrationForm({ locale = "en" }: { locale?: Locale })
 
     const [stage, setStage] = useState<Stage>("details");
     const [name, setName] = useState("");
+    // The national number, the digits after +880 (PhoneField).
     const [phone, setPhone] = useState("");
     const [email, setEmail] = useState("");
     const [code, setCode] = useState("");
@@ -67,7 +64,7 @@ export function CustomerRegistrationForm({ locale = "en" }: { locale?: Locale })
     async function sendCode() {
         setError(null);
         const result = await requestVerification({
-            phone,
+            phone: toSubmitted(phone),
             purpose: "register",
             language: locale,
         });
@@ -95,7 +92,7 @@ export function CustomerRegistrationForm({ locale = "en" }: { locale?: Locale })
 
         const result = await registerCustomer({
             name,
-            phone,
+            phone: toSubmitted(phone),
             email,
             code,
             language: locale,
@@ -142,28 +139,7 @@ export function CustomerRegistrationForm({ locale = "en" }: { locale?: Locale })
                     />
                 </div>
 
-                <div>
-                    <label
-                        htmlFor="customer-register-phone"
-                        className="mb-1.5 block text-sm font-medium text-ink"
-                    >
-                        {text.phone}
-                    </label>
-                    <input
-                        id="customer-register-phone"
-                        name="phone"
-                        type="tel"
-                        value={phone}
-                        onChange={(event) => setPhone(event.target.value)}
-                        placeholder={text.phonePlaceholder}
-                        autoComplete="tel"
-                        className="form-input mb-0"
-                        required
-                    />
-                    <p className="mt-1.5 text-xs leading-5 text-muted">
-                        {text.phoneHint}
-                    </p>
-                </div>
+                <PhoneField id="customer-register-phone" value={phone} onChange={setPhone} locale={locale} />
 
                 <div>
                     <label
@@ -241,7 +217,7 @@ export function CustomerRegistrationForm({ locale = "en" }: { locale?: Locale })
             <div className="rounded-lg border border-line bg-surface-2 p-3 text-sm text-muted">
                 <p>{text.creatingFor}</p>
                 <p className="mt-1 font-medium text-ink">{name}</p>
-                <p>{phone}</p>
+                <p>{COUNTRY_CODE} {displayNational(phone, locale)}</p>
                 {email && <p>{email}</p>}
             </div>
 

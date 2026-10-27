@@ -12,10 +12,12 @@ export const metadata = {
 };
 
 export default async function VendorRegisterPage() {
-    const [session, settings, businesses] = await Promise.all([
+    const [session, settings, businesses, options] = await Promise.all([
         authenticatedApiGet("/auth/me"),
         apiGet("/settings/public").catch(() => null),
         authenticatedApiGet("/vendor-account/businesses").catch(() => null),
+        // The category and area lists for the form.
+        apiGet("/auth/register/vendor/options").catch(() => ({ categories: [], areas: [] })),
     ]);
     // What happens after registering depends on the admin's approval setting (KAN-293).
     const next =
@@ -75,7 +77,7 @@ export default async function VendorRegisterPage() {
                     {user?.user_role === "admin" ? (
                         <p className="form-status-error">Administrator accounts cannot register a business.</p>
                     ) : (
-                        <VendorRegistrationForm account={account} />
+                        <VendorRegistrationForm account={account} options={options} />
                     )}
                 </div>
             </div>
