@@ -47,3 +47,21 @@ test("the language switch works the same in the customer account", async ({ page
     await page.goto("/account/saved");
     await expect(page.getByRole("banner").getByRole("link", { name: "সাহেববাজার" })).toBeVisible();
 });
+
+// Switching in place kept the other language's tab title: after English on a Bangla page, the tab still
+// read সাহেববাজার.
+test("switching language also switches the tab title, both ways", async ({ page }) => {
+    const languages = page.getByRole("banner").getByRole("navigation", { name: "Language" });
+    for (const [path, en, bn] of [
+        ["/?lang=bn", "Shahebbazar — Find businesses and services in Rajshahi", "সাহেববাজার — রাজশাহীর ব্যবসা ও সেবা খুঁজুন"],
+        ["/search?q=mango&lang=bn", "mango in Rajshahi — search results | Shahebbazar", 'রাজশাহীতে "mango" — অনুসন্ধানের ফল | Shahebbazar'],
+    ] as const) {
+        await page.goto(path);
+        await expect(page).toHaveTitle(bn);
+        await languages.getByRole("link", { name: "English" }).click();
+        await expect(page).toHaveTitle(en);
+        await expect(languages.getByRole("link", { name: "English" })).toHaveAttribute("aria-current", "true");
+        await languages.getByRole("link", { name: "বাংলা" }).click();
+        await expect(page).toHaveTitle(bn);
+    }
+});

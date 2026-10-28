@@ -1,7 +1,6 @@
 "use client";
 
 import { Fragment, Suspense } from "react";
-import Link from "next/link";
 import { usePathname, useSearchParams } from "next/navigation";
 import { LANGUAGE_COOKIE, type Locale } from "@/lib/i18n";
 
@@ -40,14 +39,16 @@ function Links({ locale, variant, hrefFor }: Props & { hrefFor: (target: Locale)
                     |
                 </span>
             )}
-            <Link
+            {/* A full page load, not a <Link>: switching in place kept the other language's tab title,
+                and a language change should redraw everything anyway. */}
+            <a
                 href={hrefFor(target)}
                 onClick={() => remember(target)}
                 aria-current={locale === target ? "true" : undefined}
                 className={STYLE[variant](locale === target, target)}
             >
                 {target === "en" ? "English" : "বাংলা"}
-            </Link>
+            </a>
         </Fragment>
     ));
 }
