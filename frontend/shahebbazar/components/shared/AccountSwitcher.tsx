@@ -88,21 +88,32 @@ export function AccountSwitcherList({ side, businesses, businessPath = "/vendors
 }
 
 /**
- * The header button showing where you are, opening the list with `extras` (theme and Log out) under it.
- * From tablet width up; on phones the list is in the menu drawer.
+ * The header's account button: picture, name and role, opening a dropdown of `children` with `extras`
+ * (theme and Log out) under it. The same control for customers, business owners and admins.
+ * From tablet width up; on phones its contents are in the menu drawer.
  */
-export function AccountSwitcher(props: Props) {
-    const { name, role } = current(props);
+export function AccountMenu({
+    name,
+    role,
+    photo = null,
+    label,
+    extras,
+    children,
+}: {
+    name: string;
+    role: string;
+    photo?: string | null;
+    /** The button's accessible name. */
+    label: string;
+    extras?: React.ReactNode;
+    children?: React.ReactNode;
+}) {
     const initial = name.trim().charAt(0).toUpperCase() || "?";
-    const side = props.side;
-    const photo = side.kind === "customer"
-        ? props.avatarUrl
-        : props.businesses.find((b) => b.vendor_id === side.vendorId)?.vendor_photo;
-    const avatar = browserAssetUrl(photo ?? null);
+    const avatar = browserAssetUrl(photo);
     return (
         <details className="group relative min-w-0">
             <summary
-                aria-label={fill(t(props.locale ?? "en").accountSwitchLabel, { name, role })}
+                aria-label={label}
                 className="flex min-w-0 cursor-pointer list-none items-center gap-2.5 rounded-[10px] px-1.5 py-1 hover:bg-surface-2 [&::-webkit-details-marker]:hidden"
             >
                 <span aria-hidden className="grid size-9 shrink-0 place-items-center overflow-hidden rounded-full bg-brand-100 text-sm font-semibold text-brand-700">
@@ -120,9 +131,29 @@ export function AccountSwitcher(props: Props) {
                 <ChevronDown className="hidden size-4 shrink-0 text-soft transition-transform group-open:rotate-180 md:block" aria-hidden />
             </summary>
             <div className="absolute right-0 z-50 mt-2 hidden w-72 rounded-xl border border-line bg-surface p-2 shadow-raised md:block">
-                <AccountSwitcherList side={props.side} businesses={props.businesses} businessPath={props.businessPath} avatarUrl={props.avatarUrl} locale={props.locale} />
-                {props.extras && <div className="mt-2 space-y-2 border-t border-line px-1.5 pt-3 pb-1">{props.extras}</div>}
+                {children}
+                {extras && <div className={`${children ? "mt-2 border-t border-line pt-3" : "pt-1"} space-y-2 px-1.5 pb-1`}>{extras}</div>}
             </div>
         </details>
+    );
+}
+
+/** The account menu for customers and business owners: where you are, and the list to switch. */
+export function AccountSwitcher(props: Props) {
+    const { name, role } = current(props);
+    const side = props.side;
+    const photo = side.kind === "customer"
+        ? props.avatarUrl
+        : props.businesses.find((b) => b.vendor_id === side.vendorId)?.vendor_photo;
+    return (
+        <AccountMenu
+            name={name}
+            role={role}
+            photo={photo}
+            label={fill(t(props.locale ?? "en").accountSwitchLabel, { name, role })}
+            extras={props.extras}
+        >
+            <AccountSwitcherList side={props.side} businesses={props.businesses} businessPath={props.businessPath} avatarUrl={props.avatarUrl} locale={props.locale} />
+        </AccountMenu>
     );
 }

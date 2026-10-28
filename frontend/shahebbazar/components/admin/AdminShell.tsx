@@ -1,9 +1,12 @@
 import Link from "next/link";
-import { ChartLine, Flag, LayoutGrid, MapPin, Megaphone, Settings, ShieldCheck, Star, type LucideIcon } from "lucide-react";
-import { MobileMenu } from "../shared/MobileMenu";
+import { ChartLine, Flag, LayoutGrid, Megaphone, Settings, ShieldCheck, Star, type LucideIcon } from "lucide-react";
+import { getAccountLocale } from "@/lib/locale-server";
+import { HeaderBar } from "../shared/HeaderBar";
 import { LogoutButton } from "@/components/auth/LogoutButton";
-import { ThemeSelector } from "@/components/theme/ThemeSelector";
-// Page frame for the admin area.
+import { AdminAccountMenu } from "@/components/auth/SessionControls";
+
+// Page frame for the admin area. The header is the site's shared one, in the chosen language; the
+// admin pages themselves are English only.
 
 type Item = { key: string; label: string; Icon: LucideIcon } & ({ href: string } | { soon: true });
 
@@ -17,7 +20,7 @@ const NAV: Item[] = [
     { key: "settings", label: "Settings", Icon: Settings, href: "/admin/settings" },
 ];
 
-export function AdminShell({
+export async function AdminShell({
     current,
     userName = "Administrator",
     children,
@@ -26,6 +29,7 @@ export function AdminShell({
     userName?: string;
     children: React.ReactNode;
 }) {
+    const locale = await getAccountLocale();
     const row = "flex items-center gap-3 rounded-[10px] px-3.5 py-2.5 text-sm";
     const navList = (
         <ul className="space-y-0.5">
@@ -59,57 +63,20 @@ export function AdminShell({
 
     return (
         <div className="flex min-h-screen flex-col">
-            <header className="sticky top-0 z-40 border-b border-line bg-surface">
-                <div className="mx-auto flex h-16 max-w-[1440px] items-center gap-3 px-4 sm:px-6">
-                    <Link href="/" className="flex shrink-0 items-center gap-2">
-                        <MapPin className="size-6 fill-brand-600 text-brand-600" strokeWidth={1.5} />
-                        <span className="text-xl font-bold tracking-tight text-brand-600 sm:text-[1.35rem]">Shahebbazar</span>
-                    </Link>
+            <HeaderBar
+                locale={locale}
+                badge={
                     <span className="rounded-full border border-brand-200 bg-brand-50 px-2.5 py-0.5 text-[0.75rem] font-semibold text-brand-700">Admin</span>
-                        <div className="ml-auto flex items-center gap-3">
-                            <div className="hidden lg:block">
-                                <ThemeSelector />
-                            </div>
-
-                            <div className="hidden leading-tight sm:block">
-                            <p className="max-w-40 truncate text-sm font-semibold">
-                                {userName}
-                            </p>
-
-                            <p className="text-xs text-muted">
-                                Administrator
-                            </p>
-                        </div>
-
-                        <div className="hidden lg:block">
-                            <LogoutButton />
-                        </div>
-
-                        <MobileMenu>
-                            <p className="truncate px-3.5 pb-2 text-sm font-semibold">
-                                {userName}
-                            </p>
-
-                            <nav aria-label="Admin">
-                                {navList}
-                            </nav>
-
-                            <div className="mt-3 border-t border-line px-3.5 pt-3">
-                                <p className="mb-2 text-[0.75rem] font-medium text-muted">
-                                    Appearance
-                                </p>
-
-                                <ThemeSelector className="w-full" />
-                            </div>
-
-                            <div className="mt-3 border-t border-line px-3.5 pt-3">
-                                <LogoutButton />
-                            </div>
-
-                        </MobileMenu>
+                }
+                account={<AdminAccountMenu userName={userName} locale={locale} />}
+                menuNav={<nav aria-label="Admin">{navList}</nav>}
+                menuAccount={
+                    <div className="space-y-2">
+                        <p className="truncate px-1 text-sm font-semibold">{userName}</p>
+                        <LogoutButton locale={locale} />
                     </div>
-                </div>
-            </header>
+                }
+            />
 
             <div className="mx-auto flex w-full max-w-[1440px] flex-1 gap-6 px-4 py-6 sm:px-6">
                 <aside className="hidden w-[236px] shrink-0 lg:block">

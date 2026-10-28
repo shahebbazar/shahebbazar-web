@@ -270,6 +270,10 @@ const strings = {
         loggingOut: "Logging out...",
         menu: "Menu",
         closeMenu: "Close menu",
+        accountHeading: "Account",
+        accountRoleAdmin: "Administrator",
+        accountAdminDashboard: "Admin dashboard",
+        accountMenuLabel: "{name}, {role}. Account menu",
     },
 
     bn: {
@@ -508,6 +512,10 @@ const strings = {
         loggingOut: "লগ আউট হচ্ছে...",
         menu: "মেনু",
         closeMenu: "মেনু বন্ধ করুন",
+        accountHeading: "অ্যাকাউন্ট",
+        accountRoleAdmin: "অ্যাডমিন",
+        accountAdminDashboard: "অ্যাডমিন ড্যাশবোর্ড",
+        accountMenuLabel: "{name}, {role}। অ্যাকাউন্ট মেনু",
     },
 } as const;
 

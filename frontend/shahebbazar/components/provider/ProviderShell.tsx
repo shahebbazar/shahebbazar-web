@@ -3,7 +3,6 @@ import { LogoutButton } from "@/components/auth/LogoutButton";
 import { AccountMenuExtras } from "@/components/auth/AccountMenuExtras";
 import {
     House,
-    MapPin,
     Megaphone,
     MessagesSquare,
     Package,
@@ -15,14 +14,12 @@ import {
     type LucideIcon,
 } from "lucide-react";
 import { authenticatedApiGet } from "@/lib/auth-server";
-import { t, type Locale } from "@/lib/i18n";
+import type { Locale } from "@/lib/i18n";
 import { providerText, type ProviderDictionary } from "@/lib/i18n-provider";
 import { getAccountLocale } from "@/lib/locale-server";
 import type { VendorPickerRow } from "@/lib/types";
-import { MobileMenu } from "../shared/MobileMenu";
 import { AccountSwitcher, AccountSwitcherList, type AccountSide } from "../shared/AccountSwitcher";
-import { LanguageLinks } from "../shared/LanguageLinks";
-import { ThemeSelector } from "@/components/theme/ThemeSelector";
+import { HeaderBar } from "../shared/HeaderBar";
 
 // Page frame for the provider area: header, navigation rail and content.
 
@@ -213,58 +210,27 @@ function ProviderHeader({
     switcher: React.ReactNode;
 }) {
     return (
-        <header className="sticky top-0 z-40 border-b border-line bg-surface">
-            <div className="mx-auto flex h-16 max-w-[1440px] items-center gap-3 px-4 sm:px-6">
-                <Link href="/" className="flex shrink-0 items-center gap-2">
-                    <MapPin className="size-6 fill-brand-600 text-brand-600" strokeWidth={1.5} />
-                    <span className="text-xl font-bold tracking-tight text-brand-600 sm:text-[1.35rem]">
-                        {t(locale).brand}
-                    </span>
-                </Link>
-
-                <div className="ml-auto flex min-w-0 items-center gap-3 sm:gap-4">
-                    <nav aria-label="Language" className="hidden items-center gap-2 text-[0.8125rem] md:flex">
-                        <LanguageLinks locale={locale} variant="header" />
-                    </nav>
-
-                    {/* The theme and Log out are in the account menu. */}
-                    <AccountSwitcher
-                        locale={locale}
-                        userName={userName}
-                        avatarUrl={avatarUrl}
-                        side={side}
-                        businesses={businesses}
-                        businessPath={businessPath}
-                        extras={<AccountMenuExtras locale={locale} />}
-                    />
-
-                    {/* Mobile navigation and logout */}
-                    <MobileMenu locale={locale}>
-                        {mobileNav}
-
-                        <div className={mobileNav ? "mt-3 border-t border-line pt-3" : ""}>
-                            {switcher}
-                        </div>
-
-                        <div className="mt-3 border-t border-line px-3.5 pt-3">
-                            <p className="mb-2 text-[0.75rem] font-medium text-muted">
-                                {t(locale).appearance}
-                            </p>
-
-                            <ThemeSelector className="w-full" locale={locale} />
-                        </div>
-
-                        <nav aria-label="Language" className="mt-3 grid grid-cols-2 gap-2 border-t border-line pt-3 text-sm font-medium">
-                            <LanguageLinks locale={locale} variant="menu" />
-                        </nav>
-
-                        <div className="mt-3 border-t border-line px-3.5 pt-3">
-                            <LogoutButton locale={locale} />
-                        </div>
-                    </MobileMenu>
+        <HeaderBar
+            locale={locale}
+            account={
+                <AccountSwitcher
+                    locale={locale}
+                    userName={userName}
+                    avatarUrl={avatarUrl}
+                    side={side}
+                    businesses={businesses}
+                    businessPath={businessPath}
+                    extras={<AccountMenuExtras locale={locale} />}
+                />
+            }
+            menuNav={mobileNav}
+            menuAccount={
+                <div className="space-y-3">
+                    {switcher}
+                    <LogoutButton locale={locale} />
                 </div>
-            </div>
-        </header>
+            }
+        />
     );
 }
 

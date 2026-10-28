@@ -1,5 +1,6 @@
 import Link from "next/link";
 import { AppShell } from "@/components/public/AppShell";
+import { getAccountLocale } from "@/lib/locale-server";
 
 const TABS = [
     { key: "overview", label: "Overview", href: "/account" },
@@ -10,7 +11,7 @@ const TABS = [
     { key: "events", label: "My events", href: "/account/events" },
 ];
 
-export function AccountShell({
+export async function AccountShell({
     current,
     title,
     children,
@@ -19,8 +20,9 @@ export function AccountShell({
     title: string;
     children: React.ReactNode;
 }) {
+    // The frame (header, side menu, footer) follows the chosen language; the account pages are English for now.
     return (
-        <AppShell locale="en" current="/account">
+        <AppShell locale={await getAccountLocale()} current="/account">
             <h1 className="text-2xl font-bold tracking-tight">{title}</h1>
             {/* On phones the tabs wrap as buttons so every one stays visible; from sm up they are an underlined tab row. */}
             <nav aria-label="Account" className="mt-4 sm:border-b sm:border-line">
