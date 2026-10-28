@@ -155,6 +155,49 @@ test("a cover can be cropped again and again without reloading the page", async 
     }
 });
 
+// KAN-330: a saved cover is cropped again from the photo it was cut from, after a reload too, so it can
+// zoom back out to the whole photo.
+test("a saved cover can be cropped again from the whole photo, starting where it was left", async ({ page }) => {
+    const [before] = await sql<{ id: number; url: string }>(
+        "SELECT vendor_photo_id AS id, vendor_photo_url AS url FROM vendor_photos WHERE vendor_id = 1 ORDER BY vendor_photo_sort, vendor_photo_id LIMIT 1"
+    );
+    // An 1800 x 945 cover with no original kept yet, as a cover saved before originals were.
+    await page.goto("/");
+    const png = await page.evaluate(() => {
+        const canvas = document.createElement("canvas");
+        canvas.width = 1800;
+        canvas.height = 945;
+        const ctx = canvas.getContext("2d")!;
+        ctx.fillStyle = "#f59e0b";
+        ctx.fillRect(0, 0, 1800, 945);
+        return canvas.toDataURL("image/png").split(",")[1];
+    });
+    const large = `uploads/e2e-large-cover-${Date.now()}.png`;
+    fs.writeFileSync(path.join(UPLOAD_DIR, path.basename(large)), Buffer.from(png, "base64"));
+    await sql("UPDATE vendor_photos SET vendor_photo_url = $1, vendor_photo_original_url = NULL, vendor_photo_crop = NULL WHERE vendor_photo_id = $2", [large, before.id]);
+    try {
+        await page.goto("/vendors/dashboard/business?vendor=1");
+        const crop = page.getByRole("dialog", { name: "Position your cover photo" });
+        const zoom = crop.getByRole("slider", { name: "Zoom" });
+        await page.getByRole("button", { name: "Crop" }).click();
+        await zoom.fill("2");
+        await expect(crop.getByText("This crop: 900 × 473.", { exact: false })).toBeVisible();
+        await crop.getByRole("button", { name: "Use this cover" }).click();
+        await expect(page.getByText("Cover photo cropped.")).toBeVisible();
+
+        await page.reload();
+        await page.getByRole("button", { name: "Crop" }).click();
+        await expect(zoom).toHaveValue("2");
+        await expect(crop.getByText("This crop: 900 × 473.", { exact: false })).toBeVisible();
+        await zoom.fill("1");
+        await expect(crop.getByText("This crop: 1800 × 945.", { exact: false })).toBeVisible();
+        await crop.getByRole("button", { name: "Cancel" }).click();
+    } finally {
+        await sql("UPDATE vendor_photos SET vendor_photo_url = $1, vendor_photo_original_url = NULL, vendor_photo_crop = NULL WHERE vendor_photo_id = $2", [before.url, before.id]);
+        await sql("UPDATE vendors SET vendor_cover_url = $1 WHERE vendor_id = 1", [before.url]);
+    }
+});
+
 test("someone who runs a business is sent to it, not to registering another one", async ({ page }) => {
     await page.goto("/events");
     const nav = page.getByRole("navigation", { name: "Main" });

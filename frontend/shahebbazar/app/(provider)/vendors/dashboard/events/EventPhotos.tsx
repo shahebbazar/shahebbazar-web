@@ -5,12 +5,15 @@ import { useRouter } from "next/navigation";
 import { Crop, Loader2, Star, Trash2, Upload } from "lucide-react";
 import { BROWSER_API_BASE, browserAssetUrl } from "@/lib/apiBase";
 import { CoverCropDialog, type CropSource } from "@/components/provider/CoverCropDialog";
-import { coverQuality, type CoverQuality } from "@/lib/coverPhoto";
+import { coverQuality, type CoverQuality, type CropPosition } from "@/lib/coverPhoto";
 import type { EventPhoto } from "@/lib/types";
 import { PHOTO_TYPES, PHOTOS_MAX, photoProblem } from "./EventForm";
 
-/** The cover being cropped: the first of a new upload, or a saved photo re-cropped in place. */
-type Cropping = CropSource & ({ kind: "upload"; rest: File[] } | { kind: "replace"; photoId: number });
+/**
+ * The cover being cropped: the first of a new upload (`original` is the chosen file, kept with the
+ * cover), or a saved photo re-cropped in place from its original (KAN-330).
+ */
+type Cropping = CropSource & ({ kind: "upload"; original: File; rest: File[] } | { kind: "replace"; photoId: number });
 
 // A saved event's cover photo and gallery (KAN-298). Each change is saved straight away.
 export function EventPhotos({ eventId, initial }: { eventId: number; initial: EventPhoto[] }) {
@@ -24,8 +27,8 @@ export function EventPhotos({ eventId, initial }: { eventId: number; initial: Ev
     const input = useRef<HTMLInputElement>(null);
     const left = PHOTOS_MAX - photos.length;
 
-    /** Sends a change; true when it was saved. */
-    async function send(method: string, path: string, body?: FormData, done?: string): Promise<boolean> {
+    /** Sends a change; the photos as saved, or null when it failed (the message says why). */
+    async function send(method: string, path: string, body?: FormData, done?: string): Promise<EventPhoto[] | null> {
         setBusy(true);
         setMessage(null);
         try {
@@ -33,16 +36,16 @@ export function EventPhotos({ eventId, initial }: { eventId: number; initial: Ev
             const data = await res.json().catch(() => null);
             if (!res.ok) {
                 setMessage({ type: "error", text: data?.error ?? `Something went wrong (${res.status}).` });
-                return false;
+                return null;
             }
             setPhotos(data.photos);
             if (done) setMessage({ type: "success", text: done });
             // The cover is also the event's image on the pages around this one.
             router.refresh();
-            return true;
+            return data.photos;
         } catch {
             setMessage({ type: "error", text: "Could not reach the server. Try again." });
-            return false;
+            return null;
         } finally {
             setBusy(false);
         }
@@ -53,22 +56,46 @@ export function EventPhotos({ eventId, initial }: { eventId: number; initial: Ev
         setCropping(null);
     }
 
-    async function cropped(file: File) {
+    async function cropped(file: File, position: CropPosition) {
         if (!cropping) return;
         if (cropping.kind === "upload") {
-            const files = [file, ...cropping.rest];
+            const { original, rest } = cropping;
             closeCrop();
-            return sendFiles(files);
+            const saved = await sendFiles([file, ...rest]);
+            const cover = saved?.find((p) => p.photo_is_cover);
+            if (cover) await sendOriginal(cover.photo_id, original, position);
+            return;
         }
         const form = new FormData();
         form.append("photo", file);
+        form.append("crop", JSON.stringify(position));
         if (await send("PUT", `/${cropping.photoId}/file`, form, "Cover photo cropped.")) closeCrop();
     }
 
     function sendFiles(files: File[]) {
         const form = new FormData();
         for (const file of files) form.append("photos", file);
-        send("POST", "", form, `${files.length} photo${files.length === 1 ? "" : "s"} added.`);
+        return send("POST", "", form, `${files.length} photo${files.length === 1 ? "" : "s"} added.`);
+    }
+
+    /**
+     * Keeps the photo a new cover was cropped from. The cover is already saved, so if this fails the
+     * only loss is that cropping it again starts from the cropped cover.
+     */
+    async function sendOriginal(photoId: number, original: File, position: CropPosition) {
+        try {
+            const form = new FormData();
+            form.append("original", original);
+            form.append("crop", JSON.stringify(position));
+            const res = await fetch(`${BROWSER_API_BASE}/api/events/${eventId}/photos/${photoId}/original`, {
+                method: "PUT",
+                body: form,
+                credentials: "include",
+            });
+            if (res.ok) setPhotos((await res.json()).photos);
+        } catch {
+            // The cover itself is saved; see above.
+        }
     }
 
     function upload(files: File[]) {
@@ -82,7 +109,7 @@ export function EventPhotos({ eventId, initial }: { eventId: number; initial: Ev
         setMessage(null);
         // The first photo becomes the cover, so it is cropped to the share-card shape first.
         if (photos.length === 0) {
-            return setCropping({ kind: "upload", src: URL.createObjectURL(files[0]), name: files[0].name, rest: files.slice(1) });
+            return setCropping({ kind: "upload", src: URL.createObjectURL(files[0]), name: files[0].name, original: files[0], rest: files.slice(1) });
         }
         sendFiles(files);
     }
@@ -127,7 +154,9 @@ export function EventPhotos({ eventId, initial }: { eventId: number; initial: Ev
                                     onClick={() =>
                                         setCropping({
                                             kind: "replace",
-                                            src: browserAssetUrl(photo.photo_url) ?? "",
+                                            // From the photo it was cut from, where it was left, when that is kept.
+                                            src: browserAssetUrl(photo.photo_original_url ?? photo.photo_url) ?? "",
+                                            start: (photo.photo_original_url && photo.photo_crop) || undefined,
                                             name: `event-cover-${photo.photo_id}`,
                                             photoId: photo.photo_id,
                                         })

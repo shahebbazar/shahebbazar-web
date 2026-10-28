@@ -23,6 +23,9 @@ export const COVER_ADVICE: Record<CoverQuality, string> = {
     small: "Too small to use as a cover: shared links would show it as a blurry thumbnail. Use a photo at least 600 × 315, ideally 1200 × 630.",
 };
 
+/** Where a crop was made, in the original photo's pixels, so cropping it again starts there (KAN-330). */
+export type CropPosition = { zoom: number; centre: { x: number; y: number } };
+
 /** The part of the photo that is kept, in the photo's own pixels. */
 export type CropArea = { x: number; y: number; width: number; height: number };
 

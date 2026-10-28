@@ -4,9 +4,9 @@ import { useEffect, useRef, useState, useTransition } from "react";
 import { useRouter } from "next/navigation";
 import { Crop, ImagePlus, Loader2, X } from "lucide-react";
 import { BROWSER_API_BASE } from "@/lib/apiBase";
-import { CoverCropDialog, type CropSource } from "@/components/provider/CoverCropDialog";
+import { CoverCropDialog, type CropPosition, type CropSource } from "@/components/provider/CoverCropDialog";
 import { EVENT_TYPES } from "@/lib/events";
-import type { VendorEvent } from "@/lib/types";
+import type { EventPhoto, VendorEvent } from "@/lib/types";
 import { saveEvent, type EventFormBody } from "./actions";
 
 // Adding or editing one of the business's events (KAN-298). A new event's photos are chosen here
@@ -53,6 +53,14 @@ export function photoProblem(file: File): string | null {
     return null;
 }
 
+/** A chosen photo and its preview; a cropped cover also has the photo it was cut from, and where. */
+type ChosenPhoto = { file: File; url: string; original?: { file: File; url: string; start: CropPosition } };
+
+function releasePhoto(photo: ChosenPhoto) {
+    URL.revokeObjectURL(photo.url);
+    if (photo.original) URL.revokeObjectURL(photo.original.url);
+}
+
 export function EventForm({
     vendorId,
     areas,
@@ -69,18 +77,20 @@ export function EventForm({
     const [form, setForm] = useState(() => initialForm(event, defaultAreaId));
     const [errors, setErrors] = useState<Record<string, string>>({});
     const [message, setMessage] = useState<{ type: "error" | "success"; text: string } | null>(null);
-    // Chosen photos with a preview address each, released when removed or when the form goes away.
-    const [chosen, setChosen] = useState<{ file: File; url: string }[]>([]);
+    // Chosen photos with a preview address each, released when removed or when the form goes away. The
+    // cropped cover also keeps the photo it was cut from and where, so cropping it again can zoom back
+    // out to the whole photo (KAN-330).
+    const [chosen, setChosen] = useState<ChosenPhoto[]>([]);
     const [pending, startTransition] = useTransition();
     const chosenRef = useRef(chosen);
     useEffect(() => {
         chosenRef.current = chosen;
     }, [chosen]);
-    useEffect(() => () => chosenRef.current.forEach((c) => URL.revokeObjectURL(c.url)), []);
+    useEffect(() => () => chosenRef.current.forEach(releasePhoto), []);
     const files = chosen.map((c) => c.file);
     // The cover being cropped: the first of newly chosen photos (`rest` are the others), or the current
-    // cover again (`rest` null).
-    const [cropping, setCropping] = useState<(CropSource & { rest: File[] | null }) | null>(null);
+    // cover again (`rest` null); `original` is the photo being cropped, kept with the cover.
+    const [cropping, setCropping] = useState<(CropSource & { original: File; rest: File[] | null }) | null>(null);
 
     const set =<K extends keyof EventFormBody>(key: K, value: EventFormBody[K]) => setForm((f) => ({ ...f, [key]: value }));
 
@@ -95,32 +105,40 @@ export function EventForm({
         setMessage(null);
         // The first photo is the cover, so it is cropped to the share-card shape first.
         if (chosen.length === 0) {
-            return setCropping({ src: URL.createObjectURL(added[0]), name: added[0].name, rest: added.slice(1) });
+            return setCropping({ src: URL.createObjectURL(added[0]), name: added[0].name, original: added[0], rest: added.slice(1) });
         }
         setChosen((current) => [...current, ...added.map((file) => ({ file, url: URL.createObjectURL(file) }))]);
     }
 
     function closeCrop() {
-        // A re-crop shows the cover's own preview, which stays in use.
+        // Cancelling the first crop drops the photo; a re-crop opens the original, which stays in use.
         if (cropping?.rest) URL.revokeObjectURL(cropping.src);
         setCropping(null);
     }
 
-    function cropped(cover: File) {
+    function cropped(cover: File, start: CropPosition) {
         if (!cropping) return;
-        const coverEntry = { file: cover, url: URL.createObjectURL(cover) };
+        // `cropping.src` is the original photo either way: just chosen, or kept from the first crop.
+        const coverEntry = { file: cover, url: URL.createObjectURL(cover), original: { file: cropping.original, url: cropping.src, start } };
         if (cropping.rest) {
             const rest = cropping.rest.map((file) => ({ file, url: URL.createObjectURL(file) }));
             setChosen([coverEntry, ...rest]);
         } else {
-            URL.revokeObjectURL(chosen[0].url);
+            // The old preview goes, unless it was the photo just cropped (a cover never cropped before).
+            if (chosen[0].url !== cropping.src) URL.revokeObjectURL(chosen[0].url);
             setChosen((current) => [coverEntry, ...current.slice(1)]);
         }
-        closeCrop();
+        setCropping(null);
+    }
+
+    function cropAgain() {
+        const cover = chosen[0];
+        const original = cover.original ?? { file: cover.file, url: cover.url, start: undefined };
+        setCropping({ src: original.url, name: original.file.name, start: original.start, original: original.file, rest: null });
     }
 
     function removeFile(index: number) {
-        URL.revokeObjectURL(chosen[index].url);
+        releasePhoto(chosen[index]);
         setChosen((current) => current.filter((_, j) => j !== index));
     }
 
@@ -130,9 +148,23 @@ export function EventForm({
             const body = new FormData();
             for (const file of files) body.append("photos", file);
             const res = await fetch(`${BROWSER_API_BASE}/api/events/${eventId}/photos`, { method: "POST", body, credentials: "include" });
-            if (res.ok) return null;
             const data = await res.json().catch(() => null);
-            return data?.error ?? "The photos could not be uploaded.";
+            if (!res.ok) return data?.error ?? "The photos could not be uploaded.";
+            // The cover keeps the photo it was cropped from. If that fails the event and its photos are
+            // still saved; cropping the cover again then starts from the cropped cover.
+            const cover = (data?.photos as EventPhoto[] | undefined)?.find((p) => p.photo_is_cover);
+            const original = chosen[0]?.original;
+            if (cover && original) {
+                const form = new FormData();
+                form.append("original", original.file);
+                form.append("crop", JSON.stringify(original.start));
+                await fetch(`${BROWSER_API_BASE}/api/events/${eventId}/photos/${cover.photo_id}/original`, {
+                    method: "PUT",
+                    body: form,
+                    credentials: "include",
+                }).catch(() => null);
+            }
+            return null;
         } catch {
             return "The photos could not be uploaded.";
         }
@@ -434,7 +466,7 @@ export function EventForm({
                                         </span>
                                         <button
                                             type="button"
-                                            onClick={() => setCropping({ src, name: chosen[0].file.name, rest: null })}
+                                            onClick={cropAgain}
                                             className="absolute bottom-1.5 right-1.5 inline-flex items-center gap-1 rounded-md bg-surface/95 px-2 py-1 text-[0.6875rem] font-medium text-ink hover:bg-surface"
                                         >
                                             <Crop className="size-3" /> Crop

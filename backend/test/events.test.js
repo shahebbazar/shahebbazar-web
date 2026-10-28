@@ -91,6 +91,7 @@ describe("access control", () => {
         ["upload event photos", "POST", (id) => `/events/${id}/photos`, { photos: true }],
         ["choose the cover", "PUT", (id) => `/events/${id}/photos/1/cover`, {}],
         ["replace a photo's file", "PUT", (id) => `/events/${id}/photos/1/file`, { photos: true }],
+        ["keep the cover's original", "PUT", (id) => `/events/${id}/photos/1/original`, { photos: true }],
         ["remove an event photo", "DELETE", (id) => `/events/${id}/photos/1`, {}],
         ["message people going", "POST", (id) => `/events/${id}/message`, { json: { body: "Hello" } }],
     ];
@@ -276,19 +277,44 @@ describe("event photos", () => {
         assert.equal(row.event_image_url, second.photo_url);
     });
 
-    it("replacing the cover's file keeps it the cover and removes the old file", async () => {
+    it("replacing the cover's file keeps it the cover, and the file it replaced becomes its original", async () => {
         const cover = (await call("GET", `/events/${eventId}/manage`, { as: "owner" })).data.photos[0];
         const form = new FormData();
         form.append("photo", new Blob([JPEG], { type: "image/jpeg" }), "cropped.jpg");
+        form.append("crop", JSON.stringify({ zoom: 1.25, centre: { x: 8, y: 4 } }));
         const res = await call("PUT", `/events/${eventId}/photos/${cover.photo_id}/file`, { as: "owner", form });
         assert.equal(res.status, 200, JSON.stringify(res.data));
         assert.equal(res.data.photos.length, 2);
         assert.equal(res.data.photos[0].photo_id, cover.photo_id);
         assert.equal(res.data.photos[0].photo_is_cover, true);
         assert.notEqual(res.data.photos[0].photo_url, cover.photo_url);
-        assert.equal(fs.existsSync(path.join(UPLOAD_DIR, path.basename(cover.photo_url))), false);
+        // It had no original yet, so the file it replaced is kept as one, to crop again from (KAN-330).
+        assert.equal(res.data.photos[0].photo_original_url, cover.photo_url);
+        assert.deepEqual(res.data.photos[0].photo_crop, { zoom: 1.25, centre: { x: 8, y: 4 } });
+        assert.ok(fs.existsSync(path.join(UPLOAD_DIR, path.basename(cover.photo_url))));
         const [row] = await query("SELECT event_image_url FROM events WHERE event_id = $1", [eventId]);
         assert.equal(row.event_image_url, res.data.photos[0].photo_url);
+    });
+
+    it("the cover's original can be replaced, and cropping again then deletes only the old crop", async () => {
+        const cover = (await call("GET", `/events/${eventId}/manage`, { as: "owner" })).data.photos[0];
+        const original = new FormData();
+        original.append("original", new Blob([JPEG], { type: "image/jpeg" }), "whole.jpg");
+        original.append("crop", JSON.stringify({ zoom: 2, centre: { x: 3, y: 2 } }));
+        const kept = await call("PUT", `/events/${eventId}/photos/${cover.photo_id}/original`, { as: "owner", form: original });
+        assert.equal(kept.status, 200, JSON.stringify(kept.data));
+        const withOriginal = kept.data.photos[0];
+        assert.equal(withOriginal.photo_url, cover.photo_url);
+        assert.notEqual(withOriginal.photo_original_url, cover.photo_original_url);
+        assert.equal(fs.existsSync(path.join(UPLOAD_DIR, path.basename(cover.photo_original_url))), false, "the earlier original is deleted");
+
+        const form = new FormData();
+        form.append("photo", new Blob([JPEG], { type: "image/jpeg" }), "cropped-again.jpg");
+        const again = (await call("PUT", `/events/${eventId}/photos/${cover.photo_id}/file`, { as: "owner", form })).data.photos[0];
+        assert.equal(again.photo_original_url, withOriginal.photo_original_url);
+        assert.equal(again.photo_crop, null, "no crop sent, so none is kept");
+        assert.equal(fs.existsSync(path.join(UPLOAD_DIR, path.basename(cover.photo_url))), false);
+        assert.ok(fs.existsSync(path.join(UPLOAD_DIR, path.basename(again.photo_original_url))));
     });
 
     it("replacing a photo that isn't the event's gives 404 and keeps no file", async () => {

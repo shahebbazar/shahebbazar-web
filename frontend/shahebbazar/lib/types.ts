@@ -1,5 +1,7 @@
 // API response contract.
 
+import type { CropPosition } from "./coverPhoto";
+
 export type OpenState = "open" | "closed" | null;
 
 export interface CategoryTile {
@@ -68,6 +70,9 @@ export interface EventPhoto {
     photo_id: number;
     photo_url: string;
     photo_is_cover: boolean;
+    /** For the organiser: the photo a cropped cover was cut from, and where (KAN-330). */
+    photo_original_url?: string | null;
+    photo_crop?: CropPosition | null;
 }
 
 export interface HomePayload {

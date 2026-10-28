@@ -12,9 +12,12 @@ import {
     loadImage,
     maxZoom,
     MIN_ZOOM_ROOM,
+    type CropPosition,
 } from "@/lib/coverPhoto";
 
-export type CropSource = { src: string; name: string };
+export type { CropPosition };
+
+export type CropSource = { src: string; name: string; start?: CropPosition };
 
 const ADVICE_STYLE = {
     good: "bg-success-bg text-success-ink",
@@ -34,7 +37,7 @@ export function CoverCropDialog({
     source: CropSource | null;
     busy?: boolean;
     onCancel: () => void;
-    onCropped: (file: File) => void;
+    onCropped: (file: File, position: CropPosition) => void;
 }) {
     const ref = useRef<HTMLDialogElement>(null);
     const frame = useRef<HTMLDivElement>(null);
@@ -71,8 +74,9 @@ export function CoverCropDialog({
                 const loaded = await loadImage(src);
                 if (cancelled) return;
                 setImg(loaded);
-                setZoom(1);
-                setCentre({ x: loaded.naturalWidth / 2, y: loaded.naturalHeight / 2 });
+                // The last crop of this photo when there is one, else the whole photo.
+                setZoom(source.start?.zoom ?? 1);
+                setCentre(source.start?.centre ?? { x: loaded.naturalWidth / 2, y: loaded.naturalHeight / 2 });
             } catch {
                 if (!cancelled) setError("The photo could not be opened. Try another one.");
             }
@@ -105,7 +109,10 @@ export function CoverCropDialog({
         if (!img || !area || !source || quality === "small") return;
         setSaving(true);
         try {
-            onCropped(await cropToFile(img, area, source.name));
+            onCropped(await cropToFile(img, area, source.name), {
+                zoom,
+                centre: { x: area.x + area.width / 2, y: area.y + area.height / 2 },
+            });
         } catch (err) {
             setError(err instanceof Error ? err.message : "The photo could not be cropped.");
         } finally {

@@ -174,25 +174,64 @@ describe("business photos", () => {
         assert.equal((await call("DELETE", `/vendors/6/photos/${photo.id}`, { as: "otherVendor" })).status, 404);
     });
 
-    it("replacing its file (a cropped cover) keeps its place and updates the cover", async () => {
+    const exists = (stored) => fs.existsSync(path.join(UPLOAD_DIR, path.basename(stored)));
+    const cropped = (crop) => {
         const form = new FormData();
         form.append("photo", new Blob([PNG], { type: "image/png" }), "cropped.png");
-        assert.equal((await call("PUT", `/vendors/${MANGO}/photos/${photo.id}/file`, { as: "otherVendor", form })).status, 403);
-        const res = await call("PUT", `/vendors/${MANGO}/photos/${photo.id}/file`, { as: "owner", form });
+        if (crop !== undefined) form.append("crop", crop);
+        return form;
+    };
+
+    it("replacing its file (a cropped cover) keeps its place, updates the cover, and keeps the file it replaced as the original", async () => {
+        assert.equal((await call("PUT", `/vendors/${MANGO}/photos/${photo.id}/file`, { as: "otherVendor", form: cropped() })).status, 403);
+        const crop = { zoom: 1.5, centre: { x: 40, y: 20 } };
+        const res = await call("PUT", `/vendors/${MANGO}/photos/${photo.id}/file`, { as: "owner", form: cropped(JSON.stringify(crop)) });
         assert.equal(res.status, 200, JSON.stringify(res.data));
         const [replaced] = res.data.photos;
         assert.equal(replaced.id, photo.id);
         assert.notEqual(replaced.url, photo.url);
-        assert.equal(fs.existsSync(path.join(UPLOAD_DIR, path.basename(photo.url))), false);
+        // Uploaded before originals were kept, so the photo it was cropped from is the file it replaced.
+        assert.equal(replaced.original_url, photo.url);
+        assert.deepEqual(replaced.crop, crop);
+        assert.ok(exists(photo.url));
         const [v] = await query("SELECT vendor_cover_url FROM vendors WHERE vendor_id = $1", [MANGO]);
         assert.equal(v.vendor_cover_url, replaced.url);
         photo = replaced;
     });
 
-    it("removing it deletes the file and clears the cover", async () => {
+    it("the photo a cover was cropped from can be kept with it, replacing an earlier one (KAN-330)", async () => {
+        const form = new FormData();
+        form.append("original", new Blob([PNG], { type: "image/png" }), "whole.png");
+        form.append("crop", JSON.stringify({ zoom: 2, centre: { x: 10, y: 5 } }));
+        assert.equal((await call("PUT", `/vendors/${MANGO}/photos/${photo.id}/original`, { as: "otherVendor", form })).status, 403);
+        const res = await call("PUT", `/vendors/${MANGO}/photos/${photo.id}/original`, { as: "owner", form });
+        assert.equal(res.status, 200, JSON.stringify(res.data));
+        const [kept] = res.data.photos;
+        assert.equal(kept.url, photo.url, "the cover itself is unchanged");
+        assert.notEqual(kept.original_url, photo.original_url);
+        assert.deepEqual(kept.crop, { zoom: 2, centre: { x: 10, y: 5 } });
+        assert.ok(exists(kept.original_url));
+        assert.equal(exists(photo.original_url), false, "the earlier original is deleted");
+        assert.equal((await call("PUT", `/vendors/${MANGO}/photos/999999/original`, { as: "owner", form })).status, 404);
+        photo = kept;
+    });
+
+    it("cropping it again keeps the original and deletes only the old crop; a bad crop is ignored", async () => {
+        const res = await call("PUT", `/vendors/${MANGO}/photos/${photo.id}/file`, { as: "owner", form: cropped("not json") });
+        assert.equal(res.status, 200, JSON.stringify(res.data));
+        const [again] = res.data.photos;
+        assert.equal(again.original_url, photo.original_url);
+        assert.equal(again.crop, null);
+        assert.equal(exists(photo.url), false);
+        assert.ok(exists(again.original_url));
+        photo = again;
+    });
+
+    it("removing it deletes the file and its original, and clears the cover", async () => {
         const res = await call("DELETE", `/vendors/${MANGO}/photos/${photo.id}`, { as: "owner" });
         assert.equal(res.status, 204, JSON.stringify(res.data));
-        assert.equal(fs.existsSync(path.join(UPLOAD_DIR, path.basename(photo.url))), false);
+        assert.equal(exists(photo.url), false);
+        assert.equal(exists(photo.original_url), false);
         const [v] = await query("SELECT vendor_cover_url FROM vendors WHERE vendor_id = $1", [MANGO]);
         assert.equal(v.vendor_cover_url, null);
         assert.equal((await call("DELETE", `/vendors/${MANGO}/photos/${photo.id}`, { as: "owner" })).status, 404);

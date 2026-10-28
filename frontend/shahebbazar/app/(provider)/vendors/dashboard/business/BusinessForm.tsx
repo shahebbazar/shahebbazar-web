@@ -16,11 +16,10 @@ import { formatLocalPhone, formatPhone, toStoredPhone } from "@/lib/format";
 import { refreshPublicPages, saveBusinessProfile } from "./actions";
 import { Field, Section, borderFor, describedBy, inputClass } from "./formParts";
 import { DAY_NAMES, HoursSection, type DayHours } from "./HoursSection";
-import { ImagesSection, imageSrc } from "./ImagesSection";
+import { ImagesSection, imageSrc, type Photo } from "./ImagesSection";
 
 // Add / Edit Business, built to UIs/…18.25.27 (3).jpeg.
 
-type Photo = { id: number; url: string };
 type FactRow = FactEntry & { key: number };
 
 const ALT_PHONE_HINTS: Record<PhoneType, string> = {

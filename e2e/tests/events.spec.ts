@@ -4,6 +4,7 @@
 
 import path from "node:path";
 import { test, expect, signIn, sql, userIdOf, expectNoSideScroll } from "../fixtures";
+import type { Page } from "@playwright/test";
 import { ROOT } from "../env";
 
 const PHOTO = path.join(ROOT, "database", "seed-assets", "seed-business-rajshahi-mango-traders.jpg");
@@ -132,25 +133,23 @@ test("a photo too small for a cover can't be used as one", async ({ page, contex
     await expect(page.getByRole("img", { name: "Chosen photo 1" })).toBeHidden();
 });
 
+/** A plain photo of the given size, drawn in the browser, ready for setInputFiles. */
+async function drawnPhoto(page: Page, width: number, height: number) {
+    const data = await page.evaluate(([w, h]) => {
+        const canvas = document.createElement("canvas");
+        canvas.width = w;
+        canvas.height = h;
+        const ctx = canvas.getContext("2d")!;
+        ctx.fillStyle = "#3b82f6";
+        ctx.fillRect(0, 0, w, h);
+        return canvas.toDataURL("image/png").split(",")[1];
+    }, [width, height]);
+    return { name: `photo-${width}.png`, mimeType: "image/png", buffer: Buffer.from(data, "base64") };
+}
+
 // KAN-326: the zoom slider moved in steps of 0.01, so a photo only just big enough had three stops.
 test("the cover zoom moves smoothly, and says why when a photo is too small to zoom", async ({ page, context }) => {
-    // A plain photo of the given size, drawn in the browser.
-    const photo = async (width: number, height: number) => ({
-        name: `photo-${width}.png`,
-        mimeType: "image/png",
-        buffer: Buffer.from(
-            await page.evaluate(([w, h]) => {
-                const canvas = document.createElement("canvas");
-                canvas.width = w;
-                canvas.height = h;
-                const ctx = canvas.getContext("2d")!;
-                ctx.fillStyle = "#3b82f6";
-                ctx.fillRect(0, 0, w, h);
-                return canvas.toDataURL("image/png").split(",")[1];
-            }, [width, height]),
-            "base64"
-        ),
-    });
+    const photo = (width: number, height: number) => drawnPhoto(page, width, height);
     await signIn(context, "owner");
     await page.goto("/vendors/dashboard/events/new?vendor=1");
     const crop = page.getByRole("dialog", { name: "Position your cover photo" });
@@ -169,6 +168,65 @@ test("the cover zoom moves smoothly, and says why when a photo is too small to z
     await zoom.fill("1.234");
     await expect(crop.getByText("This crop: 1459 × 766.", { exact: false })).toBeVisible();
     await crop.getByRole("button", { name: "Cancel" }).click();
+});
+
+// KAN-330: cropping the chosen cover again opened the cropped file, so it couldn't zoom back out.
+test("cropping a new event's cover again starts where it was left and can zoom back out to the whole photo", async ({ page, context }) => {
+    await signIn(context, "owner");
+    await page.goto("/vendors/dashboard/events/new?vendor=1");
+    const crop = page.getByRole("dialog", { name: "Position your cover photo" });
+    const zoom = crop.getByRole("slider", { name: "Zoom" });
+
+    await page.getByLabel("Choose event photos").setInputFiles(await drawnPhoto(page, 1800, 945));
+    await zoom.fill("2");
+    await expect(crop.getByText("This crop: 900 × 473.", { exact: false })).toBeVisible();
+    await crop.getByRole("button", { name: "Use this cover" }).click();
+    await expect(crop).toBeHidden();
+
+    await page.getByRole("button", { name: "Crop" }).click();
+    await expect(zoom).toHaveValue("2");
+    await expect(crop.getByText("This crop: 900 × 473.", { exact: false })).toBeVisible();
+    await zoom.fill("1");
+    await expect(crop.getByText("This crop: 1800 × 945.", { exact: false })).toBeVisible();
+    await crop.getByRole("button", { name: "Use this cover" }).click();
+    await expect(crop).toBeHidden();
+    await expect(page.getByRole("img", { name: "Chosen photo 1" })).toBeVisible();
+});
+
+test("once the event is saved, its cover is still cropped from the whole photo it was cut from", async ({ page, context }) => {
+    const title = `E2E Cover Original ${Date.now() % 100000}`;
+    await signIn(context, "owner");
+    try {
+        await page.goto("/vendors/dashboard/events/new?vendor=1");
+        await page.getByLabel("Event name").fill(title);
+        await page.getByLabel(/^Details/).fill("A test event whose cover is cropped, saved and cropped again.");
+        await page.getByLabel(/^Starts/).fill(dhakaLocal(9, 10));
+        await page.getByLabel(/^Ends/).fill(dhakaLocal(9, 12));
+        await page.getByLabel(/^Venue or address/).fill("Shaheb Bazar Zero Point");
+        const crop = page.getByRole("dialog", { name: "Position your cover photo" });
+        const zoom = crop.getByRole("slider", { name: "Zoom" });
+        await page.getByLabel("Choose event photos").setInputFiles(await drawnPhoto(page, 1800, 945));
+        await zoom.fill("2");
+        await crop.getByRole("button", { name: "Use this cover" }).click();
+        await page.getByRole("button", { name: "Add event" }).click();
+        await expect(page.getByText("Event added and live.")).toBeVisible();
+
+        const [photo] = await sql<{ photo_original_url: string | null }>(
+            "SELECT p.photo_original_url FROM event_photos p JOIN events e USING (event_id) WHERE e.event_title = $1 AND p.photo_is_cover",
+            [title]
+        );
+        expect(photo.photo_original_url, "the original is saved with the cover").toBeTruthy();
+
+        await page.reload();
+        await page.getByRole("button", { name: "Crop" }).click();
+        await expect(zoom).toHaveValue("2");
+        await zoom.fill("1");
+        await expect(crop.getByText("This crop: 1800 × 945.", { exact: false })).toBeVisible();
+        await crop.getByRole("button", { name: "Use this cover" }).click();
+        await expect(page.getByText("Cover photo cropped.")).toBeVisible();
+    } finally {
+        await sql("DELETE FROM events WHERE event_title = $1", [title]);
+    }
 });
 
 test("shared events get a full-size card with the cover photo, in the page's language", async ({ page, request }) => {
