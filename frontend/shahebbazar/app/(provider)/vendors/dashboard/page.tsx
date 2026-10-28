@@ -2,12 +2,11 @@ import type { Metadata } from "next";
 import Link from "next/link";
 import { cookies } from "next/headers";
 import { notFound, redirect } from "next/navigation";
-import { ChevronRight } from "lucide-react";
 import { authenticatedApiGet } from "@/lib/auth-server";
 import type { AuthUser } from "@/lib/auth-client";
-import { ACTIVE_BUSINESS_COOKIE, switchHref } from "@/lib/activeBusiness";
+import { ACTIVE_BUSINESS_COOKIE } from "@/lib/activeBusiness";
 import { localiseDigits } from "@/lib/format";
-import { fill, t, type Locale } from "@/lib/i18n";
+import { fill, type Locale } from "@/lib/i18n";
 import { providerText } from "@/lib/i18n-provider";
 import { getAccountLocale } from "@/lib/locale-server";
 import type {
@@ -32,7 +31,6 @@ import {
     QuickActions,
     StatCards,
 } from "@/components/provider/DashboardCards";
-import { StatusBadge } from "@/components/provider/StatusBadge";
 import { TrendChart } from "@/components/provider/TrendChart";
 
 // Provider dashboard, built to UIs/…18.25.27 (2).jpeg.
@@ -61,22 +59,18 @@ export default async function ProviderDashboardPage({
                 "/vendor-account/businesses"
             )) ?? [];
 
-        const [onlyVendor] = vendors;
-
-        if (vendors.length === 1 && onlyVendor) {
-            redirect(providerHref("/vendors/dashboard", onlyVendor.vendor_id));
-        }
-
-        // Reopen the business they last worked on, if they still run it.
+        // Straight to a business: the one they last worked on if they still run it, else their first,
+        // which is an approved one whenever they have one (the API lists those first).
+        // The account switcher in the header moves between them, so a page to choose one first only
+        // got in the way (KAN-334). The picker is left for someone with no business any more.
         const remembered = Number((await cookies()).get(ACTIVE_BUSINESS_COOKIE)?.value);
-        if (vendors.some((v) => v.vendor_id === remembered)) {
-            redirect(providerHref("/vendors/dashboard", remembered));
-        }
+        const open = vendors.find((v) => v.vendor_id === remembered) ?? vendors[0];
+        if (open) redirect(providerHref("/vendors/dashboard", open.vendor_id));
 
         const session = await authenticatedApiGet<{ user: AuthUser }>("/auth/me");
         return (
             <PickerShell userName={session?.user.user_name ?? ""} avatarUrl={session?.user.user_avatar_url}>
-                <BusinessPicker vendors={vendors} locale={locale} />
+                <NoBusiness locale={locale} />
             </PickerShell>
         );
     }
@@ -234,47 +228,18 @@ function AnalyticsOverview({ data, locale }: { data: VendorDashboard; locale: Lo
     );
 }
 
-// A simple page that lists the businesses connected to the signed-in provider account.
-function BusinessPicker({ vendors, locale }: { vendors: VendorPickerRow[]; locale: Locale }) {
+// For a business account that no longer runs any business, such as a manager who was removed. Anyone
+// who runs one goes straight to it.
+function NoBusiness({ locale }: { locale: Locale }) {
     const copy = providerText(locale);
     return (
         <main className="mx-auto w-full max-w-xl px-4 py-12">
             <h1 className="text-[1.5rem] font-bold tracking-tight">
                 {copy.chooseTitle}
             </h1>
-
-            <p className="mt-2 text-[0.875rem] leading-relaxed text-muted">
-                {copy.chooseIntro}
+            <p className="form-status-error mt-6">
+                {copy.chooseNone}
             </p>
-
-            {vendors.length === 0 ? (
-                <p className="form-status-error mt-6">
-                    {copy.chooseNone}
-                </p>
-            ) : (
-                <ul className="mt-6 divide-y divide-line overflow-hidden rounded-xl border border-line bg-surface shadow-card">
-                    {vendors.map((vendor) => (
-                        <li key={vendor.vendor_id}>
-                            <Link
-                                href={switchHref(vendor.vendor_id)}
-                                className="flex items-center gap-3 px-4 py-3 hover:bg-surface-2"
-                            >
-                                <span className="min-w-0 flex-1 truncate text-[0.9375rem] font-medium">
-                                    {vendor.vendor_name}
-                                </span>
-
-                                {vendor.member_role === "manager" && (
-                                    <span className="text-[0.75rem] text-muted">{t(locale).accountRoleManager}</span>
-                                )}
-
-                                <StatusBadge status={vendor.vendor_status} locale={locale} />
-
-                                <ChevronRight className="size-4 shrink-0 text-soft" />
-                            </Link>
-                        </li>
-                    ))}
-                </ul>
-            )}
         </main>
     );
 }

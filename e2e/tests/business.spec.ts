@@ -2,7 +2,7 @@
 
 import fs from "node:fs";
 import path from "node:path";
-import { test, expect, setApproval, signIn, sql, expectNoSideScroll, userIdOf } from "../fixtures";
+import { test, expect, fillBusinessRegistration, setApproval, signIn, sql, expectNoSideScroll, userIdOf } from "../fixtures";
 import { ROOT, UPLOAD_DIR } from "../env";
 
 test.beforeEach(async ({ context }) => {
@@ -35,16 +35,48 @@ test("the product form lists each category followed by its own subcategories", a
     }
 });
 
-test("an owner of two businesses can still leave the business picker @phone", async ({ page, context }) => {
-    await signIn(context, "twoBusinesses"); // replaces the owner's session from beforeEach
+// KAN-334: an owner of two businesses was shown a page to choose one first, though the account
+// switcher in the header already moves between them.
+test("an owner of two businesses goes straight to an approved one, and the dashboard reopens the one they switched to @phone", async ({ page, context }) => {
+    const wide = (page.viewportSize()?.width ?? 1280) >= 1024;
+    await signIn(context, "twoBusinesses"); // Silk House, and Cloth Store waiting for approval
     await page.goto("/vendors/dashboard");
-    await expect(page.getByRole("heading", { name: "Choose a business" })).toBeVisible();
-    await expect(page.getByRole("banner").getByRole("link", { name: "Shahebbazar" })).toBeVisible();
-    // The way out: the account menu in the header (with Log out in it), or the menu drawer on a phone.
-    await expect(page.getByRole("banner").locator("summary").filter({ visible: true }).or(page.getByRole("button", { name: /menu/i })).first()).toBeVisible();
+    await expect(page).toHaveURL(/\/vendors\/dashboard\?vendor=\d+$/);
+    await expect(page.getByRole("heading", { name: "Choose a business" })).toHaveCount(0);
+    // Silk House, the approved one, though Cloth Store comes first in the alphabet.
+    await expect(page.locator("main")).toContainText("Shaheb Bazar Silk House");
     await expectNoSideScroll(page);
+
+    // The switcher lists the customer account, then the businesses, approved ones first.
+    if (wide) await page.locator("summary").filter({ visible: true }).first().click();
+    else await page.getByRole("button", { name: /menu/i }).click();
+    const accounts = page.locator('a[href="/account"], a[href^="/vendors/switch"]').filter({ visible: true });
+    // Each link starts with its picture: a photo, or a first letter when there is none.
+    await expect(accounts).toHaveText([/Customer account$/, /Shaheb Bazar Silk House$/, /Shaheb Bazar Cloth Store$/]);
+
+    // After moving to the other business, the dashboard opens it again.
+    await page.getByRole("link", { name: "Shaheb Bazar Cloth Store" }).filter({ visible: true }).first().click();
+    await expect(page.locator("main")).toContainText("Shaheb Bazar Cloth Store");
+    await page.goto("/vendors/dashboard");
+    await expect(page.locator("main")).toContainText("Shaheb Bazar Cloth Store");
     await page.setViewportSize({ width: 360, height: 780 }); // narrower than the test phone, as many are
     await expectNoSideScroll(page);
+});
+
+test("registering another business opens it, and the dashboard reopens it afterwards (KAN-334)", async ({ page }) => {
+    const name = `E2E Second Shop ${Date.now() % 100000}`;
+    try {
+        await page.goto("/vendors/register");
+        await fillBusinessRegistration(page, { name, phone: "01711000005" });
+        await page.getByRole("button", { name: "Register business" }).click();
+        await expect(page).toHaveURL(/\/vendors\/dashboard\?vendor=\d+$/);
+        await expect(page.locator("main")).toContainText(name);
+        await page.goto("/vendors/dashboard");
+        await expect(page).toHaveURL(/\/vendors\/dashboard\?vendor=\d+$/);
+        await expect(page.locator("main")).toContainText(name);
+    } finally {
+        await sql("DELETE FROM vendors WHERE vendor_name = $1", [name]);
+    }
 });
 
 test("switching business redirects within the site's own address", async ({ page }) => {
