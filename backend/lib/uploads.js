@@ -123,9 +123,9 @@ async function removeUnreferencedFiles(db, storedPaths) {
         if (!stored.startsWith("uploads/")) continue;
         const inUse = await db.query(
             `SELECT 1 FROM listing_photos WHERE photo_url = $1
-             UNION ALL SELECT 1 FROM vendor_photos WHERE vendor_photo_url = $1
+             UNION ALL SELECT 1 FROM vendor_photos WHERE vendor_photo_url = $1 OR vendor_photo_original_url = $1
              UNION ALL SELECT 1 FROM vendors WHERE vendor_logo_url = $1 OR vendor_cover_url = $1
-             UNION ALL SELECT 1 FROM event_photos WHERE photo_url = $1
+             UNION ALL SELECT 1 FROM event_photos WHERE photo_url = $1 OR photo_original_url = $1
              UNION ALL SELECT 1 FROM events WHERE event_image_url = $1
              UNION ALL SELECT 1 FROM users WHERE user_avatar_url = $1
              LIMIT 1`,
@@ -137,8 +137,26 @@ async function removeUnreferencedFiles(db, storedPaths) {
     }
 }
 
+/**
+ * Where a cover was cropped, from the form field `crop` as the cropper sends it:
+ * {"zoom":1.5,"centre":{"x":640,"y":336}}, in the original photo's pixels. Null when missing or not
+ * that shape, so a bad value only loses the remembered position, never the upload.
+ */
+function parseCrop(value) {
+    let crop;
+    try {
+        crop = JSON.parse(value);
+    } catch {
+        return null;
+    }
+    const number = (n, min, max) => typeof n === "number" && Number.isFinite(n) && n >= min && n <= max;
+    if (!crop || !number(crop.zoom, 1, 4) || !number(crop.centre?.x, 0, 1e5) || !number(crop.centre?.y, 0, 1e5)) return null;
+    return { zoom: crop.zoom, centre: { x: crop.centre.x, y: crop.centre.y } };
+}
+
 module.exports = {
     UPLOAD_DIR,
+    parseCrop,
     IMAGE_TYPES,
     ensureUploadDir,
     imageUpload,

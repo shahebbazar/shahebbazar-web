@@ -1,6 +1,7 @@
 "use client";
 
 import { BROWSER_API_BASE } from "@/lib/apiBase";
+import { switchHref } from "@/lib/activeBusiness";
 import { CodeHint } from "./CodeHint";
 import { ResendCodeButton } from "./ResendCodeButton";
 import { PhoneField } from "./PhoneField";
@@ -155,9 +156,8 @@ export function VendorRegistrationForm({
                     return;
                 }
 
-                router.push(
-                    `/vendors/dashboard?vendor=${data.vendor.vendor_id}`
-                );
+                // Through the switcher's route, so this business is also the one "My Business" reopens.
+                router.push(switchHref(data.vendor.vendor_id));
                 router.refresh();
                 return;
             } catch (error) {
@@ -220,7 +220,8 @@ export function VendorRegistrationForm({
             return;
         }
 
-        router.push("/vendors/dashboard");
+        // The new business, not the business picker: someone who already ran a business now runs two.
+        router.push(result.vendorId ? switchHref(result.vendorId) : "/vendors/dashboard");
         router.refresh();
     }
 

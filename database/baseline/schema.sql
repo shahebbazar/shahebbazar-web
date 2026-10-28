@@ -1024,7 +1024,9 @@ CREATE TABLE public.vendor_photos (
     vendor_photo_url text NOT NULL,
     vendor_photo_alt character varying(255),
     vendor_photo_sort smallint DEFAULT 0 NOT NULL,
-    vendor_photo_created_at timestamp with time zone DEFAULT now() NOT NULL
+    vendor_photo_created_at timestamp with time zone DEFAULT now() NOT NULL,
+    vendor_photo_original_url text,
+    vendor_photo_crop jsonb
 );
 
 
@@ -2599,7 +2601,10 @@ CREATE TABLE public.event_photos (
     photo_url text NOT NULL,
     photo_sort_order integer DEFAULT 0 NOT NULL,
     photo_is_cover boolean DEFAULT false NOT NULL,
-    photo_created_at timestamp with time zone DEFAULT now() NOT NULL
+    photo_created_at timestamp with time zone DEFAULT now() NOT NULL,
+    -- A cropped cover's original photo, and where it was cropped (migration 015).
+    photo_original_url text,
+    photo_crop jsonb
 );
 CREATE INDEX idx_event_photos_event ON public.event_photos (event_id, photo_sort_order);
 CREATE UNIQUE INDEX idx_event_photos_one_cover ON public.event_photos (event_id) WHERE photo_is_cover;

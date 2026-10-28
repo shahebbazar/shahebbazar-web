@@ -308,9 +308,12 @@ export type BusinessOptions = {
 };
 
 /** Creates the business owner's account and business, and signs them in. */
+/** A registered business owner, and the id of the business just registered, to open it. */
+type RegisterVendorResult = { ok: true; user: AuthUser; vendorId: number | null } | { ok: false; error: string };
+
 export async function registerVendor(
     input: VendorRegistrationInput & { code: string }
-): Promise<RegisterCustomerResult> {
+): Promise<RegisterVendorResult> {
     try {
         const response = await fetch(`${AUTH_API_BASE}/api/auth/register/vendor`, {
             method: "POST",
@@ -328,7 +331,8 @@ export async function registerVendor(
         if (!user) {
             return { ok: false, error: "The server did not return the new business account." };
         }
-        return { ok: true, user };
+        const vendorId = (body.vendor as { vendor_id?: unknown } | undefined)?.vendor_id;
+        return { ok: true, user, vendorId: typeof vendorId === "number" ? vendorId : null };
     } catch (error) {
         console.error("Vendor registration failed:", error);
         return { ok: false, error: "Unable to contact the registration service." };

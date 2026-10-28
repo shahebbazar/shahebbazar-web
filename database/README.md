@@ -44,6 +44,9 @@ concern, but each one must suit the business or listing it illustrates.
 > - **Businesses** (`seed-business-<slug>.jpg`) are each business's first photo and cover. To add
 >   one, save the file and add the slug to the "Business photos" list in `baseline/seed.sql`.
 >   Still without one: `shaheb-bazar-cloth-store` (pending).
+> - **Logos** (`seed-logo-<slug>.jpg`) are a business's logo. To add one, save the file and add the
+>   slug to the "Business logos" list in `baseline/seed.sql`. Only `rajshahi-mango-traders` (the demo
+>   business owner, 01711-000005) has one so far.
 > - **Listings** (`seed-listing-*.jpg`) are each listing's main photo, mapped in the "Listing
 >   photos" block at the end of `baseline/seed.sql`; one file can serve several listings. Eight
 >   listings have one so far.

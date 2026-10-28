@@ -1,5 +1,7 @@
 // API response contract.
 
+import type { CropPosition } from "./coverPhoto";
+
 export type OpenState = "open" | "closed" | null;
 
 export interface CategoryTile {
@@ -68,6 +70,9 @@ export interface EventPhoto {
     photo_id: number;
     photo_url: string;
     photo_is_cover: boolean;
+    /** For the organiser: the photo a cropped cover was cut from, and where (KAN-330). */
+    photo_original_url?: string | null;
+    photo_crop?: CropPosition | null;
 }
 
 export interface HomePayload {
@@ -277,8 +282,9 @@ export interface VendorPickerRow {
     vendor_slug: string;
     vendor_status: VendorStatus;
     member_role: MemberRole;
-    /** The business's logo, or its cover photo when it has no logo. */
-    vendor_photo: string | null;
+    /** The business's logo; with none, its main category's picture is shown (KAN-333). */
+    vendor_logo: string | null;
+    vendor_category_slug: string | null;
 }
 
 /** GET /api/vendors/:id/members */
@@ -338,6 +344,8 @@ export interface VendorProfile {
         vendor_cover_url: string | null;
         vendor_status: VendorStatus;
         vendor_rejection_reason: string | null;
+        /** The saved main category, whose picture customers see while there is no logo (KAN-333). */
+        primary_category_slug?: string | null;
     };
     category_ids: number[];
     /** Days without an entry have no hours recorded. */
@@ -564,8 +572,9 @@ export interface ConversationSummary {
     vendor_id: number;
     vendor_name: string;
     vendor_slug: string;
-    /** The business's logo (or its cover photo when it has none) and the customer's profile photo. */
+    /** The business's logo (with none, its main category's picture is shown) and the customer's photo. */
     vendor_logo: string | null;
+    vendor_category_slug: string | null;
     customer_name: string;
     customer_avatar: string | null;
     listing_id: number | null;
@@ -594,6 +603,7 @@ export interface ConversationThread {
         vendor_name: string;
         vendor_slug: string;
         vendor_logo: string | null;
+        vendor_category_slug: string | null;
         customer_name: string;
         customer_avatar: string | null;
         listing_id: number | null;
@@ -680,6 +690,7 @@ export interface EventDetail extends EventItem {
     vendor_name: string | null;
     vendor_slug: string | null;
     vendor_logo_url: string | null;
+    vendor_category_slug?: string | null;
     going_count: number;
     interested_count: number;
     /** It has finished (or started, without an end time), by the database's clock. */

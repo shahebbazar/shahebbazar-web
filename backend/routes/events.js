@@ -9,8 +9,9 @@
 
 const express = require("express");
 const pool = require("../db");
-const { imageUpload, receive, discard, storedPath, checkUploads, removeUnreferencedFiles } = require("../lib/uploads");
+const { imageUpload, receive, discard, storedPath, checkUploads, parseCrop, removeUnreferencedFiles } = require("../lib/uploads");
 const { parseId } = require("../lib/currentUser");
+const { primaryCategorySlug } = require("../lib/primaryCategory");
 const { requireVendorOwnership, requireEventOwnership } = require("../lib/middleware/auth");
 const { requireFeature } = require("../lib/access");
 const { getSetting } = require("../lib/settings");
@@ -42,7 +43,7 @@ const PUBLIC_COLUMNS = `
     e.event_type, e.event_is_online, e.event_online_url, e.event_price_type, e.event_price_bdt,
     e.event_ticket_url,
     loc.location_name AS area_name, loc.location_slug AS area_slug,
-    v.vendor_name, v.vendor_slug, v.vendor_logo_url,
+    v.vendor_name, v.vendor_slug, v.vendor_logo_url, ${primaryCategorySlug("v")} AS vendor_category_slug,
     COALESCE(rc.going_count, 0) AS going_count, COALESCE(rc.interested_count, 0) AS interested_count,
     COALESCE(e.event_ends_at, e.event_starts_at) < NOW() AS ended`;
 
@@ -67,7 +68,8 @@ const MANAGE_COLUMNS = `
 
 async function eventPhotos(db, eventId) {
     const result = await db.query(
-        `SELECT photo_id, photo_url, photo_is_cover FROM event_photos
+        // A cropped cover also has the photo it was cut from and where, to crop it again (KAN-330).
+        `SELECT photo_id, photo_url, photo_is_cover, photo_original_url, photo_crop FROM event_photos
          WHERE event_id = $1 ORDER BY photo_is_cover DESC, photo_sort_order, photo_id`,
         [eventId]
     );
@@ -731,9 +733,9 @@ router.post("/events/:eventId/message", ...eventAccess, async (req, res) => {
 router.delete("/events/:eventId", ...eventAccess, async (req, res) => {
     const eventId = req.event.event_id;
     try {
-        const photos = await pool.query("SELECT photo_url FROM event_photos WHERE event_id = $1", [eventId]);
+        const photos = await pool.query("SELECT photo_url, photo_original_url FROM event_photos WHERE event_id = $1", [eventId]);
         await pool.query("DELETE FROM events WHERE event_id = $1", [eventId]);
-        await removeUnreferencedFiles(pool, photos.rows.map((r) => r.photo_url));
+        await removeUnreferencedFiles(pool, photos.rows.flatMap((r) => [r.photo_url, r.photo_original_url]));
         res.json({ success: true });
     } catch (err) {
         console.error(`DELETE /api/events/${eventId} failed:`, err);
@@ -864,12 +866,17 @@ router.put(
         const client = await pool.connect();
         try {
             await client.query("BEGIN");
+            // The original stays; a photo without one (saved before originals were kept) keeps the file
+            // being replaced as its original, so the next crop can still zoom out to it (KAN-330).
             const replaced = await client.query(
-                `UPDATE event_photos p SET photo_url = $3
-                 FROM (SELECT photo_url AS old_url FROM event_photos WHERE photo_id = $1 AND event_id = $2) before
+                `UPDATE event_photos p SET photo_url = $3,
+                        photo_original_url = COALESCE(before.old_original, before.old_url),
+                        photo_crop = $4
+                 FROM (SELECT photo_url AS old_url, photo_original_url AS old_original
+                       FROM event_photos WHERE photo_id = $1 AND event_id = $2) before
                  WHERE p.photo_id = $1 AND p.event_id = $2
                  RETURNING before.old_url`,
-                [photoId, eventId, storedPath(req.files[0])]
+                [photoId, eventId, storedPath(req.files[0]), parseCrop(req.body?.crop)]
             );
             if (replaced.rowCount === 0) {
                 await client.query("ROLLBACK");
@@ -891,6 +898,48 @@ router.put(
     }
 );
 
+// Stores the photo a cover was cropped from, and where (the `crop` field), after a new cover is
+// uploaded; any earlier original is replaced (KAN-330).
+router.put(
+    "/events/:eventId/photos/:photoId/original",
+    ...eventAccess,
+    receive(
+        imageUpload("original", EVENT_PHOTO_MAX_BYTES, 1, (req) => `event-${req.params.eventId}`),
+        "5 MB",
+        "eventId",
+        "event"
+    ),
+    async (req, res) => {
+        const eventId = req.event.event_id;
+        const photoId = parseId(req.params.photoId);
+        if (photoId === null) {
+            await discard(req.files);
+            return res.status(400).json({ success: false, error: "Invalid photo id" });
+        }
+        if (!(await checkUploads(req, res))) return;
+
+        try {
+            const replaced = await pool.query(
+                `UPDATE event_photos p SET photo_original_url = $3, photo_crop = $4
+                 FROM (SELECT photo_original_url AS old_original FROM event_photos WHERE photo_id = $1 AND event_id = $2) before
+                 WHERE p.photo_id = $1 AND p.event_id = $2
+                 RETURNING before.old_original`,
+                [photoId, eventId, storedPath(req.files[0]), parseCrop(req.body?.crop)]
+            );
+            if (replaced.rowCount === 0) {
+                await discard(req.files);
+                return res.status(404).json({ success: false, error: "Photo not found." });
+            }
+            await removeUnreferencedFiles(pool, [replaced.rows[0].old_original]);
+            res.json({ success: true, photos: await eventPhotos(pool, eventId) });
+        } catch (err) {
+            await discard(req.files);
+            console.error(`PUT /api/events/${eventId}/photos/${photoId}/original failed:`, err);
+            res.status(500).json({ success: false, error: "Could not save the original photo." });
+        }
+    }
+);
+
 router.delete("/events/:eventId/photos/:photoId", ...eventAccess, async (req, res) => {
     const eventId = req.event.event_id;
     const photoId = parseId(req.params.photoId);
@@ -901,7 +950,7 @@ router.delete("/events/:eventId/photos/:photoId", ...eventAccess, async (req, re
         await client.query("BEGIN");
         await client.query("SELECT 1 FROM events WHERE event_id = $1 FOR UPDATE", [eventId]);
         const removed = await client.query(
-            "DELETE FROM event_photos WHERE photo_id = $1 AND event_id = $2 RETURNING photo_url, photo_is_cover",
+            "DELETE FROM event_photos WHERE photo_id = $1 AND event_id = $2 RETURNING photo_url, photo_original_url, photo_is_cover",
             [photoId, eventId]
         );
         if (removed.rowCount === 0) {
@@ -919,7 +968,7 @@ router.delete("/events/:eventId/photos/:photoId", ...eventAccess, async (req, re
         }
         await syncCover(client, eventId);
         await client.query("COMMIT");
-        await removeUnreferencedFiles(pool, [removed.rows[0].photo_url]);
+        await removeUnreferencedFiles(pool, [removed.rows[0].photo_url, removed.rows[0].photo_original_url]);
         res.json({ success: true, photos: await eventPhotos(pool, eventId) });
     } catch (err) {
         await client.query("ROLLBACK").catch(() => { });

@@ -322,10 +322,19 @@ describe("messages and alerts", () => {
         assert.equal(inbox.data.find((c) => c.conversation_id === conversationId).customer_avatar, "uploads/test-face.png");
         const thread = await call("GET", `/vendors/${target.vendor_id}/conversations/${conversationId}`, { as: "targetOwner" });
         assert.equal(thread.data.conversation.customer_avatar, "uploads/test-face.png");
-        const [logo] = await query("SELECT COALESCE(vendor_logo_url, vendor_cover_url) AS photo FROM vendors WHERE vendor_id = $1", [target.vendor_id]);
+        // The logo only, never the cover: with no logo the site shows the main category's picture, the
+        // same in every logo spot (KAN-333).
+        const [business] = await query(
+            `SELECT v.vendor_logo_url,
+                    (SELECT c.category_slug FROM vendor_categories vc JOIN categories c USING (category_id)
+                     WHERE vc.vendor_id = v.vendor_id ORDER BY c.category_sort_order, c.category_id LIMIT 1) AS slug
+             FROM vendors v WHERE v.vendor_id = $1`,
+            [target.vendor_id]
+        );
         const mine = (await call("GET", "/me/conversations", { as: "customer" })).data.find((c) => c.conversation_id === conversationId);
-        assert.equal(mine.vendor_logo, logo.photo, "the logo, or the cover photo when there is no logo");
-        assert.ok(mine.vendor_logo, "seeded businesses all have a cover photo");
+        assert.equal(mine.vendor_logo, business.vendor_logo_url);
+        assert.equal(mine.vendor_category_slug, business.slug);
+        assert.ok(mine.vendor_category_slug, "seeded businesses all have a category");
         await query("UPDATE users SET user_avatar_url = NULL WHERE user_phone = $1", [PHONES.customer]);
     });
 

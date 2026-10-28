@@ -13,7 +13,7 @@ import {
     Wallet,
     type LucideIcon,
 } from "lucide-react";
-import { authenticatedApiGet } from "@/lib/auth-server";
+import { authenticatedApiGet, getViewer } from "@/lib/auth-server";
 import type { Locale } from "@/lib/i18n";
 import { providerText, type ProviderDictionary } from "@/lib/i18n-provider";
 import { getAccountLocale } from "@/lib/locale-server";
@@ -108,10 +108,25 @@ export async function ProviderShell({
     current: ProviderNavKey;
     children: React.ReactNode;
 }) {
-    const businesses = (await authenticatedApiGet<VendorPickerRow[]>("/vendor-account/businesses")) ?? [];
+    const [businesses, viewer] = await Promise.all([
+        authenticatedApiGet<VendorPickerRow[]>("/vendor-account/businesses").then((rows) => rows ?? []),
+        getViewer(),
+    ]);
     const locale = await getAccountLocale();
     const copy = providerText(locale);
-    const switcher = <AccountSwitcherList side={{ kind: "business", vendorId: vendor.vendor_id }} businesses={businesses} businessPath={PAGE_PATHS[current]} locale={locale} />;
+    // The owner's own name and photo, for the Customer account row (the button shows the business).
+    const userName = viewer?.user_name ?? vendor.vendor_name;
+    const avatarUrl = viewer?.user_avatar_url ?? null;
+    const switcher = (
+        <AccountSwitcherList
+            userName={userName}
+            side={{ kind: "business", vendorId: vendor.vendor_id }}
+            businesses={businesses}
+            businessPath={PAGE_PATHS[current]}
+            avatarUrl={avatarUrl}
+            locale={locale}
+        />
+    );
 
     const navList = (
         <ul className="space-y-0.5">
@@ -128,7 +143,8 @@ export async function ProviderShell({
         <div lang={locale} className={`flex min-h-screen flex-col ${locale === "bn" ? "font-bn" : ""}`}>
             <ProviderHeader
                 locale={locale}
-                userName={vendor.vendor_name}
+                userName={userName}
+                avatarUrl={avatarUrl}
                 side={{ kind: "business", vendorId: vendor.vendor_id }}
                 businesses={businesses}
                 businessPath={PAGE_PATHS[current]}
@@ -183,7 +199,7 @@ export async function PickerShell({
                 side={side}
                 businesses={businesses}
                 businessPath={PAGE_PATHS.dashboard}
-                switcher={<AccountSwitcherList side={side} businesses={businesses} businessPath={PAGE_PATHS.dashboard} avatarUrl={avatarUrl} locale={locale} />}
+                switcher={<AccountSwitcherList userName={userName} side={side} businesses={businesses} businessPath={PAGE_PATHS.dashboard} avatarUrl={avatarUrl} locale={locale} />}
             />
             {children}
         </div>

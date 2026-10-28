@@ -23,6 +23,9 @@ export const COVER_ADVICE: Record<CoverQuality, string> = {
     small: "Too small to use as a cover: shared links would show it as a blurry thumbnail. Use a photo at least 600 × 315, ideally 1200 × 630.",
 };
 
+/** Where a crop was made, in the original photo's pixels, so cropping it again starts there (KAN-330). */
+export type CropPosition = { zoom: number; centre: { x: number; y: number } };
+
 /** The part of the photo that is kept, in the photo's own pixels. */
 export type CropArea = { x: number; y: number; width: number; height: number };
 
@@ -43,6 +46,12 @@ export function maxZoom(width: number, height: number): number {
     const fullWidth = width / height > COVER_RATIO ? height * COVER_RATIO : width;
     return Math.max(1, Math.min(4, fullWidth / COVER_MIN_WIDTH));
 }
+
+/**
+ * Below this furthest zoom the slider is switched off: a photo only just above the minimum could zoom by
+ * a few pixels at most, and a full-width slider for that looks broken (KAN-326).
+ */
+export const MIN_ZOOM_ROOM = 1.05;
 
 /** Loads an image file or address for measuring and drawing. */
 export function loadImage(src: string): Promise<HTMLImageElement> {

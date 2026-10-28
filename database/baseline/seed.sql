@@ -508,6 +508,12 @@ SET vendor_cover_url = p.vendor_photo_url
 FROM vendor_photos p
 WHERE p.vendor_id = v.vendor_id AND p.vendor_photo_url LIKE 'uploads/seed-business-%';
 
+-- Business logos (seed-assets/seed-logo-<slug>.jpg). The demo owner's business has one, so the account
+-- menu and messages show a logo rather than falling back to the cover.
+UPDATE vendors
+SET vendor_logo_url = 'uploads/seed-logo-' || vendor_slug || '.jpg'
+WHERE vendor_slug IN ('rajshahi-mango-traders');
+
 -- Opening hours: defaults for approved vendors, then overrides for 24-hour and late-closing businesses.
 INSERT INTO vendor_opening_hours (vendor_id, hours_day_of_week, hours_open_time, hours_close_time)
 SELECT v.vendor_id, d, TIME '09:00', TIME '22:00'
@@ -969,10 +975,12 @@ JOIN public.vendors v ON v.vendor_slug = 'rajshahi-mango-traders'
 WHERE u.user_phone IN ('+8801722000003', '+8801722000004', '+8801722000005', '+8801722000006');
 
 -- Platform settings (KAN-293). Also in database/migrations/003_platform_settings.sql.
--- Approval of new businesses and listings starts on, as the site has always worked.
+-- The demo data starts with approval of new businesses and listings off, so whatever testers add is
+-- public at once; an admin can switch either on in Settings. Without a row, both default to on
+-- (backend/lib/settings.js).
 INSERT INTO public.platform_settings (setting_key, setting_value) VALUES
-    ('require_business_approval', 'true'),
-    ('require_listing_approval', 'true')
+    ('require_business_approval', 'false'),
+    ('require_listing_approval', 'false')
 ON CONFLICT (setting_key) DO NOTHING;
 
 -- Listing photos: development placeholders in database/seed-assets/, copied into the upload folder

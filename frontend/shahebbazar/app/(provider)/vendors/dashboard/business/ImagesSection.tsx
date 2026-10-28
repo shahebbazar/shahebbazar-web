@@ -4,12 +4,17 @@ import { useRef, useState } from "react";
 import { Crop, ImagePlus, Loader2, Star, Trash2, Upload } from "lucide-react";
 import { BROWSER_API_BASE } from "@/lib/apiBase";
 import { CoverCropDialog, type CropSource } from "@/components/provider/CoverCropDialog";
-import { coverQuality, type CoverQuality } from "@/lib/coverPhoto";
+import { coverQuality, type CoverQuality, type CropPosition } from "@/lib/coverPhoto";
+import { CategoryFallbackImage } from "@/components/shared/CategoryFallbackImage";
 
-type Photo = { id: number; url: string };
+/** A business photo. A cropped cover also has the photo it was cut from, and where (KAN-330). */
+export type Photo = { id: number; url: string; original_url?: string | null; crop?: CropPosition | null };
 
-/** The cover being cropped: the first of a new upload, or a saved photo re-cropped in place. */
-type Cropping = CropSource & ({ kind: "upload"; rest: File[] } | { kind: "replace"; photo: Photo });
+/**
+ * The cover being cropped: the first of a new upload (`original` is the chosen file, kept with the
+ * cover), or a saved photo re-cropped in place from its original.
+ */
+type Cropping = CropSource & ({ kind: "upload"; original: File; rest: File[] } | { kind: "replace"; photo: Photo });
 
 const TYPES = ["image/jpeg", "image/png", "image/webp"];
 const LOGO_MAX = 2 * 1024 * 1024;
@@ -39,6 +44,8 @@ async function errorText(res: Response) {
 // Logo and business photos.
 export function ImagesSection({
     vendorId,
+    businessName,
+    categorySlug,
     logoUrl,
     photos,
     photosMax,
@@ -47,6 +54,9 @@ export function ImagesSection({
     onPhotosFromServer,
 }: {
     vendorId: number;
+    businessName: string;
+    /** The saved main category: without a logo, customers see its picture in every logo spot (KAN-333). */
+    categorySlug: string | null;
     logoUrl: string | null;
     photos: Photo[];
     photosMax: number;
@@ -114,7 +124,7 @@ export function ImagesSection({
         setMessage(null);
         // The first photo becomes the cover, so it is cropped to the share-card shape first.
         if (photos.length === 0) {
-            return setCropping({ kind: "upload", src: URL.createObjectURL(files[0]), name: files[0].name, rest: files.slice(1) });
+            return setCropping({ kind: "upload", src: URL.createObjectURL(files[0]), name: files[0].name, original: files[0], rest: files.slice(1) });
         }
         sendPhotos(files);
     }
@@ -124,17 +134,21 @@ export function ImagesSection({
         setCropping(null);
     }
 
-    async function cropped(file: File) {
+    async function cropped(file: File, position: CropPosition) {
         if (!cropping) return;
         if (cropping.kind === "upload") {
-            const files = [file, ...cropping.rest];
+            const { original, rest } = cropping;
             closeCrop();
-            return sendPhotos(files);
+            // The cover is the first photo, so once it is saved its original is kept with it.
+            const saved = await sendPhotos([file, ...rest]);
+            if (saved?.[0]) await sendOriginal(saved[0].id, original, position);
+            return;
         }
         setBusy("photos");
         try {
             const form = new FormData();
             form.append("photo", file);
+            form.append("crop", JSON.stringify(position));
             const res = await fetch(`${BROWSER_API_BASE}/api/vendors/${vendorId}/photos/${cropping.photo.id}/file`, {
                 method: "PUT",
                 body: form,
@@ -151,21 +165,47 @@ export function ImagesSection({
         }
     }
 
-    async function sendPhotos(files: File[]) {
+    /** Uploads photos; returns the server's list, or null when it failed (the message says why). */
+    async function sendPhotos(files: File[]): Promise<Photo[] | null> {
         setBusy("photos");
         setMessage(null);
         try {
             const form = new FormData();
             for (const file of files) form.append("photos", file);
             const res = await fetch(`${BROWSER_API_BASE}/api/vendors/${vendorId}/photos`, { method: "POST", body: form, credentials: "include" });
-            if (!res.ok) return setMessage({ type: "error", text: await errorText(res) });
+            if (!res.ok) {
+                setMessage({ type: "error", text: await errorText(res) });
+                return null;
+            }
             const body = await res.json();
             onPhotosFromServer(body.photos);
             setMessage({ type: "success", text: `${files.length} photo${files.length === 1 ? "" : "s"} added.` });
+            return body.photos;
         } catch {
             setMessage({ type: "error", text: "Could not reach the server. Try again." });
+            return null;
         } finally {
             setBusy(null);
+        }
+    }
+
+    /**
+     * Keeps the photo a new cover was cropped from. The cover is already saved, so if this fails the
+     * only loss is that cropping it again starts from the cropped cover.
+     */
+    async function sendOriginal(photoId: number, original: File, position: CropPosition) {
+        try {
+            const form = new FormData();
+            form.append("original", original);
+            form.append("crop", JSON.stringify(position));
+            const res = await fetch(`${BROWSER_API_BASE}/api/vendors/${vendorId}/photos/${photoId}/original`, {
+                method: "PUT",
+                body: form,
+                credentials: "include",
+            });
+            if (res.ok) onPhotosFromServer((await res.json()).photos);
+        } catch {
+            // The cover itself is saved; see above.
         }
     }
 
@@ -197,7 +237,16 @@ export function ImagesSection({
                             // eslint-disable-next-line @next/next/no-img-element
                             <img src={logo} alt="Business logo" className="size-full object-contain p-3" />
                         ) : (
-                            <ImagePlus className="size-8 text-soft" />
+                            // What customers see in its place, faded so it doesn't read as an uploaded logo.
+                            <>
+                                <CategoryFallbackImage
+                                    slug={categorySlug}
+                                    businessName={businessName}
+                                    alt="Your category's picture, shown until you add a logo"
+                                    className="size-full object-cover opacity-40"
+                                />
+                                <ImagePlus className="absolute size-8 text-ink" aria-hidden />
+                            </>
                         )}
                         {busy === "logo" && (
                             <span className="absolute inset-0 grid place-items-center bg-surface/70">
@@ -225,7 +274,10 @@ export function ImagesSection({
                             </button>
                         )}
                     </div>
-                    <p className="mt-1.5 text-[0.75rem] text-muted">JPG, PNG or WEBP, up to 2 MB.</p>
+                    <p className="mt-1.5 text-[0.75rem] text-muted">
+                        JPG, PNG or WEBP, up to 2 MB.
+                        {!logo && " Until you add one, customers see your category's picture, as shown."}
+                    </p>
                     <input
                         ref={logoInput}
                         type="file"
@@ -274,7 +326,16 @@ export function ImagesSection({
                                         <button
                                             type="button"
                                             disabled={busy !== null}
-                                            onClick={() => setCropping({ kind: "replace", src: imageSrc(photo.url) ?? "", name: `cover-${photo.id}`, photo })}
+                                            onClick={() =>
+                                                setCropping({
+                                                    kind: "replace",
+                                                    // From the photo it was cut from, where it was left, when that is kept.
+                                                    src: imageSrc(photo.original_url ?? photo.url) ?? "",
+                                                    start: (photo.original_url && photo.crop) || undefined,
+                                                    name: `cover-${photo.id}`,
+                                                    photo,
+                                                })
+                                            }
                                             className="inline-flex items-center gap-1 rounded-md bg-surface/95 px-2 py-1 text-[0.6875rem] font-medium text-ink hover:bg-surface"
                                         >
                                             <Crop className="size-3" /> Crop

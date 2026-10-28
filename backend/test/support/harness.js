@@ -205,6 +205,13 @@ async function businessChoices() {
     return { ...row, vendor_description: "A family shop on Station Road, open every day." };
 }
 
+/** Switches on approval of new businesses and listings, which the demo data starts with off. */
+async function requireApproval() {
+    await query(
+        "UPDATE platform_settings SET setting_value = 'true' WHERE setting_key IN ('require_business_approval', 'require_listing_approval')"
+    );
+}
+
 module.exports = {
     apiOutput,
     BACKEND_DIR,
@@ -220,6 +227,7 @@ module.exports = {
     testClient,
     call,
     requestCode,
+    requireApproval,
     signIn,
     startApi,
     stopApi,

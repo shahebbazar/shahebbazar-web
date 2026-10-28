@@ -16,11 +16,10 @@ import { formatLocalPhone, formatPhone, toStoredPhone } from "@/lib/format";
 import { refreshPublicPages, saveBusinessProfile } from "./actions";
 import { Field, Section, borderFor, describedBy, inputClass } from "./formParts";
 import { DAY_NAMES, HoursSection, type DayHours } from "./HoursSection";
-import { ImagesSection, imageSrc } from "./ImagesSection";
+import { ImagesSection, imageSrc, type Photo } from "./ImagesSection";
 
 // Add / Edit Business, built to UIs/…18.25.27 (3).jpeg.
 
-type Photo = { id: number; url: string };
 type FactRow = FactEntry & { key: number };
 
 const ALT_PHONE_HINTS: Record<PhoneType, string> = {
@@ -242,9 +241,10 @@ export function BusinessForm({ initial }: { initial: VendorProfileWithOptions })
 
     /** After an upload or removal: the server's list becomes the saved order. */
     function photosFromServer(serverPhotos: Photo[]) {
-        // A local, unsaved reorder is kept for photos that still exist.
-        const ids = new Set(serverPhotos.map((p) => p.id));
-        const kept = photos.filter((p) => ids.has(p.id));
+        // A local, unsaved reorder is kept for photos that still exist, with the server's copy of each: a
+        // cropped cover keeps its id but gets a new file, and the old one is deleted (KAN-327).
+        const byId = new Map(serverPhotos.map((p) => [p.id, p]));
+        const kept = photos.flatMap((p) => byId.get(p.id) ?? []);
         const added = serverPhotos.filter((p) => !photos.some((q) => q.id === p.id));
         setPhotos([...kept, ...added]);
         setSaved((s) => JSON.stringify({ ...JSON.parse(s), photo_order: serverPhotos.map((p) => p.id) }));
@@ -522,6 +522,8 @@ export function BusinessForm({ initial }: { initial: VendorProfileWithOptions })
                     <Section id="images" title="Images & Logo" description="Upload a logo and photos of your business. Good images help you get more attention.">
                         <ImagesSection
                             vendorId={vendorId}
+                            businessName={profile.vendor.vendor_name}
+                            categorySlug={profile.vendor.primary_category_slug ?? null}
                             logoUrl={logoUrl}
                             photos={photos}
                             photosMax={limits.photosMax}

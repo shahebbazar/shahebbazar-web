@@ -27,6 +27,7 @@ export default async function ConversationPage({ params }: { params: Promise<{ i
                 thread={thread}
                 otherName={thread.conversation.vendor_name}
                 otherPhoto={thread.conversation.vendor_logo}
+                otherBusiness={{ categorySlug: thread.conversation.vendor_category_slug }}
                 otherHref={`/business/${thread.conversation.vendor_slug}`}
                 send={replyAsCustomer.bind(null, Number(id))}
                 reportBackHref={`/account/messages/${id}`}

@@ -46,7 +46,6 @@ const en = {
     statusSuspended: "Your business has been suspended and is hidden from customers.",
     reason: "Reason:",
     chooseTitle: "Choose a business",
-    chooseIntro: "Choose which of your businesses you want to manage.",
     chooseNone: "No businesses are connected to this vendor account.",
 
     profileViews: "Profile Views",
@@ -160,7 +159,6 @@ const bn: Record<keyof typeof en, string> = {
     statusSuspended: "আপনার ব্যবসা স্থগিত করা হয়েছে এবং গ্রাহকদের কাছ থেকে লুকানো আছে।",
     reason: "কারণ:",
     chooseTitle: "একটি ব্যবসা বেছে নিন",
-    chooseIntro: "আপনার কোন ব্যবসা পরিচালনা করতে চান, বেছে নিন।",
     chooseNone: "এই অ্যাকাউন্টের সঙ্গে কোনো ব্যবসা যুক্ত নেই।",
 
     profileViews: "প্রোফাইল ভিউ",

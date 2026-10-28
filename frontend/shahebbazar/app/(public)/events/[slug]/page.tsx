@@ -1,7 +1,7 @@
 import type { Metadata } from "next";
 import Link from "next/link";
 import { notFound } from "next/navigation";
-import { AlertTriangle, CalendarDays, CalendarPlus, ChevronLeft, Globe, MapPin, Store, Ticket } from "lucide-react";
+import { AlertTriangle, CalendarDays, CalendarPlus, ChevronLeft, Globe, MapPin, Ticket } from "lucide-react";
 import { AppShell } from "@/components/public/AppShell";
 import { EventResponseButtons } from "@/components/public/EventResponseButtons";
 import { ProfileViewBeacon } from "@/components/analytics/ProfileViewBeacon";
@@ -10,6 +10,7 @@ import { BROWSER_API_BASE } from "@/lib/apiBase";
 import { authenticatedApiGet, getViewer } from "@/lib/auth-server";
 import { eventOgImage, pageMetadata, SITE_URL } from "@/lib/seo";
 import { ShareMenu } from "@/components/shared/ShareMenu";
+import { CategoryFallbackImage } from "@/components/shared/CategoryFallbackImage";
 import { resolveLocale, t, localeHref, pick } from "@/lib/i18n";
 import { formatEventRange, formatEventWhen } from "@/lib/format";
 import { eventPrice, eventTypeLabel, googleCalendarUrl, venueAndArea } from "@/lib/events";
@@ -70,7 +71,6 @@ export default async function EventPage({
     const gallery = (event.photos ?? []).filter((p) => !p.photo_is_cover);
     const cancelled = event.event_status === "cancelled";
     const ended = event.ended;
-    const logo = assetUrl(event.vendor_logo_url);
 
     return (
         <AppShell locale={locale} current="/events">
@@ -201,13 +201,14 @@ export default async function EventPage({
                             <div className="rounded-xl border border-line p-4">
                                 <p className="text-[0.75rem] font-medium text-muted">{copy.organisedBy}</p>
                                 <Link href={localeHref(`/business/${event.vendor_slug}`, locale)} className="mt-2 flex items-center gap-3 hover:text-brand-600">
-                                    <span className="grid size-11 shrink-0 place-items-center overflow-hidden rounded-lg bg-brand-50 text-brand-600">
-                                        {logo ? (
-                                            // eslint-disable-next-line @next/next/no-img-element
-                                            <img src={logo} alt="" className="size-full object-contain p-1" />
-                                        ) : (
-                                            <Store className="size-5" />
-                                        )}
+                                    <span className="grid size-11 shrink-0 place-items-center overflow-hidden rounded-lg bg-brand-50">
+                                        {/* The logo, or the main category's picture, as in every logo spot (KAN-333). */}
+                                        <CategoryFallbackImage
+                                            slug={event.vendor_category_slug}
+                                            businessName={event.vendor_name}
+                                            logoUrl={event.vendor_logo_url}
+                                            className="size-full object-cover"
+                                        />
                                     </span>
                                     <span className="font-semibold">{event.vendor_name}</span>
                                 </Link>

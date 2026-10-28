@@ -210,3 +210,11 @@ test("a conversation shows the business's photo, and its name opens the business
         await sql("DELETE FROM conversations WHERE conversation_id = $1", [id]);
     }
 });
+
+// KAN-333: the business's photo only appeared once the first message had been sent.
+test("a new message shows the business's photo before anything is sent @phone", async ({ page, context }) => {
+    await signIn(context, "customer2");
+    await page.goto(`/account/messages/new?vendor=${SLUG}`);
+    const to = page.locator("div").filter({ has: page.getByText("To", { exact: true }) }).filter({ hasText: "Padma Handicrafts" }).last();
+    await expect(to.locator("img")).toHaveCount(1);
+});

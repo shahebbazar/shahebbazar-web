@@ -167,3 +167,23 @@ describe("businesses run by more than one person (KAN-250 to 252)", () => {
         assert.equal((await call("GET", `/vendors/${OTHER}/members`, { as: "manager" })).status, 403);
     });
 });
+
+// KAN-334: the switcher lists approved businesses first, and the dashboard opens the first one.
+describe("the order of someone's businesses", () => {
+    const names = async () => (await call("GET", "/vendor-account/businesses", { as: "twoBusinesses" })).data.map((b) => b.vendor_name);
+
+    before(() => signIn("twoBusinesses", "+8801711000002", "vendor")); // Silk House, and Cloth Store waiting for approval
+
+    it("approved businesses come first, even when another comes earlier in the alphabet", async () => {
+        assert.deepEqual(await names(), ["Shaheb Bazar Silk House", "Shaheb Bazar Cloth Store"]);
+    });
+
+    it("once all are approved, they are in alphabetical order", async () => {
+        await query("UPDATE vendors SET vendor_status = 'approved' WHERE vendor_slug = 'shaheb-bazar-cloth-store'");
+        try {
+            assert.deepEqual(await names(), ["Shaheb Bazar Cloth Store", "Shaheb Bazar Silk House"]);
+        } finally {
+            await query("UPDATE vendors SET vendor_status = 'pending' WHERE vendor_slug = 'shaheb-bazar-cloth-store'");
+        }
+    });
+});

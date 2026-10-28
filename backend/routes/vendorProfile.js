@@ -1,10 +1,11 @@
 const express = require("express");
 const pool = require("../db");
 const { LIMITS, validateProfile } = require("../lib/businessProfile");
-const { imageUpload, receive, discard, storedPath, checkUploads, removeUnreferencedFiles } = require("../lib/uploads");
+const { imageUpload, receive, discard, storedPath, checkUploads, parseCrop, removeUnreferencedFiles } = require("../lib/uploads");
 const { requireVendorOwnership } = require("../lib/middleware/auth");
 const { requireFeature } = require("../lib/access");
 const { getSetting } = require("../lib/settings");
+const { primaryCategorySlug } = require("../lib/primaryCategory");
 const { businessOptions } = require("../lib/vendorRegistration");
 const router = express.Router();
 
@@ -12,6 +13,11 @@ const router = express.Router();
 
 const LOGO_MAX_BYTES = 2 * 1024 * 1024;
 const PHOTO_MAX_BYTES = 5 * 1024 * 1024;
+
+// A business photo as the dashboard gets it. A cropped cover also has the photo it was cut from and
+// where it was cropped, so it can be cropped again from the whole photo (KAN-330).
+const PHOTO_COLUMNS = `vendor_photo_id AS id, vendor_photo_url AS url,
+    vendor_photo_original_url AS original_url, vendor_photo_crop AS crop`;
 
 function parseId(raw) {
     return /^\d{1,10}$/.test(raw) && Number(raw) > 0 && Number(raw) <= 2147483647 ? Number(raw) : null;
@@ -25,6 +31,8 @@ async function loadProfile(db, vendorId) {
                 vendor_phone, vendor_whatsapp, vendor_phone_alt, vendor_phone_alt_type, vendor_email, vendor_website, vendor_address,
                 location_id, vendor_logo_url, vendor_cover_url, vendor_status,
                 vendor_rejection_reason,
+                -- For the category picture customers see while there is no logo (KAN-333).
+                ${primaryCategorySlug("vendors")} AS primary_category_slug,
                 -- The contact number, shown read-only: the owner's sign-in mobile.
                 (SELECT u.user_phone FROM users u WHERE u.user_id = vendors.user_id) AS owner_phone
          FROM vendors WHERE vendor_id = $1`,
@@ -52,7 +60,7 @@ async function loadProfile(db, vendorId) {
             [vendorId]
         ),
         db.query(
-            `SELECT vendor_photo_id AS id, vendor_photo_url AS url
+            `SELECT ${PHOTO_COLUMNS}
              FROM vendor_photos WHERE vendor_id = $1
              ORDER BY vendor_photo_sort, vendor_photo_id`,
             [vendorId]
@@ -377,7 +385,7 @@ router.post(
             await client.query("COMMIT");
 
             const photos = await pool.query(
-                `SELECT vendor_photo_id AS id, vendor_photo_url AS url FROM vendor_photos
+                `SELECT ${PHOTO_COLUMNS} FROM vendor_photos
                  WHERE vendor_id = $1 ORDER BY vendor_photo_sort, vendor_photo_id`,
                 [vendorId]
             );
@@ -411,12 +419,17 @@ router.put(
         const client = await pool.connect();
         try {
             await client.query("BEGIN");
+            // The original stays; a photo without one (saved before originals were kept) keeps the file
+            // being replaced as its original, so the next crop can still zoom out to it (KAN-330).
             const replaced = await client.query(
-                `UPDATE vendor_photos p SET vendor_photo_url = $3
-                 FROM (SELECT vendor_photo_url AS old_url FROM vendor_photos WHERE vendor_photo_id = $1 AND vendor_id = $2) before
+                `UPDATE vendor_photos p SET vendor_photo_url = $3,
+                        vendor_photo_original_url = COALESCE(before.old_original, before.old_url),
+                        vendor_photo_crop = $4
+                 FROM (SELECT vendor_photo_url AS old_url, vendor_photo_original_url AS old_original
+                       FROM vendor_photos WHERE vendor_photo_id = $1 AND vendor_id = $2) before
                  WHERE p.vendor_photo_id = $1 AND p.vendor_id = $2
                  RETURNING before.old_url`,
-                [photoId, vendorId, storedPath(req.files[0])]
+                [photoId, vendorId, storedPath(req.files[0]), parseCrop(req.body?.crop)]
             );
             if (replaced.rowCount === 0) {
                 await client.query("ROLLBACK");
@@ -428,7 +441,7 @@ router.put(
             await removeUnreferencedFiles(pool, [replaced.rows[0].old_url]);
 
             const photos = await pool.query(
-                `SELECT vendor_photo_id AS id, vendor_photo_url AS url FROM vendor_photos
+                `SELECT ${PHOTO_COLUMNS} FROM vendor_photos
                  WHERE vendor_id = $1 ORDER BY vendor_photo_sort, vendor_photo_id`,
                 [vendorId]
             );
@@ -444,6 +457,49 @@ router.put(
     }
 );
 
+// Stores the photo a cover was cropped from, and where (the `crop` field), after a new cover is
+// uploaded; any earlier original is replaced (KAN-330).
+router.put(
+    "/vendors/:vendorId/photos/:photoId/original",
+    ...ownerAccess,
+    receive(imageUpload("original", PHOTO_MAX_BYTES, 1, vendorFilePrefix), "5 MB"),
+    async (req, res) => {
+        const vendorId = parseId(req.params.vendorId);
+        const photoId = parseId(req.params.photoId);
+        if (photoId === null) {
+            await discard(req.files);
+            return res.status(400).json({ error: "Invalid id" });
+        }
+        if (!(await checkUploads(req, res))) return;
+
+        try {
+            const replaced = await pool.query(
+                `UPDATE vendor_photos p SET vendor_photo_original_url = $3, vendor_photo_crop = $4
+                 FROM (SELECT vendor_photo_original_url AS old_original FROM vendor_photos
+                       WHERE vendor_photo_id = $1 AND vendor_id = $2) before
+                 WHERE p.vendor_photo_id = $1 AND p.vendor_id = $2
+                 RETURNING before.old_original`,
+                [photoId, vendorId, storedPath(req.files[0]), parseCrop(req.body?.crop)]
+            );
+            if (replaced.rowCount === 0) {
+                await discard(req.files);
+                return res.status(404).json({ error: "Photo not found" });
+            }
+            await removeUnreferencedFiles(pool, [replaced.rows[0].old_original]);
+            const photos = await pool.query(
+                `SELECT ${PHOTO_COLUMNS} FROM vendor_photos
+                 WHERE vendor_id = $1 ORDER BY vendor_photo_sort, vendor_photo_id`,
+                [vendorId]
+            );
+            res.json({ photos: photos.rows });
+        } catch (err) {
+            await discard(req.files);
+            console.error(`PUT /api/vendors/${vendorId}/photos/${photoId}/original failed:`, err);
+            res.status(500).json({ error: "Could not save the original photo." });
+        }
+    }
+);
+
 router.delete("/vendors/:vendorId/photos/:photoId", ...ownerAccess, async (req, res) => {
     const vendorId = parseId(req.params.vendorId);
     const photoId = parseId(req.params.photoId);
@@ -453,7 +509,7 @@ router.delete("/vendors/:vendorId/photos/:photoId", ...ownerAccess, async (req, 
     try {
         await client.query("BEGIN");
         const removed = await client.query(
-            "DELETE FROM vendor_photos WHERE vendor_photo_id = $1 AND vendor_id = $2 RETURNING vendor_photo_url",
+            "DELETE FROM vendor_photos WHERE vendor_photo_id = $1 AND vendor_id = $2 RETURNING vendor_photo_url, vendor_photo_original_url",
             [photoId, vendorId]
         );
         if (removed.rowCount === 0) {
@@ -462,7 +518,7 @@ router.delete("/vendors/:vendorId/photos/:photoId", ...ownerAccess, async (req, 
         }
         await syncCover(client, vendorId);
         await client.query("COMMIT");
-        await removeUnreferencedFiles(pool, [removed.rows[0].vendor_photo_url]);
+        await removeUnreferencedFiles(pool, [removed.rows[0].vendor_photo_url, removed.rows[0].vendor_photo_original_url]);
         res.status(204).end();
     } catch (err) {
         await client.query("ROLLBACK").catch(() => { });

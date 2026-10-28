@@ -1,6 +1,9 @@
 // A business owner's dashboard.
 
-import { test, expect, signIn, sql, expectNoSideScroll, userIdOf } from "../fixtures";
+import fs from "node:fs";
+import path from "node:path";
+import { test, expect, fillBusinessRegistration, setApproval, signIn, sql, expectNoSideScroll, userIdOf } from "../fixtures";
+import { ROOT, UPLOAD_DIR } from "../env";
 
 test.beforeEach(async ({ context }) => {
     await signIn(context, "owner");
@@ -32,16 +35,48 @@ test("the product form lists each category followed by its own subcategories", a
     }
 });
 
-test("an owner of two businesses can still leave the business picker @phone", async ({ page, context }) => {
-    await signIn(context, "twoBusinesses"); // replaces the owner's session from beforeEach
+// KAN-334: an owner of two businesses was shown a page to choose one first, though the account
+// switcher in the header already moves between them.
+test("an owner of two businesses goes straight to an approved one, and the dashboard reopens the one they switched to @phone", async ({ page, context }) => {
+    const wide = (page.viewportSize()?.width ?? 1280) >= 1024;
+    await signIn(context, "twoBusinesses"); // Silk House, and Cloth Store waiting for approval
     await page.goto("/vendors/dashboard");
-    await expect(page.getByRole("heading", { name: "Choose a business" })).toBeVisible();
-    await expect(page.getByRole("banner").getByRole("link", { name: "Shahebbazar" })).toBeVisible();
-    // The way out: the account menu in the header (with Log out in it), or the menu drawer on a phone.
-    await expect(page.getByRole("banner").locator("summary").filter({ visible: true }).or(page.getByRole("button", { name: /menu/i })).first()).toBeVisible();
+    await expect(page).toHaveURL(/\/vendors\/dashboard\?vendor=\d+$/);
+    await expect(page.getByRole("heading", { name: "Choose a business" })).toHaveCount(0);
+    // Silk House, the approved one, though Cloth Store comes first in the alphabet.
+    await expect(page.locator("main")).toContainText("Shaheb Bazar Silk House");
     await expectNoSideScroll(page);
+
+    // The switcher lists the customer account, then the businesses, approved ones first.
+    if (wide) await page.locator("summary").filter({ visible: true }).first().click();
+    else await page.getByRole("button", { name: /menu/i }).click();
+    const accounts = page.locator('a[href="/account"], a[href^="/vendors/switch"]').filter({ visible: true });
+    // Each link starts with its picture: a photo, or a first letter when there is none.
+    await expect(accounts).toHaveText([/Customer account$/, /Shaheb Bazar Silk House$/, /Shaheb Bazar Cloth Store$/]);
+
+    // After moving to the other business, the dashboard opens it again.
+    await page.getByRole("link", { name: "Shaheb Bazar Cloth Store" }).filter({ visible: true }).first().click();
+    await expect(page.locator("main")).toContainText("Shaheb Bazar Cloth Store");
+    await page.goto("/vendors/dashboard");
+    await expect(page.locator("main")).toContainText("Shaheb Bazar Cloth Store");
     await page.setViewportSize({ width: 360, height: 780 }); // narrower than the test phone, as many are
     await expectNoSideScroll(page);
+});
+
+test("registering another business opens it, and the dashboard reopens it afterwards (KAN-334)", async ({ page }) => {
+    const name = `E2E Second Shop ${Date.now() % 100000}`;
+    try {
+        await page.goto("/vendors/register");
+        await fillBusinessRegistration(page, { name, phone: "01711000005" });
+        await page.getByRole("button", { name: "Register business" }).click();
+        await expect(page).toHaveURL(/\/vendors\/dashboard\?vendor=\d+$/);
+        await expect(page.locator("main")).toContainText(name);
+        await page.goto("/vendors/dashboard");
+        await expect(page).toHaveURL(/\/vendors\/dashboard\?vendor=\d+$/);
+        await expect(page.locator("main")).toContainText(name);
+    } finally {
+        await sql("DELETE FROM vendors WHERE vendor_name = $1", [name]);
+    }
 });
 
 test("switching business redirects within the site's own address", async ({ page }) => {
@@ -55,17 +90,54 @@ test("switching business redirects within the site's own address", async ({ page
     await expect(page.locator("main")).toContainText("Rajshahi Mango Traders");
 });
 
-test("adding a product says it waits for approval, and it does", async ({ page }) => {
-    const title = `E2E Langra Mango ${Date.now() % 100000}`;
+// Each `approval` is what the admin setting is; the demo data starts with it off.
+for (const approval of [false, true]) {
+    test(`adding a product with approval ${approval ? "on says it waits, and it does" : "off makes it public at once"}`, async ({ page }) => {
+        const title = `E2E Langra Mango ${approval ? "On" : "Off"} ${Date.now() % 100000}`;
+        if (approval) await setApproval("listing", true);
+        try {
+            await page.goto("/vendors/dashboard/add-listing?vendor=1");
+            await page.locator("input[name=listing_title]").fill(title);
+            await page.locator("select[name=category_id]").selectOption({ index: 1 });
+            await page.locator("input[name=listing_price]").fill("450");
+            await page.getByRole("button", { name: "Publish listing" }).click();
+            await expect(
+                page.getByText(approval ? "Listing created. It appears publicly once an admin approves it." : "Listing created. It is public now.")
+            ).toBeVisible();
+            const [row] = await sql<{ listing_status: string }>("SELECT listing_status FROM vendor_listings WHERE listing_title = $1", [title]);
+            expect(row.listing_status).toBe(approval ? "pending" : "approved");
+        } finally {
+            await sql("DELETE FROM vendor_listings WHERE listing_title = $1", [title]);
+            await setApproval("listing", false);
+        }
+    });
+}
+
+// KAN-329: the file box showed only file names, so the owner couldn't see which photos they had picked.
+test("chosen listing photos are shown before saving, and one can be taken out @phone", async ({ page }) => {
+    const title = `E2E Photo Preview ${Date.now() % 100000}`;
+    const seed = (name: string) => path.join(ROOT, "database", "seed-assets", name);
     await page.goto("/vendors/dashboard/add-listing?vendor=1");
     await page.locator("input[name=listing_title]").fill(title);
     await page.locator("select[name=category_id]").selectOption({ index: 1 });
-    await page.locator("input[name=listing_price]").fill("450");
-    await page.getByRole("button", { name: "Publish listing" }).click();
-    await expect(page.getByText("Listing created. It appears publicly once an admin approves it.")).toBeVisible();
-    const [row] = await sql<{ listing_status: string }>("SELECT listing_status FROM vendor_listings WHERE listing_title = $1", [title]);
-    expect(row.listing_status).toBe("pending");
-    await sql("DELETE FROM vendor_listings WHERE listing_title = $1", [title]);
+    await page.getByLabel("Choose listing photos").setInputFiles([seed("seed-listing-khirsapat-mango.jpg"), seed("seed-listing-fazli-mango-wholesale.jpg")]);
+
+    await expect(page.getByRole("img", { name: "Chosen photo 1" })).toBeVisible();
+    await expect(page.getByRole("img", { name: "Chosen photo 2" })).toBeVisible();
+    await expect(page.getByText("Main photo")).toBeVisible();
+    await page.getByRole("button", { name: "Remove chosen photo 2" }).click();
+    await expect(page.getByRole("img", { name: "Chosen photo 2" })).toBeHidden();
+
+    try {
+        await page.getByRole("button", { name: "Publish listing" }).click();
+        await expect(page.getByText(/^Listing created/)).toBeVisible();
+        // Only the photo left in is uploaded, and the previews clear for the next listing.
+        const rows = await sql("SELECT p.photo_id FROM listing_photos p JOIN vendor_listings l USING (listing_id) WHERE l.listing_title = $1", [title]);
+        expect(rows).toHaveLength(1);
+        await expect(page.getByRole("img", { name: "Chosen photo 1" })).toBeHidden();
+    } finally {
+        await sql("DELETE FROM vendor_listings WHERE listing_title = $1", [title]);
+    }
 });
 
 test("the business details form and other dashboard pages open", async ({ page }) => {
@@ -80,6 +152,81 @@ test("the business details form and other dashboard pages open", async ({ page }
         const res = await page.goto(path);
         expect(res?.status(), path).toBe(200);
         await expect(page.getByRole("heading", { name: text }).first(), path).toBeVisible();
+    }
+});
+
+// KAN-327: after a crop the page kept the cover's old address, whose file the server had deleted, so
+// cropping again opened blank with "The photo could not be opened".
+test("a cover can be cropped again and again without reloading the page", async ({ page }) => {
+    const cover = () =>
+        sql<{ id: number; url: string }>(
+            "SELECT vendor_photo_id AS id, vendor_photo_url AS url FROM vendor_photos WHERE vendor_id = 1 ORDER BY vendor_photo_sort, vendor_photo_id LIMIT 1"
+        ).then((rows) => rows[0]);
+    const before = await cover();
+    try {
+        await page.goto("/vendors/dashboard/business?vendor=1");
+        const crop = page.getByRole("dialog", { name: "Position your cover photo" });
+        for (let round = 1; round <= 2; round++) {
+            await page.getByRole("button", { name: "Crop" }).click();
+            await expect(crop.locator("img")).toBeVisible();
+            await expect(crop.getByText("The photo could not be opened")).toBeHidden();
+            await crop.getByRole("button", { name: "Use this cover" }).click();
+            await expect(crop).toBeHidden();
+            await expect(page.getByText("Cover photo cropped.")).toBeVisible();
+            // The thumbnail shows the new file, not the one the crop replaced.
+            const { url } = await cover();
+            expect(url, `round ${round}`).not.toBe(before.url);
+            await expect(page.getByRole("img", { name: "Business photo 1" })).toHaveAttribute("src", new RegExp(`${url}$`));
+        }
+    } finally {
+        await sql("UPDATE vendor_photos SET vendor_photo_url = $1 WHERE vendor_photo_id = $2", [before.url, before.id]);
+        await sql("UPDATE vendors SET vendor_cover_url = $1 WHERE vendor_id = 1", [before.url]);
+        // A crop deletes the file it replaced once nothing else uses it, so the seed photo is put back.
+        const seed = path.join(UPLOAD_DIR, path.basename(before.url));
+        if (!fs.existsSync(seed)) fs.copyFileSync(path.join(ROOT, "database", "seed-assets", path.basename(before.url)), seed);
+    }
+});
+
+// KAN-330: a saved cover is cropped again from the photo it was cut from, after a reload too, so it can
+// zoom back out to the whole photo.
+test("a saved cover can be cropped again from the whole photo, starting where it was left", async ({ page }) => {
+    const [before] = await sql<{ id: number; url: string }>(
+        "SELECT vendor_photo_id AS id, vendor_photo_url AS url FROM vendor_photos WHERE vendor_id = 1 ORDER BY vendor_photo_sort, vendor_photo_id LIMIT 1"
+    );
+    // An 1800 x 945 cover with no original kept yet, as a cover saved before originals were.
+    await page.goto("/");
+    const png = await page.evaluate(() => {
+        const canvas = document.createElement("canvas");
+        canvas.width = 1800;
+        canvas.height = 945;
+        const ctx = canvas.getContext("2d")!;
+        ctx.fillStyle = "#f59e0b";
+        ctx.fillRect(0, 0, 1800, 945);
+        return canvas.toDataURL("image/png").split(",")[1];
+    });
+    const large = `uploads/e2e-large-cover-${Date.now()}.png`;
+    fs.writeFileSync(path.join(UPLOAD_DIR, path.basename(large)), Buffer.from(png, "base64"));
+    await sql("UPDATE vendor_photos SET vendor_photo_url = $1, vendor_photo_original_url = NULL, vendor_photo_crop = NULL WHERE vendor_photo_id = $2", [large, before.id]);
+    try {
+        await page.goto("/vendors/dashboard/business?vendor=1");
+        const crop = page.getByRole("dialog", { name: "Position your cover photo" });
+        const zoom = crop.getByRole("slider", { name: "Zoom" });
+        await page.getByRole("button", { name: "Crop" }).click();
+        await zoom.fill("2");
+        await expect(crop.getByText("This crop: 900 × 473.", { exact: false })).toBeVisible();
+        await crop.getByRole("button", { name: "Use this cover" }).click();
+        await expect(page.getByText("Cover photo cropped.")).toBeVisible();
+
+        await page.reload();
+        await page.getByRole("button", { name: "Crop" }).click();
+        await expect(zoom).toHaveValue("2");
+        await expect(crop.getByText("This crop: 900 × 473.", { exact: false })).toBeVisible();
+        await zoom.fill("1");
+        await expect(crop.getByText("This crop: 1800 × 945.", { exact: false })).toBeVisible();
+        await crop.getByRole("button", { name: "Cancel" }).click();
+    } finally {
+        await sql("UPDATE vendor_photos SET vendor_photo_url = $1, vendor_photo_original_url = NULL, vendor_photo_crop = NULL WHERE vendor_photo_id = $2", [before.url, before.id]);
+        await sql("UPDATE vendors SET vendor_cover_url = $1 WHERE vendor_id = 1", [before.url]);
     }
 });
 
@@ -128,4 +275,37 @@ test("with no language picked, the dashboard uses the account's own language (KA
     } finally {
         await sql("UPDATE users SET user_language = $2 WHERE user_id = $1", [owner, user_language]);
     }
+});
+
+// KAN-333: without a logo, the account menu showed the cover, the public page a category picture and
+// the edit page nothing, so the logo seemed to come and go. Every logo spot now shows the category's
+// picture, and the edit page says so.
+test("a business without a logo shows its category's picture in every logo spot @phone", async ({ page, context }) => {
+    const wide = (page.viewportSize()?.width ?? 1280) >= 1024;
+    const [silk] = await sql<{ vendor_id: number; vendor_cover_url: string | null; vendor_logo_url: string | null }>(
+        "SELECT vendor_id, vendor_cover_url, vendor_logo_url FROM vendors WHERE vendor_slug = 'shaheb-bazar-silk-house'"
+    );
+    expect(silk.vendor_logo_url, "the seed gives Silk House no logo").toBeNull();
+    await signIn(context, "twoBusinesses");
+
+    await page.goto("/business/shaheb-bazar-silk-house");
+    const badge = page.locator("main img").nth(1); // the cover, then the round badge
+    const picture = await badge.getAttribute("src");
+    expect(picture).toBeTruthy();
+    expect(picture).not.toContain(path.basename(silk.vendor_cover_url ?? "no-cover"));
+
+    // The account switcher: the business's row, and the button when working on it.
+    await page.goto(`/vendors/dashboard?vendor=${silk.vendor_id}`);
+    if (wide) {
+        await expect(page.locator("header summary img").first()).toHaveAttribute("src", picture!);
+        await page.locator("summary").filter({ visible: true }).first().click();
+    } else {
+        await page.getByRole("button", { name: /menu/i }).click();
+    }
+    await expect(page.getByRole("link", { name: "Shaheb Bazar Silk House" }).filter({ visible: true }).first().locator("img")).toHaveAttribute("src", picture!);
+
+    // The edit page shows it in the empty logo box, and says customers see it.
+    await page.goto(`/vendors/dashboard/business?vendor=${silk.vendor_id}`);
+    await expect(page.getByRole("img", { name: "Your category's picture, shown until you add a logo" })).toHaveAttribute("src", picture!);
+    await expect(page.getByText(/Until you add one, customers see your category's picture/)).toBeVisible();
 });
