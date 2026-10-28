@@ -21,6 +21,7 @@ their profile, listings and messages; administrators approve and moderate.
 - [Marketing passes](#marketing-passes)
 - [Testing](#testing)
 - [Deploying to a server](docs/DEPLOY.md) (the team test server) and [to the client's server](docs/DEPLOY-CLIENT.md)
+- [Using the test server](docs/TEST-SERVER.md): putting your branch on test.shahebbazar.com
 - [Conventions](#conventions)
 - [Troubleshooting](#troubleshooting)
 - [Known gaps](#known-gaps)
@@ -549,8 +550,8 @@ pull request that has passed CI. CI is the gate, so no approval is needed to mer
    against the latest code. Turn on **auto-merge** and the PR merges itself when CI passes.
 7. Tag a teammate on the PR. They review after it merges, and any problem becomes a
    follow-up PR. Because CI is the only gate, add tests with every change.
-8. After the merge, CI runs again on `main` and then deploys it to the test server
-   ([docs/DEPLOY.md](docs/DEPLOY.md), step 6).
+8. After the merge, CI runs again on `main` and then deploys it to staging. To try a branch on a
+   real server before it merges, put it on the test server ([docs/TEST-SERVER.md](docs/TEST-SERVER.md)).
 
 Never commit `.env` files, sign-in codes, session tokens or files from `backend/uploads/`.
 
@@ -591,7 +592,7 @@ schema separately.
   open `/vendors/dashboard?vendor=<id>` directly.
 - **Business form feedback:** some invalid fields (categories, description,
   location, contact details) are not clearly highlighted in the form.
-- **Deployment** (KAN-254): the team test server updates itself from `main` ([docs/DEPLOY.md](docs/DEPLOY.md)). The client's server isn't set up yet, and sign-in codes aren't sent by SMS yet.
+- **Deployment** (KAN-254): staging on the client's server updates itself from `main`, and any branch can be put on the team test server by hand ([docs/TEST-SERVER.md](docs/TEST-SERVER.md)). Production on the client's server isn't set up yet, and sign-in codes aren't sent by SMS yet.
 - **Language** uses `?lang=bn`; `/en` and `/bn` URL prefixes are a future improvement.
 - **Maps** are illustrations, not a live map.
 - **Bookings and promotions** are later-phase features.

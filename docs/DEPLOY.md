@@ -120,7 +120,8 @@ the certificate.
 
 ## 6. Automatic deploys from GitHub
 
-The server updates when someone starts it: *Actions* → *CI* → *Run workflow*, pick the branch to
+A short guide for the team, with a screenshot, is [TEST-SERVER.md](TEST-SERVER.md). The server
+updates when someone starts it: *Actions* → *CI* → *Run workflow*, pick the branch to
 put on the server (`main` or a feature branch), and leave *Where to deploy* on **test server**. After
 the API tests, frontend checks and browser
 tests pass on that branch, the **Deploy to the test server** job in `.github/workflows/ci.yml`
