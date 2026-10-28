@@ -1,9 +1,10 @@
 # Checks every pull request into main, and main itself after a merge (KAN-281).
 # Branch protection on main requires these jobs to pass before a pull request can be merged:
 # API tests, Frontend checks and Browser tests.
-# Once they pass on main, the Deploy jobs update the AWS test server (docs/DEPLOY.md) and the staging
-# site on the client's server (docs/DEPLOY-CLIENT.md).
-# Run workflow (Actions tab) on main re-runs the checks and deploys again.
+# Once they pass on main, Deploy to staging updates the staging site on the client's server
+# (docs/DEPLOY-CLIENT.md).
+# Run workflow (Actions tab) runs the checks on the chosen branch, then deploys it to the AWS test
+# server (docs/DEPLOY.md), or, for main only, to staging again.
 
 name: CI
 
@@ -13,6 +14,12 @@ on:
   push:
     branches: [main]
   workflow_dispatch:
+    inputs:
+      deploy_to:
+        description: Where to deploy the branch once the checks pass (staging takes main only)
+        type: choice
+        options: [test server, staging]
+        default: test server
 
 # A newer push to a pull request cancels its older run. Runs on main aren't cancelled, so a deploy
 # is never stopped halfway.
@@ -171,13 +178,14 @@ jobs:
             e2e/test-results/
           retention-days: 7
 
-  # Updates the test server with main, once every check has passed. Over SSH with a key that can
-  # only run deploy/deploy.sh (docs/DEPLOY.md). Until the test-server environment's secrets are
-  # set, it notes that and passes.
+  # Updates the test server with the branch someone chose in Actions → CI → Run workflow, once every
+  # check has passed. Pushes and merges don't touch it. Over SSH with a key that can only run
+  # deploy/deploy.sh (docs/DEPLOY.md). Until the test-server environment's secrets are set, it notes
+  # that and passes.
   deploy:
     name: Deploy to the test server
     needs: [api, web, e2e]
-    if: github.ref == 'refs/heads/main' && github.event_name != 'pull_request'
+    if: github.event_name == 'workflow_dispatch' && inputs.deploy_to == 'test server'
     runs-on: ubuntu-24.04
     timeout-minutes: 25
     environment:
@@ -215,13 +223,13 @@ jobs:
           ssh -i ~/.ssh/deploy_key -o BatchMode=yes -o ServerAliveInterval=30 "ubuntu@$DEPLOY_HOST" "$GITHUB_SHA"
 
   # Updates the staging site on the client's server (staging.shahebbazar.com) with main, once every
-  # check has passed. Over SSH with a key that can only run deploy/client/deploy.sh
-  # (docs/DEPLOY-CLIENT.md, "Automatic deploys"). Until the staging environment's secrets are set, it
-  # notes that and passes.
+  # check has passed, after each push to main or when Run workflow on main chooses staging. Over SSH
+  # with a key that can only run deploy/client/deploy.sh (docs/DEPLOY-CLIENT.md, "Automatic
+  # deploys"). Until the staging environment's secrets are set, it notes that and passes.
   deploy-staging:
     name: Deploy to staging
     needs: [api, web, e2e]
-    if: github.ref == 'refs/heads/main' && github.event_name != 'pull_request'
+    if: github.ref == 'refs/heads/main' && (github.event_name == 'push' || inputs.deploy_to == 'staging')
     runs-on: ubuntu-24.04
     timeout-minutes: 25
     environment:

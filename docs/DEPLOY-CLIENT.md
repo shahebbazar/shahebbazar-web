@@ -119,7 +119,7 @@ once:
 4. Delete `staging_deploy` and `staging_deploy.pub` from your computer.
 
 Until the secrets are set, the job notes that and passes. To check it: **Actions → CI → Run workflow**
-on `main`. The **Deploy to staging** job ends with `Deployed: https://staging.shahebbazar.com is up.`
+on `main`, with **staging** as where to deploy. The **Deploy to staging** job ends with `Deployed: https://staging.shahebbazar.com is up.`
 
 Production isn't deployed automatically: it will deploy only on a release, approved by hand.
 

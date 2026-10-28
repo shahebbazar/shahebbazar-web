@@ -120,11 +120,14 @@ the certificate.
 
 ## 6. Automatic deploys from GitHub
 
-Once set up, every merge into `main` updates the server by itself. After the API tests, frontend
-checks and browser tests pass on `main`, the **Deploy to the test server** job in
-`.github/workflows/ci.yml` connects over SSH and runs `deploy/deploy.sh`, which:
+The server updates when someone starts it: *Actions* → *CI* → *Run workflow*, pick the branch to
+put on the server (`main` or a feature branch), and leave *Where to deploy* on **test server**. After
+the API tests, frontend checks and browser
+tests pass on that branch, the **Deploy to the test server** job in `.github/workflows/ci.yml`
+connects over SSH and runs `deploy/deploy.sh`. Merges and pushes don't touch this server (staging
+on the client's server is the one that follows `main`). The script:
 
-1. updates the code to the commit that passed (never an older one, never one that isn't on `main`);
+1. checks out the commit that passed (it must be on a branch of the repository);
 2. builds the new images while the old containers keep serving;
 3. if the update adds or changes files in `database/migrations/`, backs up and applies them;
 4. restarts what changed and checks the site answers, failing the job (and emailing whoever merged)
@@ -145,7 +148,8 @@ The key GitHub uses can run nothing but that script. Setup, once:
    ```
 
 3. **On GitHub** (needs a repository admin): *Settings* → *Environments* → *New environment*
-   `test-server`. Under *Deployment branches and tags*, choose *Selected branches* and add `main`.
+   `test-server`. Under *Deployment branches and tags*, choose *All branches* (anyone who can run
+   the workflow can then deploy any branch; to limit it, choose *Selected branches* and list them).
    Then add:
 
    | Kind | Name | Value |
@@ -156,12 +160,16 @@ The key GitHub uses can run nothing but that script. Setup, once:
    | Variable | `TEST_SERVER_URL` | `https://13-55-1-2.sslip.io` (shown as the deployment link) |
 
 4. **Remove the private key from the server:** `rm ~/github-deploy` (GitHub has it now).
-5. **Try it:** *Actions* → *CI* → *Run workflow* on `main`. The checks run, then the deploy; its log
-   shows the build and ends with "Deployed … and the site is answering".
+5. **Try it:** *Actions* → *CI* → *Run workflow*, with `main` as the branch. The checks run, then
+   the deploy; its log shows the build and ends with "Deployed … and the site is answering".
 
-Until the secrets are set, the deploy job only notes that and passes. To undo a bad change, revert
-its pull request: the revert deploys like any other merge. To stop automatic deploys, delete the
-`DEPLOY_HOST` secret.
+Until the secrets are set, the deploy job only notes that and passes. To undo a bad change, run the
+workflow again on `main` or on a branch that works. To stop deploys, delete the `DEPLOY_HOST` secret.
+
+**Switching branches and the database.** Migrations are worked out as the files added or changed in
+`database/migrations/` between the last deployed commit and the new one, so a branch with its own
+migration applies it, but moving back to a branch without it doesn't undo it. If the test data ends
+up out of step with the branch, reset it (deletes everything, see Everyday use) after the deploy.
 
 ## Everyday use
 
@@ -169,7 +177,7 @@ All commands run from `~/shahebbazar-web` on the server.
 
 | Task | Command |
 | --- | --- |
-| Deploy the latest `main` | Automatic after each merge (step 6). By hand: `sh deploy/deploy.sh` |
+| Deploy a branch | *Run workflow* in Actions (step 6). By hand: `sh deploy/deploy.sh <commit>`, or with no commit the latest `main` |
 | See what's running | `docker compose -f deploy/docker-compose.yml ps` |
 | Follow the API's log | `docker compose -f deploy/docker-compose.yml logs -f api` |
 | Restart everything | `docker compose -f deploy/docker-compose.yml restart` |
@@ -234,4 +242,4 @@ settings in `deploy/.env`:
 - The database is not reachable from outside the server.
 - Uploads are checked by type and size in the API; Caddy also limits requests to 50 MB.
 - Secrets live only in `deploy/.env` on the server, and the deploy key only in the GitHub
-  environment `test-server`, which only `main` can use.
+  environment `test-server`, which can be limited to chosen branches (step 6).
