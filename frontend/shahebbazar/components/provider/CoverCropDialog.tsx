@@ -11,6 +11,7 @@ import {
     cropToFile,
     loadImage,
     maxZoom,
+    MIN_ZOOM_ROOM,
 } from "@/lib/coverPhoto";
 
 export type CropSource = { src: string; name: string };
@@ -90,6 +91,8 @@ export function CoverCropDialog({
     const area = img ? cropArea(width, height, zoom, centre.x, centre.y) : null;
     const quality = area ? coverQuality(area.width, area.height) : null;
     const zoomLimit = img ? maxZoom(width, height) : 1;
+    const canZoom = zoomLimit >= MIN_ZOOM_ROOM;
+    const zoomHintId = useId();
 
     function moveTo(x: number, y: number) {
         if (!img) return;
@@ -195,18 +198,26 @@ export function CoverCropDialog({
                         type="range"
                         min={1}
                         max={zoomLimit}
-                        step={0.01}
+                        // Any position, not steps: a step of 0.01 left only a few stops on a short range.
+                        step="any"
                         value={zoom}
-                        disabled={!img || zoomLimit === 1}
+                        disabled={!img || !canZoom}
+                        aria-describedby={img && !canZoom ? zoomHintId : undefined}
                         onChange={(e) => {
                             const next = Number(e.target.value);
                             setZoom(next);
                             const a = cropArea(width, height, next, centre.x, centre.y);
                             setCentre({ x: a.x + a.width / 2, y: a.y + a.height / 2 });
                         }}
-                        className="w-full accent-brand-600"
+                        className="w-full accent-brand-600 disabled:opacity-50"
                     />
                 </label>
+                {img && !canZoom && quality !== "small" && (
+                    <p id={zoomHintId} className="mt-1 pl-7 text-xs text-soft">
+                        This photo is only just big enough for a cover, so it can&apos;t be zoomed in. To zoom, use a
+                        photo at least {COVER_WIDTH} × {COVER_HEIGHT}.
+                    </p>
+                )}
 
                 {quality && area && (
                     <p className={`mt-3 flex gap-2 rounded-lg p-3 text-[0.8125rem] ${ADVICE_STYLE[quality]}`} role={quality === "small" ? "alert" : "status"}>

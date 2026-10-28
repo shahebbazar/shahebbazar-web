@@ -44,6 +44,12 @@ export function maxZoom(width: number, height: number): number {
     return Math.max(1, Math.min(4, fullWidth / COVER_MIN_WIDTH));
 }
 
+/**
+ * Below this furthest zoom the slider is switched off: a photo only just above the minimum could zoom by
+ * a few pixels at most, and a full-width slider for that looks broken (KAN-326).
+ */
+export const MIN_ZOOM_ROOM = 1.05;
+
 /** Loads an image file or address for measuring and drawing. */
 export function loadImage(src: string): Promise<HTMLImageElement> {
     return new Promise((resolve, reject) => {

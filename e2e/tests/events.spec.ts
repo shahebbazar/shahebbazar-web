@@ -132,6 +132,45 @@ test("a photo too small for a cover can't be used as one", async ({ page, contex
     await expect(page.getByRole("img", { name: "Chosen photo 1" })).toBeHidden();
 });
 
+// KAN-326: the zoom slider moved in steps of 0.01, so a photo only just big enough had three stops.
+test("the cover zoom moves smoothly, and says why when a photo is too small to zoom", async ({ page, context }) => {
+    // A plain photo of the given size, drawn in the browser.
+    const photo = async (width: number, height: number) => ({
+        name: `photo-${width}.png`,
+        mimeType: "image/png",
+        buffer: Buffer.from(
+            await page.evaluate(([w, h]) => {
+                const canvas = document.createElement("canvas");
+                canvas.width = w;
+                canvas.height = h;
+                const ctx = canvas.getContext("2d")!;
+                ctx.fillStyle = "#3b82f6";
+                ctx.fillRect(0, 0, w, h);
+                return canvas.toDataURL("image/png").split(",")[1];
+            }, [width, height]),
+            "base64"
+        ),
+    });
+    await signIn(context, "owner");
+    await page.goto("/vendors/dashboard/events/new?vendor=1");
+    const crop = page.getByRole("dialog", { name: "Position your cover photo" });
+    const zoom = crop.getByRole("slider", { name: "Zoom" });
+
+    // 612 wide, as in the report: zooming would take it under 600 x 315, so the slider is off and says why.
+    await page.getByLabel("Choose event photos").setInputFiles(await photo(612, 408));
+    await expect(crop.getByText(/only just big enough for a cover/)).toBeVisible();
+    await expect(zoom).toBeDisabled();
+    await crop.getByRole("button", { name: "Cancel" }).click();
+
+    // A large photo zooms to any point, not only whole hundredths.
+    await page.getByLabel("Choose event photos").setInputFiles(await photo(1800, 945));
+    await expect(zoom).toBeEnabled();
+    await expect(crop.getByText(/only just big enough/)).toBeHidden();
+    await zoom.fill("1.234");
+    await expect(crop.getByText("This crop: 1459 × 766.", { exact: false })).toBeVisible();
+    await crop.getByRole("button", { name: "Cancel" }).click();
+});
+
 test("shared events get a full-size card with the cover photo, in the page's language", async ({ page, request }) => {
     await page.goto("/events/mango-season-tasting-day?lang=bn");
     const image = await page.locator('meta[property="og:image"]').getAttribute("content");
