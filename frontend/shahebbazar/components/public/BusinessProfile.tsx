@@ -69,6 +69,7 @@ export function BusinessProfile({
                         slug={categories[0]?.slug ?? business.primary_category_slug}
                         businessName={business.vendor_name}
                         preferredImageUrl={business.vendor_cover_url}
+                        loading="eager"
                         className="size-full object-cover"
                         alt={`${name} — cover photograph`}
                     />

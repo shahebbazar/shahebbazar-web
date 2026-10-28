@@ -97,7 +97,7 @@ export function ShareMenu({
                 </button>
                 {canShare && (
                     <button type="button" onClick={() => { done(); navigator.share({ title, url }).catch(() => {}); }} className={item}>
-git status                        <Share2 className="size-4" />
+                        <Share2 className="size-4" />
                         {text.more}
                     </button>
                 )}
