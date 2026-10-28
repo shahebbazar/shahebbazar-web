@@ -1,5 +1,5 @@
 import Link from "next/link";
-import { ChevronDown, Plus, Store, UserRound } from "lucide-react";
+import { ChevronDown, Plus } from "lucide-react";
 import { switchHref } from "@/lib/activeBusiness";
 import { fill, t, type Locale } from "@/lib/i18n";
 import { browserAssetUrl } from "@/lib/apiBase";
@@ -40,15 +40,28 @@ function current({ userName, side, businesses, locale = "en" }: Props) {
     };
 }
 
-/** A row's picture: the photo when there is one, otherwise the icon. */
-function RowIcon({ photo, Icon }: { photo: string | null | undefined; Icon: typeof Store }) {
+/**
+ * An account's picture: the photo when there is one, otherwise the name's first letter. The button and
+ * the list both use it, so an account looks the same in each (KAN-315).
+ */
+function Avatar({ name, photo, className }: { name: string; photo: string | null | undefined; className: string }) {
     const src = browserAssetUrl(photo ?? null);
-    // eslint-disable-next-line @next/next/no-img-element
-    return src ? <img src={src} alt="" className="size-5 shrink-0 rounded-full object-cover" /> : <Icon className="size-4 shrink-0" aria-hidden />;
+    return (
+        <span aria-hidden className={`grid shrink-0 place-items-center overflow-hidden rounded-full bg-brand-100 font-semibold text-brand-700 ${className}`}>
+            {src ? (
+                // eslint-disable-next-line @next/next/no-img-element
+                <img src={src} alt="" className="size-full object-cover" />
+            ) : (
+                name.trim().charAt(0).toUpperCase() || "?"
+            )}
+        </span>
+    );
 }
 
+const ROW_AVATAR = "size-5 text-[0.625rem]";
+
 /** The choices, for the dropdown and for the phone menu drawer. */
-export function AccountSwitcherList({ side, businesses, businessPath = "/vendors/dashboard", avatarUrl, locale = "en" }: Omit<Props, "userName">) {
+export function AccountSwitcherList({ userName, side, businesses, businessPath = "/vendors/dashboard", avatarUrl, locale = "en" }: Omit<Props, "extras">) {
     const copy = t(locale);
     const isCustomer = side.kind === "customer";
     return (
@@ -57,7 +70,7 @@ export function AccountSwitcherList({ side, businesses, businessPath = "/vendors
             <ul className="space-y-0.5">
                 <li>
                     <Link href="/account" aria-current={isCustomer ? "true" : undefined} className={`${ROW} ${isCustomer ? ROW_ACTIVE : ROW_IDLE}`}>
-                        <RowIcon photo={avatarUrl} Icon={UserRound} />
+                        <Avatar name={userName} photo={avatarUrl} className={ROW_AVATAR} />
                         <span className="min-w-0 flex-1 truncate">{copy.accountCustomer}</span>
                     </Link>
                 </li>
@@ -70,7 +83,7 @@ export function AccountSwitcherList({ side, businesses, businessPath = "/vendors
                                 aria-current={active ? "true" : undefined}
                                 className={`${ROW} ${active ? ROW_ACTIVE : ROW_IDLE}`}
                             >
-                                <RowIcon photo={b.vendor_photo} Icon={Store} />
+                                <Avatar name={b.vendor_name} photo={b.vendor_photo} className={ROW_AVATAR} />
                                 <span className="min-w-0 flex-1 truncate">{b.vendor_name}</span>
                                 {b.member_role === "manager" && <span className="text-[0.6875rem] text-soft">{copy.accountRoleManager}</span>}
                             </Link>
@@ -108,22 +121,13 @@ export function AccountMenu({
     extras?: React.ReactNode;
     children?: React.ReactNode;
 }) {
-    const initial = name.trim().charAt(0).toUpperCase() || "?";
-    const avatar = browserAssetUrl(photo);
     return (
         <details className="group relative min-w-0">
             <summary
                 aria-label={label}
                 className="flex min-w-0 cursor-pointer list-none items-center gap-2.5 rounded-[10px] px-1.5 py-1 hover:bg-surface-2 [&::-webkit-details-marker]:hidden"
             >
-                <span aria-hidden className="grid size-9 shrink-0 place-items-center overflow-hidden rounded-full bg-brand-100 text-sm font-semibold text-brand-700">
-                    {avatar ? (
-                        // eslint-disable-next-line @next/next/no-img-element
-                        <img src={avatar} alt="" className="size-full object-cover" />
-                    ) : (
-                        initial
-                    )}
-                </span>
+                <Avatar name={name} photo={photo} className="size-9 text-sm" />
                 <span className="hidden min-w-0 leading-tight min-[420px]:block">
                     <span className="block max-w-44 truncate text-sm font-semibold">{name}</span>
                     <span className="block text-[0.75rem] text-muted">{role}</span>
@@ -153,7 +157,7 @@ export function AccountSwitcher(props: Props) {
             label={fill(t(props.locale ?? "en").accountSwitchLabel, { name, role })}
             extras={props.extras}
         >
-            <AccountSwitcherList side={props.side} businesses={props.businesses} businessPath={props.businessPath} avatarUrl={props.avatarUrl} locale={props.locale} />
+            <AccountSwitcherList userName={props.userName} side={props.side} businesses={props.businesses} businessPath={props.businessPath} avatarUrl={props.avatarUrl} locale={props.locale} />
         </AccountMenu>
     );
 }

@@ -1,6 +1,6 @@
 // The business owner's Marketing workspace (KAN-285, KAN-286): brief, drafts, editing, sending.
 
-import { test, expect, signIn, sql, expectNoSideScroll } from "../fixtures";
+import { test, expect, signIn, sql, userIdOf, expectNoSideScroll } from "../fixtures";
 import type { Page } from "@playwright/test";
 
 const WORKSPACE = "/vendors/dashboard/marketing?vendor=1";
@@ -330,6 +330,43 @@ test("the account switcher shows which side you're on and moves between the cust
     await expect(page.getByRole("link", { name: "Rajshahi Mango Traders" }).filter({ visible: true }).first()).toHaveAttribute("aria-current", "true");
     await page.getByRole("link", { name: "Customer account" }).filter({ visible: true }).first().click();
     await expect(page).toHaveURL(/\/account$/);
+});
+
+// KAN-315: the customer account had the owner's letter on the button but a stock icon in the list,
+// and no photo at all on the business side.
+test("the customer account has the same picture on the button and in the list, on both sides @phone", async ({ page }) => {
+    const wide = (page.viewportSize()?.width ?? 1280) >= 1024;
+    const openSwitcher = async () => {
+        if (wide) await page.locator("summary").filter({ visible: true }).first().click();
+        else await page.getByRole("button", { name: /menu/i }).click();
+    };
+    const customerRow = () => page.getByRole("link", { name: "Customer account" }).filter({ visible: true }).first();
+    const owner = await userIdOf("owner");
+
+    // No photo: the owner's first letter, as on the button.
+    await page.goto("/account");
+    if (wide) await expect(page.locator("header summary span[aria-hidden]").first()).toHaveText("S");
+    await openSwitcher();
+    await expect(customerRow().locator("span[aria-hidden]")).toHaveText("S");
+
+    const [{ photo }] = await sql<{ photo: string }>("SELECT vendor_photo_url AS photo FROM vendor_photos WHERE vendor_id = 2 ORDER BY vendor_photo_sort LIMIT 1");
+    try {
+        await sql("UPDATE users SET user_avatar_url = $1 WHERE user_id = $2", [photo, owner]);
+        const src = new RegExp(`${photo.replace(/^\/+/, "").replace(/[.*+?^${}()|[\]\\]/g, "\\$&")}$`);
+
+        // Customer side: the photo on the button and on the row.
+        await page.goto("/account");
+        if (wide) await expect(page.locator("header summary img").first()).toHaveAttribute("src", src);
+        await openSwitcher();
+        await expect(customerRow().locator("img")).toHaveAttribute("src", src);
+
+        // Business side: the button shows the business, and the row still shows the owner's photo.
+        await page.goto("/vendors/dashboard?vendor=1");
+        await openSwitcher();
+        await expect(customerRow().locator("img")).toHaveAttribute("src", src);
+    } finally {
+        await sql("UPDATE users SET user_avatar_url = NULL WHERE user_id = $1", [owner]);
+    }
 });
 
 test("an event campaign can be about one of the business's events, with no products, and its posts link to the event (KAN-298)", async ({ page }) => {
