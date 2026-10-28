@@ -1,10 +1,10 @@
 import Link from "next/link";
 import { BadgeCheck, MapPin, Star } from "lucide-react";
 import { OpenBadge } from "../shared/BusinessCard";
-import { assetUrl } from "@/lib/api";
 import { t, localeHref, pick, type Locale } from "@/lib/i18n";
 import { formatRating, localiseDigits, toNumber } from "@/lib/format";
 import type { BusinessCard } from "@/lib/types";
+import { CategoryFallbackImage } from "@/components/shared/CategoryFallbackImage";
 
 // Search result row.
 export function SearchResultRow({
@@ -19,7 +19,6 @@ export function SearchResultRow({
 }) {
     const copy = t(locale);
     const name = pick(locale, business.vendor_name, business.vendor_name_bn);
-    const cover = assetUrl(business.vendor_cover_url);
     const reviews = toNumber(business.review_count);
     // A visit from a Sponsored row is counted as a sponsored view (ProfileViewBeacon).
     const href = localeHref(`/business/${business.vendor_slug}${sponsored ? "?from=sponsored" : ""}`, locale);
@@ -27,16 +26,13 @@ export function SearchResultRow({
     return (
         <article className="flex flex-col gap-4 p-4 sm:flex-row">
             <div className="relative aspect-4/3 w-full shrink-0 overflow-hidden rounded-lg bg-brand-50 sm:aspect-auto sm:h-[130px] sm:w-[180px]">
-                {cover ? (
-                    // eslint-disable-next-line @next/next/no-img-element
-                    <img src={cover} alt="" loading="lazy" className="size-full object-cover" />
-                ) : (
-                    <div className="grid size-full place-items-center bg-gradient-to-br from-brand-100 to-brand-200">
-                        <span className="text-2xl font-bold text-brand-600 opacity-70">
-                            {name.trim().charAt(0).toUpperCase() || "?"}
-                        </span>
-                    </div>
-                )}
+                <CategoryFallbackImage
+                    slug={business.primary_category_slug}
+                    businessName={business.vendor_name}
+                    preferredImageUrl={business.vendor_cover_url}
+                    className="size-full object-cover"
+                    alt=""
+                />
 
                 {sponsored && (
                     <span className="absolute top-2 left-2 inline-flex items-center gap-1 rounded-md bg-sponsor-bg px-2 py-0.5 text-[0.6875rem] font-semibold text-sponsor-ink">

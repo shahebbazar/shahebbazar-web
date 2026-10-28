@@ -15,7 +15,7 @@ import {
     Users,
     type LucideIcon,
 } from "lucide-react";
-import { assetUrl } from "@/lib/api";
+import { CategoryFallbackImage } from "@/components/shared/CategoryFallbackImage";
 import { t, localeHref, pick, type Locale } from "@/lib/i18n";
 import { formatClockTime, formatRating, localiseDigits, toNumber } from "@/lib/format";
 import type { BusinessDetail } from "@/lib/types";
@@ -183,24 +183,17 @@ export function BusinessSidebar({
 
                     <ul className="space-y-3.5">
                         {similar.map((item) => {
-                            const cover = assetUrl(item.vendor_cover_url);
                             const distance = toNumber(item.distance_km);
                             return (
                                 <li key={item.vendor_id} className="flex gap-3">
                                     <div className="size-14 shrink-0 overflow-hidden rounded-lg bg-brand-50">
-                                        {cover ? (
-                                            // eslint-disable-next-line @next/next/no-img-element
-                                            <img
-                                                src={cover}
-                                                alt=""
-                                                loading="lazy"
-                                                className="size-full object-cover"
-                                            />
-                                        ) : (
-                                            <div className="grid size-full place-items-center bg-gradient-to-br from-brand-100 to-brand-200 text-sm font-bold text-brand-600">
-                                                {item.vendor_name.charAt(0).toUpperCase()}
-                                            </div>
-                                        )}
+                                        <CategoryFallbackImage
+                                            slug={item.primary_category_slug}
+                                            businessName={item.vendor_name}
+                                            preferredImageUrl={item.vendor_cover_url}
+                                            className="size-full object-cover"
+                                            alt=""
+                                        />
                                     </div>
 
                                     <div className="min-w-0 flex-1">
