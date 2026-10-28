@@ -4,6 +4,7 @@ import { switchHref } from "@/lib/activeBusiness";
 import { fill, t, type Locale } from "@/lib/i18n";
 import { browserAssetUrl } from "@/lib/apiBase";
 import type { VendorPickerRow } from "@/lib/types";
+import { CategoryFallbackImage } from "./CategoryFallbackImage";
 
 // One account switcher for the whole site: the public header (customer side) and the business
 // dashboard use the same control. The button shows where you are now (your customer account, or a
@@ -40,15 +41,21 @@ function current({ userName, side, businesses, locale = "en" }: Props) {
     };
 }
 
+/** A business shown in the menu: its main category's picture stands in for a missing logo (KAN-333). */
+type BusinessPicture = { categorySlug: string | null };
+
 /**
- * An account's picture: the photo when there is one, otherwise the name's first letter. The button and
- * the list both use it, so an account looks the same in each (KAN-315).
+ * An account's picture. A customer: their photo, otherwise their first letter. A business: its logo,
+ * otherwise its main category's picture, as in every other logo spot on the site (KAN-333). The button
+ * and the list both use it, so an account looks the same in each (KAN-315).
  */
-function Avatar({ name, photo, className }: { name: string; photo: string | null | undefined; className: string }) {
+function Avatar({ name, photo, business, className }: { name: string; photo: string | null | undefined; business?: BusinessPicture; className: string }) {
     const src = browserAssetUrl(photo ?? null);
     return (
         <span aria-hidden className={`grid shrink-0 place-items-center overflow-hidden rounded-full bg-brand-100 font-semibold text-brand-700 ${className}`}>
-            {src ? (
+            {business ? (
+                <CategoryFallbackImage slug={business.categorySlug} businessName={name} logoUrl={photo} className="size-full object-cover" />
+            ) : src ? (
                 // eslint-disable-next-line @next/next/no-img-element
                 <img src={src} alt="" className="size-full object-cover" />
             ) : (
@@ -83,7 +90,7 @@ export function AccountSwitcherList({ userName, side, businesses, businessPath =
                                 aria-current={active ? "true" : undefined}
                                 className={`${ROW} ${active ? ROW_ACTIVE : ROW_IDLE}`}
                             >
-                                <Avatar name={b.vendor_name} photo={b.vendor_photo} className={ROW_AVATAR} />
+                                <Avatar name={b.vendor_name} photo={b.vendor_logo} business={{ categorySlug: b.vendor_category_slug }} className={ROW_AVATAR} />
                                 <span className="min-w-0 flex-1 truncate">{b.vendor_name}</span>
                                 {b.member_role === "manager" && <span className="text-[0.6875rem] text-soft">{copy.accountRoleManager}</span>}
                             </Link>
@@ -109,6 +116,7 @@ export function AccountMenu({
     name,
     role,
     photo = null,
+    business,
     label,
     extras,
     children,
@@ -116,6 +124,8 @@ export function AccountMenu({
     name: string;
     role: string;
     photo?: string | null;
+    /** Set when the button shows a business, which falls back to its category's picture. */
+    business?: BusinessPicture;
     /** The button's accessible name. */
     label: string;
     extras?: React.ReactNode;
@@ -127,7 +137,7 @@ export function AccountMenu({
                 aria-label={label}
                 className="flex min-w-0 cursor-pointer list-none items-center gap-2.5 rounded-[10px] px-1.5 py-1 hover:bg-surface-2 [&::-webkit-details-marker]:hidden"
             >
-                <Avatar name={name} photo={photo} className="size-9 text-sm" />
+                <Avatar name={name} photo={photo} business={business} className="size-9 text-sm" />
                 <span className="hidden min-w-0 leading-tight min-[420px]:block">
                     <span className="block max-w-44 truncate text-sm font-semibold">{name}</span>
                     <span className="block text-[0.75rem] text-muted">{role}</span>
@@ -146,14 +156,13 @@ export function AccountMenu({
 export function AccountSwitcher(props: Props) {
     const { name, role } = current(props);
     const side = props.side;
-    const photo = side.kind === "customer"
-        ? props.avatarUrl
-        : props.businesses.find((b) => b.vendor_id === side.vendorId)?.vendor_photo;
+    const shown = side.kind === "business" ? props.businesses.find((b) => b.vendor_id === side.vendorId) : undefined;
     return (
         <AccountMenu
             name={name}
             role={role}
-            photo={photo}
+            photo={side.kind === "customer" ? props.avatarUrl : shown?.vendor_logo}
+            business={side.kind === "business" ? { categorySlug: shown?.vendor_category_slug ?? null } : undefined}
             label={fill(t(props.locale ?? "en").accountSwitchLabel, { name, role })}
             extras={props.extras}
         >

@@ -5,6 +5,7 @@ const { imageUpload, receive, discard, storedPath, checkUploads, parseCrop, remo
 const { requireVendorOwnership } = require("../lib/middleware/auth");
 const { requireFeature } = require("../lib/access");
 const { getSetting } = require("../lib/settings");
+const { primaryCategorySlug } = require("../lib/primaryCategory");
 const { businessOptions } = require("../lib/vendorRegistration");
 const router = express.Router();
 
@@ -30,6 +31,8 @@ async function loadProfile(db, vendorId) {
                 vendor_phone, vendor_whatsapp, vendor_phone_alt, vendor_phone_alt_type, vendor_email, vendor_website, vendor_address,
                 location_id, vendor_logo_url, vendor_cover_url, vendor_status,
                 vendor_rejection_reason,
+                -- For the category picture customers see while there is no logo (KAN-333).
+                ${primaryCategorySlug("vendors")} AS primary_category_slug,
                 -- The contact number, shown read-only: the owner's sign-in mobile.
                 (SELECT u.user_phone FROM users u WHERE u.user_id = vendors.user_id) AS owner_phone
          FROM vendors WHERE vendor_id = $1`,

@@ -10,6 +10,7 @@ export function ThreadView({
     thread,
     otherName,
     otherPhoto,
+    otherBusiness,
     otherHref,
     send,
     reportBackHref,
@@ -18,6 +19,8 @@ export function ThreadView({
     otherName: string;
     /** The business's logo for the customer, the customer's photo for the business. */
     otherPhoto: string | null;
+    /** Set when the other side is the business, whose picture falls back to its category's (KAN-333). */
+    otherBusiness?: { categorySlug: string | null };
     /** Where the other side's name and photo link to: the business's page, for the customer. */
     otherHref?: string;
     send: (body: string) => Promise<SendResult>;
@@ -30,12 +33,12 @@ export function ThreadView({
             <div className="rounded-xl border border-line bg-surface p-4 shadow-card">
                 {otherHref ? (
                     <Link href={otherHref} className="group flex w-fit items-center gap-3">
-                        <Avatar name={otherName} photo={otherPhoto} />
+                        <Avatar name={otherName} photo={otherPhoto} business={otherBusiness} />
                         <span className="font-semibold group-hover:text-brand-600 group-hover:underline">{otherName}</span>
                     </Link>
                 ) : (
                     <div className="flex items-center gap-3">
-                        <Avatar name={otherName} photo={otherPhoto} />
+                        <Avatar name={otherName} photo={otherPhoto} business={otherBusiness} />
                         <p className="font-semibold">{otherName}</p>
                     </div>
                 )}

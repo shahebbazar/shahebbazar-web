@@ -522,6 +522,8 @@ export function BusinessForm({ initial }: { initial: VendorProfileWithOptions })
                     <Section id="images" title="Images & Logo" description="Upload a logo and photos of your business. Good images help you get more attention.">
                         <ImagesSection
                             vendorId={vendorId}
+                            businessName={profile.vendor.vendor_name}
+                            categorySlug={profile.vendor.primary_category_slug ?? null}
                             logoUrl={logoUrl}
                             photos={photos}
                             photosMax={limits.photosMax}

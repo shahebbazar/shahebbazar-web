@@ -276,3 +276,36 @@ test("with no language picked, the dashboard uses the account's own language (KA
         await sql("UPDATE users SET user_language = $2 WHERE user_id = $1", [owner, user_language]);
     }
 });
+
+// KAN-333: without a logo, the account menu showed the cover, the public page a category picture and
+// the edit page nothing, so the logo seemed to come and go. Every logo spot now shows the category's
+// picture, and the edit page says so.
+test("a business without a logo shows its category's picture in every logo spot @phone", async ({ page, context }) => {
+    const wide = (page.viewportSize()?.width ?? 1280) >= 1024;
+    const [silk] = await sql<{ vendor_id: number; vendor_cover_url: string | null; vendor_logo_url: string | null }>(
+        "SELECT vendor_id, vendor_cover_url, vendor_logo_url FROM vendors WHERE vendor_slug = 'shaheb-bazar-silk-house'"
+    );
+    expect(silk.vendor_logo_url, "the seed gives Silk House no logo").toBeNull();
+    await signIn(context, "twoBusinesses");
+
+    await page.goto("/business/shaheb-bazar-silk-house");
+    const badge = page.locator("main img").nth(1); // the cover, then the round badge
+    const picture = await badge.getAttribute("src");
+    expect(picture).toBeTruthy();
+    expect(picture).not.toContain(path.basename(silk.vendor_cover_url ?? "no-cover"));
+
+    // The account switcher: the business's row, and the button when working on it.
+    await page.goto(`/vendors/dashboard?vendor=${silk.vendor_id}`);
+    if (wide) {
+        await expect(page.locator("header summary img").first()).toHaveAttribute("src", picture!);
+        await page.locator("summary").filter({ visible: true }).first().click();
+    } else {
+        await page.getByRole("button", { name: /menu/i }).click();
+    }
+    await expect(page.getByRole("link", { name: "Shaheb Bazar Silk House" }).filter({ visible: true }).first().locator("img")).toHaveAttribute("src", picture!);
+
+    // The edit page shows it in the empty logo box, and says customers see it.
+    await page.goto(`/vendors/dashboard/business?vendor=${silk.vendor_id}`);
+    await expect(page.getByRole("img", { name: "Your category's picture, shown until you add a logo" })).toHaveAttribute("src", picture!);
+    await expect(page.getByText(/Until you add one, customers see your category's picture/)).toBeVisible();
+});

@@ -5,6 +5,7 @@ import { Crop, ImagePlus, Loader2, Star, Trash2, Upload } from "lucide-react";
 import { BROWSER_API_BASE } from "@/lib/apiBase";
 import { CoverCropDialog, type CropSource } from "@/components/provider/CoverCropDialog";
 import { coverQuality, type CoverQuality, type CropPosition } from "@/lib/coverPhoto";
+import { CategoryFallbackImage } from "@/components/shared/CategoryFallbackImage";
 
 /** A business photo. A cropped cover also has the photo it was cut from, and where (KAN-330). */
 export type Photo = { id: number; url: string; original_url?: string | null; crop?: CropPosition | null };
@@ -43,6 +44,8 @@ async function errorText(res: Response) {
 // Logo and business photos.
 export function ImagesSection({
     vendorId,
+    businessName,
+    categorySlug,
     logoUrl,
     photos,
     photosMax,
@@ -51,6 +54,9 @@ export function ImagesSection({
     onPhotosFromServer,
 }: {
     vendorId: number;
+    businessName: string;
+    /** The saved main category: without a logo, customers see its picture in every logo spot (KAN-333). */
+    categorySlug: string | null;
     logoUrl: string | null;
     photos: Photo[];
     photosMax: number;
@@ -231,7 +237,16 @@ export function ImagesSection({
                             // eslint-disable-next-line @next/next/no-img-element
                             <img src={logo} alt="Business logo" className="size-full object-contain p-3" />
                         ) : (
-                            <ImagePlus className="size-8 text-soft" />
+                            // What customers see in its place, faded so it doesn't read as an uploaded logo.
+                            <>
+                                <CategoryFallbackImage
+                                    slug={categorySlug}
+                                    businessName={businessName}
+                                    alt="Your category's picture, shown until you add a logo"
+                                    className="size-full object-cover opacity-40"
+                                />
+                                <ImagePlus className="absolute size-8 text-ink" aria-hidden />
+                            </>
                         )}
                         {busy === "logo" && (
                             <span className="absolute inset-0 grid place-items-center bg-surface/70">
@@ -259,7 +274,10 @@ export function ImagesSection({
                             </button>
                         )}
                     </div>
-                    <p className="mt-1.5 text-[0.75rem] text-muted">JPG, PNG or WEBP, up to 2 MB.</p>
+                    <p className="mt-1.5 text-[0.75rem] text-muted">
+                        JPG, PNG or WEBP, up to 2 MB.
+                        {!logo && " Until you add one, customers see your category's picture, as shown."}
+                    </p>
                     <input
                         ref={logoInput}
                         type="file"

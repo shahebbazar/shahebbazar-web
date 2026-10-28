@@ -1,4 +1,5 @@
 const pool = require("../db");
+const { primaryCategorySlug } = require("./primaryCategory");
 
 // Business membership (KAN-250): owners and managers who can run a business.
 
@@ -29,8 +30,9 @@ async function businessMemberIds(vendorId, db = pool) {
  */
 async function memberBusinesses(userId, db = pool) {
     const result = await db.query(
+        // The logo, and the main category for its picture when there is none (KAN-333).
         `SELECT v.vendor_id, v.vendor_name, v.vendor_slug, v.vendor_status, m.member_role,
-                COALESCE(v.vendor_logo_url, v.vendor_cover_url) AS vendor_photo
+                v.vendor_logo_url AS vendor_logo, ${primaryCategorySlug("v")} AS vendor_category_slug
          FROM vendor_members m
          JOIN vendors v ON v.vendor_id = m.vendor_id
          WHERE m.user_id = $1

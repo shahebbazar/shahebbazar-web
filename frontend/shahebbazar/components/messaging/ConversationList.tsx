@@ -24,6 +24,7 @@ export function ConversationList({
                         <Avatar
                             name={show === "business" ? c.vendor_name : c.customer_name}
                             photo={show === "business" ? c.vendor_logo : c.customer_avatar}
+                            business={show === "business" ? { categorySlug: c.vendor_category_slug } : undefined}
                         />
                         <span className="min-w-0 flex-1">
                             <span className="flex items-baseline justify-between gap-2">

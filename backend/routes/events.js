@@ -11,6 +11,7 @@ const express = require("express");
 const pool = require("../db");
 const { imageUpload, receive, discard, storedPath, checkUploads, parseCrop, removeUnreferencedFiles } = require("../lib/uploads");
 const { parseId } = require("../lib/currentUser");
+const { primaryCategorySlug } = require("../lib/primaryCategory");
 const { requireVendorOwnership, requireEventOwnership } = require("../lib/middleware/auth");
 const { requireFeature } = require("../lib/access");
 const { getSetting } = require("../lib/settings");
@@ -42,7 +43,7 @@ const PUBLIC_COLUMNS = `
     e.event_type, e.event_is_online, e.event_online_url, e.event_price_type, e.event_price_bdt,
     e.event_ticket_url,
     loc.location_name AS area_name, loc.location_slug AS area_slug,
-    v.vendor_name, v.vendor_slug, v.vendor_logo_url,
+    v.vendor_name, v.vendor_slug, v.vendor_logo_url, ${primaryCategorySlug("v")} AS vendor_category_slug,
     COALESCE(rc.going_count, 0) AS going_count, COALESCE(rc.interested_count, 0) AS interested_count,
     COALESCE(e.event_ends_at, e.event_starts_at) < NOW() AS ended`;
 

@@ -35,9 +35,10 @@ export default async function NewMessagePage({
             </Link>
             <div className="mb-4 rounded-xl border border-line bg-surface p-4 shadow-card">
                 <p className="text-sm text-muted">To</p>
-                {/* The same picture as the conversation once it starts: the logo, or else the cover (KAN-333). */}
+                {/* The same picture as the conversation once it starts, and every logo spot: the logo, or else
+                    the main category's picture (KAN-333). */}
                 <div className="mt-1 flex items-center gap-3">
-                    <Avatar name={business.vendor_name} photo={business.vendor_logo_url ?? business.vendor_cover_url} />
+                    <Avatar name={business.vendor_name} photo={business.vendor_logo_url} business={{ categorySlug: detail.categories[0]?.slug ?? business.primary_category_slug }} />
                     <p className="font-semibold">{business.vendor_name}</p>
                 </div>
                 {item && <p className="mt-1 text-[0.8125rem] text-brand-700">About: {item.title}</p>}
