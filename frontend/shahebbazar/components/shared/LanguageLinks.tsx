@@ -3,7 +3,12 @@
 import { Fragment, Suspense } from "react";
 import Link from "next/link";
 import { usePathname, useSearchParams } from "next/navigation";
-import type { Locale } from "@/lib/i18n";
+import { LANGUAGE_COOKIE, type Locale } from "@/lib/i18n";
+
+/** Remembers the choice for a year, so pages without ?lang (the business dashboard) use it too. */
+function remember(target: Locale) {
+    document.cookie = `${LANGUAGE_COOKIE}=${target}; path=/; max-age=31536000; samesite=lax`;
+}
 
 /** The current page in `target`: same address and filters, with only ?lang changed. */
 function useSamePage(target: Locale): string {
@@ -35,7 +40,12 @@ function Links({ locale, variant, hrefFor }: Props & { hrefFor: (target: Locale)
                     |
                 </span>
             )}
-            <Link href={hrefFor(target)} aria-current={locale === target ? "true" : undefined} className={STYLE[variant](locale === target, target)}>
+            <Link
+                href={hrefFor(target)}
+                onClick={() => remember(target)}
+                aria-current={locale === target ? "true" : undefined}
+                className={STYLE[variant](locale === target, target)}
+            >
                 {target === "en" ? "English" : "বাংলা"}
             </Link>
         </Fragment>

@@ -2,6 +2,8 @@ import type { Metadata } from "next";
 import { notFound, redirect } from "next/navigation";
 import { authenticatedApiGet } from "@/lib/auth-server";
 import { ProviderShell, parseVendorParam, providerHref } from "@/components/provider/ProviderShell";
+import { providerText } from "@/lib/i18n-provider";
+import { getAccountLocale } from "@/lib/locale-server";
 import { ConversationList } from "@/components/messaging/ConversationList";
 import type { ConversationSummary, VendorSummary } from "@/lib/types";
 
@@ -18,11 +20,12 @@ export default async function InquiriesPage({ searchParams }: { searchParams: Pr
     ]);
     if (!vendor) notFound();
 
+    const copy = providerText(await getAccountLocale());
     return (
         <ProviderShell vendor={vendor} current="inquiries">
-            <h1 className="text-[1.75rem] leading-tight font-bold tracking-tight">Inquiries</h1>
+            <h1 className="text-[1.75rem] leading-tight font-bold tracking-tight">{copy.inquiriesTitle}</h1>
             <p className="mt-1.5 mb-5 text-[0.9375rem] text-muted">
-                Questions customers sent with the “Ask about this” button on one of your products.
+                {copy.inquiriesIntro}
             </p>
             <ConversationList
                 conversations={conversations ?? []}

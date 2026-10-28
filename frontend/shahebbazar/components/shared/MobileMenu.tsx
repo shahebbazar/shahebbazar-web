@@ -2,9 +2,10 @@
 
 import { useEffect, useState } from "react";
 import { Menu, X } from "lucide-react";
+import { t, type Locale } from "@/lib/i18n";
 
 // Hamburger menu for phones and tablets; the side rail takes over from lg up.
-export function MobileMenu({ label = "Menu", children }: { label?: string; children: React.ReactNode }) {
+export function MobileMenu({ label, locale = "en", children }: { label?: string; locale?: Locale; children: React.ReactNode }) {
     const [open, setOpen] = useState(false);
 
     useEffect(() => {
@@ -22,7 +23,7 @@ export function MobileMenu({ label = "Menu", children }: { label?: string; child
         <div className="lg:hidden">
             <button
                 type="button"
-                aria-label={open ? "Close menu" : label}
+                aria-label={open ? t(locale).closeMenu : (label ?? t(locale).menu)}
                 aria-expanded={open}
                 aria-controls="mobile-menu"
                 onClick={() => setOpen(!open)}

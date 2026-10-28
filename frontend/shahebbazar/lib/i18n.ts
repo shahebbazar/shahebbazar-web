@@ -3,6 +3,12 @@
 export const LOCALES = ["en", "bn"] as const;
 export type Locale = (typeof LOCALES)[number];
 
+/**
+ * The language last picked with the English / বাংলা switch. Public pages take theirs from ?lang; the
+ * signed-in areas (the business dashboard) have no ?lang in their links, so they read this (KAN-328).
+ */
+export const LANGUAGE_COOKIE = "sb_lang";
+
 export function resolveLocale(raw: string | string[] | undefined): Locale {
     const value = Array.isArray(raw) ? raw[0] : raw;
     return value === "bn" ? "bn" : "en";
@@ -246,6 +252,24 @@ const strings = {
         unsubAlready: "Offers from {name} by {channel} are already stopped.",
         unsubInvalid: "This unsubscribe link is not valid. You can manage offers from your account.",
         unsubManage: "Manage offers in your account",
+
+        // --- account menu, shared by the site header and the business dashboard (KAN-328) ---
+        accountSwitchTo: "Switch to",
+        accountCustomer: "Customer account",
+        accountRoleCustomer: "Customer",
+        accountRoleOwner: "Business owner",
+        accountRoleManager: "Manager",
+        accountRegisterBusiness: "Register a business",
+        accountRegisterAnother: "Register another business",
+        accountSwitchLabel: "{name}, {role}. Switch account",
+        appearance: "Appearance",
+        themeLight: "Light",
+        themeDark: "Dark",
+        themeSystem: "System",
+        logOut: "Log out",
+        loggingOut: "Logging out...",
+        menu: "Menu",
+        closeMenu: "Close menu",
     },
 
     bn: {
@@ -466,6 +490,24 @@ const strings = {
         unsubAlready: "{name} থেকে {channel} অফার আগেই বন্ধ করা হয়েছে।",
         unsubInvalid: "এই আনসাবস্ক্রাইব লিংকটি সঠিক নয়। অ্যাকাউন্ট থেকে অফার নিয়ন্ত্রণ করতে পারেন।",
         unsubManage: "অ্যাকাউন্টে অফার নিয়ন্ত্রণ করুন",
+
+        // --- account menu, shared by the site header and the business dashboard (KAN-328) ---
+        accountSwitchTo: "অ্যাকাউন্ট বদলান",
+        accountCustomer: "গ্রাহক অ্যাকাউন্ট",
+        accountRoleCustomer: "গ্রাহক",
+        accountRoleOwner: "ব্যবসার মালিক",
+        accountRoleManager: "ম্যানেজার",
+        accountRegisterBusiness: "ব্যবসা নিবন্ধন করুন",
+        accountRegisterAnother: "আরেকটি ব্যবসা নিবন্ধন করুন",
+        accountSwitchLabel: "{name}, {role}। অ্যাকাউন্ট বদলান",
+        appearance: "থিম",
+        themeLight: "লাইট",
+        themeDark: "ডার্ক",
+        themeSystem: "সিস্টেম",
+        logOut: "লগ আউট",
+        loggingOut: "লগ আউট হচ্ছে...",
+        menu: "মেনু",
+        closeMenu: "মেনু বন্ধ করুন",
     },
 } as const;
 

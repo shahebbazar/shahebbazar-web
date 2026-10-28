@@ -146,6 +146,16 @@ describe("sessions", () => {
         for (const secret of ["password", "token", "hash"]) assert.ok(!text.includes(secret), secret);
     });
 
+    it("/auth/me includes the account's language, for the signed-in pages (KAN-328)", async () => {
+        const [{ user_id, user_language }] = await query("SELECT user_id, user_language FROM users WHERE user_phone = '+8801722000002'");
+        await query("UPDATE users SET user_language = 'bn' WHERE user_id = $1", [user_id]);
+        try {
+            assert.equal((await call("GET", "/auth/me", { cookie })).data.user.user_language, "bn");
+        } finally {
+            await query("UPDATE users SET user_language = $2 WHERE user_id = $1", [user_id, user_language]);
+        }
+    });
+
     it("a made-up or tampered cookie is not accepted", async () => {
         assert.equal((await call("GET", "/auth/me", { cookie: "shaheb_session=made-up" })).status, 401);
         assert.equal((await call("GET", "/auth/me", { cookie: `${cookie}x` })).status, 401);

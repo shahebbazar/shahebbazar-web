@@ -4,6 +4,8 @@ import { notFound, redirect } from "next/navigation";
 import { authenticatedApiGet } from "@/lib/auth-server";
 import type { VendorPaymentMethods } from "@/lib/types";
 import { ProviderShell, parseVendorParam } from "@/components/provider/ProviderShell";
+import { providerText } from "@/lib/i18n-provider";
+import { getAccountLocale } from "@/lib/locale-server";
 import { PaymentMethodsForm } from "./PaymentMethodsForm";
 
 export const metadata: Metadata = {
@@ -27,13 +29,12 @@ export default async function PaymentMethodsPage({
     const { vendor: business, methods } = data;
     const isApproved = business.vendor_status === "approved";
 
+    const copy = providerText(await getAccountLocale());
     return (
         <ProviderShell vendor={business} current="payments">
-            <h1 className="text-[1.75rem] leading-tight font-bold tracking-tight">Payment Methods</h1>
+            <h1 className="text-[1.75rem] leading-tight font-bold tracking-tight">{copy.navPayments}</h1>
             <p className="mt-1.5 max-w-2xl text-[0.9375rem] leading-relaxed text-muted">
-                Customers see these on your business profile, so they know how they can pay
-                before they visit or order. Payment is made to you directly; Shahebbazar does not
-                take or handle payments.
+                {copy.paymentsIntro}
             </p>
 
             <div className="mt-6 max-w-md rounded-xl border border-line bg-surface p-5 shadow-card">

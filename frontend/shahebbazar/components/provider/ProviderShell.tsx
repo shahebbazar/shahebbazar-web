@@ -15,9 +15,13 @@ import {
     type LucideIcon,
 } from "lucide-react";
 import { authenticatedApiGet } from "@/lib/auth-server";
+import { t, type Locale } from "@/lib/i18n";
+import { providerText, type ProviderDictionary } from "@/lib/i18n-provider";
+import { getAccountLocale } from "@/lib/locale-server";
 import type { VendorPickerRow } from "@/lib/types";
 import { MobileMenu } from "../shared/MobileMenu";
 import { AccountSwitcher, AccountSwitcherList, type AccountSide } from "../shared/AccountSwitcher";
+import { LanguageLinks } from "../shared/LanguageLinks";
 import { ThemeSelector } from "@/components/theme/ThemeSelector";
 
 // Page frame for the provider area: header, navigation rail and content.
@@ -36,7 +40,7 @@ export type ProviderNavKey =
 
 type NavItem = {
     key: string;
-    label: string;
+    label: keyof ProviderDictionary;
     Icon: LucideIcon;
 } & (
         | { path: string; hash?: string }
@@ -47,15 +51,15 @@ type NavItem = {
     );
 
 const NAV: NavItem[] = [
-    { key: "dashboard", label: "Dashboard", Icon: House, path: "/vendors/dashboard" },
-    { key: "business", label: "My Business", Icon: Store, path: "/vendors/dashboard/business" },
-    { key: "listings", label: "Products & Services", Icon: Package, path: "/vendors/dashboard/listings" },
-    { key: "payments", label: "Payment Methods", Icon: Wallet, path: "/vendors/dashboard/payment-methods" },
-    { key: "reviews", label: "Reviews", Icon: Star, path: "/vendors/dashboard/reviews" },
-    { key: "messages", label: "Messages", Icon: MessagesSquare, path: "/vendors/dashboard/messages" },
-    { key: "events", label: "Events", Icon: Ticket, path: "/vendors/dashboard/events" },
-    { key: "marketing", label: "Marketing", Icon: Megaphone, path: "/vendors/dashboard/marketing" },
-    { key: "settings", label: "Settings", Icon: Settings, path: "/vendors/dashboard/settings" },
+    { key: "dashboard", label: "navDashboard", Icon: House, path: "/vendors/dashboard" },
+    { key: "business", label: "navBusiness", Icon: Store, path: "/vendors/dashboard/business" },
+    { key: "listings", label: "navListings", Icon: Package, path: "/vendors/dashboard/listings" },
+    { key: "payments", label: "navPayments", Icon: Wallet, path: "/vendors/dashboard/payment-methods" },
+    { key: "reviews", label: "navReviews", Icon: Star, path: "/vendors/dashboard/reviews" },
+    { key: "messages", label: "navMessages", Icon: MessagesSquare, path: "/vendors/dashboard/messages" },
+    { key: "events", label: "navEvents", Icon: Ticket, path: "/vendors/dashboard/events" },
+    { key: "marketing", label: "navMarketing", Icon: Megaphone, path: "/vendors/dashboard/marketing" },
+    { key: "settings", label: "navSettings", Icon: Settings, path: "/vendors/dashboard/settings" },
 ];
 
 
@@ -108,27 +112,31 @@ export async function ProviderShell({
     children: React.ReactNode;
 }) {
     const businesses = (await authenticatedApiGet<VendorPickerRow[]>("/vendor-account/businesses")) ?? [];
-    const switcher = <AccountSwitcherList side={{ kind: "business", vendorId: vendor.vendor_id }} businesses={businesses} businessPath={PAGE_PATHS[current]} />;
+    const locale = await getAccountLocale();
+    const copy = providerText(locale);
+    const switcher = <AccountSwitcherList side={{ kind: "business", vendorId: vendor.vendor_id }} businesses={businesses} businessPath={PAGE_PATHS[current]} locale={locale} />;
 
     const navList = (
         <ul className="space-y-0.5">
             {NAV.map((item) => (
                 <li key={item.key}>
-                    <NavRow item={item} vendorId={vendor.vendor_id} active={item.key === current} />
+                    <NavRow item={item} label={copy[item.label]} vendorId={vendor.vendor_id} active={item.key === current} />
                 </li>
             ))}
         </ul>
     );
 
     return (
-        <div className="flex min-h-screen flex-col">
+        // The language is declared here, as in AppShell: the root layout renders <html> without it.
+        <div lang={locale} className={`flex min-h-screen flex-col ${locale === "bn" ? "font-bn" : ""}`}>
             <ProviderHeader
+                locale={locale}
                 userName={vendor.vendor_name}
                 side={{ kind: "business", vendorId: vendor.vendor_id }}
                 businesses={businesses}
                 businessPath={PAGE_PATHS[current]}
                 mobileNav={
-                    <nav aria-label="Provider">
+                    <nav aria-label={copy.navLabel}>
                         {navList}
                     </nav>
                 }
@@ -138,7 +146,7 @@ export async function ProviderShell({
             <div className="mx-auto flex w-full max-w-[1440px] flex-1 gap-6 px-4 py-6 sm:px-6">
                 <aside className="hidden w-[236px] shrink-0 lg:block">
                     <nav
-                        aria-label="Provider"
+                        aria-label={copy.navLabel}
                         className="rounded-xl border border-line bg-surface p-2 shadow-card"
                     >
                         {navList}
@@ -167,16 +175,18 @@ export async function PickerShell({
 }) {
     const businesses = (await authenticatedApiGet<VendorPickerRow[]>("/vendor-account/businesses")) ?? [];
     const side = { kind: "customer" } as const;
+    const locale = await getAccountLocale();
 
     return (
-        <div className="flex min-h-screen flex-col">
+        <div lang={locale} className={`flex min-h-screen flex-col ${locale === "bn" ? "font-bn" : ""}`}>
             <ProviderHeader
+                locale={locale}
                 userName={userName}
                 avatarUrl={avatarUrl}
                 side={side}
                 businesses={businesses}
                 businessPath={PAGE_PATHS.dashboard}
-                switcher={<AccountSwitcherList side={side} businesses={businesses} businessPath={PAGE_PATHS.dashboard} avatarUrl={avatarUrl} />}
+                switcher={<AccountSwitcherList side={side} businesses={businesses} businessPath={PAGE_PATHS.dashboard} avatarUrl={avatarUrl} locale={locale} />}
             />
             {children}
         </div>
@@ -184,6 +194,7 @@ export async function PickerShell({
 }
 
 function ProviderHeader({
+    locale,
     userName,
     avatarUrl = null,
     side,
@@ -192,6 +203,7 @@ function ProviderHeader({
     mobileNav,
     switcher,
 }: {
+    locale: Locale;
     userName: string;
     avatarUrl?: string | null;
     side: AccountSide;
@@ -206,23 +218,28 @@ function ProviderHeader({
                 <Link href="/" className="flex shrink-0 items-center gap-2">
                     <MapPin className="size-6 fill-brand-600 text-brand-600" strokeWidth={1.5} />
                     <span className="text-xl font-bold tracking-tight text-brand-600 sm:text-[1.35rem]">
-                        Shahebbazar
+                        {t(locale).brand}
                     </span>
                 </Link>
 
                 <div className="ml-auto flex min-w-0 items-center gap-3 sm:gap-4">
+                    <nav aria-label="Language" className="hidden items-center gap-2 text-[0.8125rem] md:flex">
+                        <LanguageLinks locale={locale} variant="header" />
+                    </nav>
+
                     {/* The theme and Log out are in the account menu. */}
                     <AccountSwitcher
+                        locale={locale}
                         userName={userName}
                         avatarUrl={avatarUrl}
                         side={side}
                         businesses={businesses}
                         businessPath={businessPath}
-                        extras={<AccountMenuExtras />}
+                        extras={<AccountMenuExtras locale={locale} />}
                     />
 
                     {/* Mobile navigation and logout */}
-                    <MobileMenu>
+                    <MobileMenu locale={locale}>
                         {mobileNav}
 
                         <div className={mobileNav ? "mt-3 border-t border-line pt-3" : ""}>
@@ -231,14 +248,18 @@ function ProviderHeader({
 
                         <div className="mt-3 border-t border-line px-3.5 pt-3">
                             <p className="mb-2 text-[0.75rem] font-medium text-muted">
-                                Appearance
+                                {t(locale).appearance}
                             </p>
 
-                            <ThemeSelector className="w-full" />
+                            <ThemeSelector className="w-full" locale={locale} />
                         </div>
 
+                        <nav aria-label="Language" className="mt-3 grid grid-cols-2 gap-2 border-t border-line pt-3 text-sm font-medium">
+                            <LanguageLinks locale={locale} variant="menu" />
+                        </nav>
+
                         <div className="mt-3 border-t border-line px-3.5 pt-3">
-                            <LogoutButton />
+                            <LogoutButton locale={locale} />
                         </div>
                     </MobileMenu>
                 </div>
@@ -247,8 +268,8 @@ function ProviderHeader({
     );
 }
 
-function NavRow({ item, vendorId, active }: { item: NavItem; vendorId: number; active: boolean }) {
-    const { Icon, label } = item;
+function NavRow({ item, label, vendorId, active }: { item: NavItem; label: string; vendorId: number; active: boolean }) {
+    const { Icon } = item;
     const rowClasses = "flex items-center gap-3 rounded-[10px] px-3.5 py-2.5 text-sm font-medium transition-colors";
 
     if (item.path === undefined) {

@@ -15,21 +15,25 @@ import {
     type LucideIcon,
 } from "lucide-react";
 import { assetUrl } from "@/lib/api";
-import { formatClockTime, toNumber, formatPhone } from "@/lib/format";
+import { formatClockTime, toNumber, formatPhone, localiseDigits } from "@/lib/format";
+import { fill, type Locale } from "@/lib/i18n";
+import { providerText } from "@/lib/i18n-provider";
 import type { PeriodCount, VendorDashboard } from "@/lib/types";
 import { providerHref } from "./ProviderShell";
 import { StatusBadge } from "./StatusBadge";
 
 /** Panels of the provider dashboard. Server components; no interactivity. */
 
-const fmt = (n: number) => n.toLocaleString("en-US");
+/** A count with thousands separators, in Bangla digits on Bangla pages. */
+export const fmt = (n: number, locale: Locale = "en") => localiseDigits(n.toLocaleString("en-US"), locale);
 
-const joinedFormat = new Intl.DateTimeFormat("en-GB", {
-    day: "numeric",
-    month: "short",
-    year: "numeric",
-    timeZone: "Asia/Dhaka",
-});
+const joinedFormat = (locale: Locale) =>
+    new Intl.DateTimeFormat(locale === "bn" ? "bn-BD" : "en-GB", {
+        day: "numeric",
+        month: "short",
+        year: "numeric",
+        timeZone: "Asia/Dhaka",
+    });
 
 export function Panel({
     title,
@@ -64,16 +68,17 @@ export function Panel({
 // Change against the previous period
 
 // "+18%", "−5%", "No change", "New" or nothing.
-export function Change({ count }: { count: PeriodCount }) {
+export function Change({ count, locale = "en" }: { count: PeriodCount; locale?: Locale }) {
+    const copy = providerText(locale);
     const { current, previous } = count;
 
     if (previous === 0) {
         return current > 0 ? (
             <span className="inline-flex items-center gap-1 font-semibold text-success-ink">
-                <TrendingUp className="size-3.5" /> New
+                <TrendingUp className="size-3.5" /> {copy.changeNew}
             </span>
         ) : (
-            <span className="text-muted">No data yet</span>
+            <span className="text-muted">{copy.noDataYet}</span>
         );
     }
 
@@ -82,7 +87,7 @@ export function Change({ count }: { count: PeriodCount }) {
     if (pct === 0) {
         return (
             <span className="inline-flex items-center gap-1 font-semibold text-muted">
-                <Minus className="size-3.5" /> No change
+                <Minus className="size-3.5" /> {copy.changeNone}
             </span>
         );
     }
@@ -95,7 +100,7 @@ export function Change({ count }: { count: PeriodCount }) {
         >
             <Arrow className="size-3.5" />
             {up ? "+" : "−"}
-            {Math.abs(pct)}%
+            {fmt(Math.abs(pct), locale)}%
         </span>
     );
 }
@@ -131,12 +136,14 @@ function StatCard({
     );
 }
 
-export function StatCards({ data }: { data: VendorDashboard }) {
+export function StatCards({ data, locale = "en" }: { data: VendorDashboard; locale?: Locale }) {
+    const copy = providerText(locale);
     const { stats, days } = data;
+    const n = (value: number) => fmt(value, locale);
     // "vs previous N days" only when there is something to compare.
     const period = (count: PeriodCount) =>
         count.current > 0 || count.previous > 0 ? (
-            <span className="text-muted">vs previous {days} days</span>
+            <span className="text-muted">{fill(copy.vsPrevious, { days: n(days) })}</span>
         ) : null;
     const rating = stats.rating.average;
 
@@ -145,36 +152,36 @@ export function StatCards({ data }: { data: VendorDashboard }) {
             <StatCard
                 Icon={Eye}
                 tint="bg-brand-50 text-brand-600"
-                value={fmt(stats.profileViews.current)}
-                label="Profile Views"
+                value={n(stats.profileViews.current)}
+                label={copy.profileViews}
                 footer={
                     <>
-                        <Change count={stats.profileViews} /> {period(stats.profileViews)}
+                        <Change count={stats.profileViews} locale={locale} /> {period(stats.profileViews)}
                     </>
                 }
             />
             <StatCard
                 Icon={Search}
                 tint="bg-brand-50 text-brand-600"
-                value={fmt(stats.searchAppearances.current)}
-                label="Search Appearances"
+                value={n(stats.searchAppearances.current)}
+                label={copy.searchAppearances}
                 footer={
                     <>
-                        <Change count={stats.searchAppearances} /> {period(stats.searchAppearances)}
+                        <Change count={stats.searchAppearances} locale={locale} /> {period(stats.searchAppearances)}
                     </>
                 }
             />
             <StatCard
                 Icon={Package}
                 tint="bg-open-bg text-open-ink"
-                value={fmt(stats.listings.active)}
-                label="Active Listings"
+                value={n(stats.listings.active)}
+                label={copy.activeListings}
                 footer={
                     <>
-                        <span className="font-semibold text-ink">+{fmt(stats.listings.addedInPeriod)}</span>
-                        <span className="text-muted">in the last {days} days</span>
+                        <span className="font-semibold text-ink">+{n(stats.listings.addedInPeriod)}</span>
+                        <span className="text-muted">{fill(copy.inLastDays, { days: n(days) })}</span>
                         {stats.listings.pending > 0 && (
-                            <span className="text-sponsor-ink">· {fmt(stats.listings.pending)} awaiting approval</span>
+                            <span className="text-sponsor-ink">{fill(copy.awaitingApproval, { count: n(stats.listings.pending) })}</span>
                         )}
                     </>
                 }
@@ -182,16 +189,16 @@ export function StatCards({ data }: { data: VendorDashboard }) {
             <StatCard
                 Icon={Star}
                 tint="bg-sponsor-bg text-star"
-                value={rating === null ? "—" : rating.toFixed(1)}
-                label="Average Rating"
+                value={rating === null ? "—" : localiseDigits(rating.toFixed(1), locale)}
+                label={copy.averageRating}
                 footer={
                     rating === null ? (
-                        <span className="text-muted">No reviews yet</span>
+                        <span className="text-muted">{copy.noReviewsYet}</span>
                     ) : (
                         <>
                             <Stars rating={rating} />
                             <span className="text-muted">
-                                ({fmt(stats.rating.count)} {stats.rating.count === 1 ? "review" : "reviews"})
+                                {fill(stats.rating.count === 1 ? copy.reviewCountOne : copy.reviewCountMany, { count: n(stats.rating.count) })}
                             </span>
                         </>
                     )
@@ -228,7 +235,8 @@ function Stars({ rating }: { rating: number }) {
 
 // Business preview
 
-export function BusinessPreview({ data }: { data: VendorDashboard }) {
+export function BusinessPreview({ data, locale = "en" }: { data: VendorDashboard; locale?: Locale }) {
+    const copy = providerText(locale);
     const { vendor, stats } = data;
     const cover = assetUrl(vendor.vendor_cover_url);
     const isLive = vendor.vendor_status === "approved";
@@ -236,14 +244,14 @@ export function BusinessPreview({ data }: { data: VendorDashboard }) {
 
     return (
         <Panel
-            title="My Business Preview"
+            title={copy.previewTitle}
             action={
                 isLive ? (
                     <Link
                         href={`/business/${vendor.vendor_slug}`}
                         className="inline-flex items-center gap-1.5 text-[0.8125rem] font-medium text-brand-600 hover:underline"
                     >
-                        View Public Profile <ExternalLink className="size-3.5" />
+                        {copy.viewPublic} <ExternalLink className="size-3.5" />
                     </Link>
                 ) : undefined
             }
@@ -270,10 +278,10 @@ export function BusinessPreview({ data }: { data: VendorDashboard }) {
                         </h3>
                         {isLive && vendor.is_verified ? (
                             <span className="rounded-full bg-open-bg px-2 py-0.5 text-[0.6875rem] font-semibold text-open-ink">
-                                Verified
+                                {copy.verified}
                             </span>
                         ) : (
-                            <StatusBadge status={vendor.vendor_status} />
+                            <StatusBadge status={vendor.vendor_status} locale={locale} />
                         )}
                     </div>
 
@@ -282,14 +290,16 @@ export function BusinessPreview({ data }: { data: VendorDashboard }) {
                     )}
                     {vendor.area_name && (
                         <p className="mt-2 flex items-center gap-1.5 text-[0.875rem] text-muted">
-                            <MapPin className="size-4 shrink-0" /> {vendor.area_name}, Rajshahi
+                            <MapPin className="size-4 shrink-0" /> {fill(copy.inRajshahi, { area: vendor.area_name })}
                         </p>
                     )}
                     {stats.rating.average !== null && (
                         <p className="mt-2 flex items-center gap-2 text-[0.875rem]">
-                            <span className="font-semibold">{stats.rating.average.toFixed(1)}</span>
+                            <span className="font-semibold">{localiseDigits(stats.rating.average.toFixed(1), locale)}</span>
                             <Stars rating={stats.rating.average} />
-                            <span className="text-muted">({fmt(stats.rating.count)} reviews)</span>
+                            <span className="text-muted">
+                                {fill(stats.rating.count === 1 ? copy.reviewCountOne : copy.reviewCountMany, { count: fmt(stats.rating.count, locale) })}
+                            </span>
                         </p>
                     )}
                     {vendor.open_state && (
@@ -301,10 +311,10 @@ export function BusinessPreview({ data }: { data: VendorDashboard }) {
                                         : "bg-shut-bg text-shut-ink"
                                 }`}
                             >
-                                {vendor.open_state === "open" ? "Open" : "Closed"}
+                                {vendor.open_state === "open" ? copy.open : copy.closed}
                             </span>
                             {vendor.open_state === "open" && closes && (
-                                <span className="text-muted">Closes {closes}</span>
+                                <span className="text-muted">{fill(copy.closesAt, { time: localiseDigits(closes, locale) })}</span>
                             )}
                         </p>
                     )}
@@ -313,7 +323,7 @@ export function BusinessPreview({ data }: { data: VendorDashboard }) {
 
             {vendor.vendor_description && (
                 <div className="mt-5">
-                    <h3 className="text-[0.8125rem] font-semibold">Short Description</h3>
+                    <h3 className="text-[0.8125rem] font-semibold">{copy.shortDescription}</h3>
                     <p className="mt-1 line-clamp-3 text-[0.875rem] leading-relaxed text-muted">
                         {vendor.vendor_description}
                     </p>
@@ -322,17 +332,17 @@ export function BusinessPreview({ data }: { data: VendorDashboard }) {
 
             <dl className="mt-5 grid gap-4 border-t border-line pt-4 text-[0.8125rem] sm:grid-cols-3">
                 <div className="min-w-0">
-                    <dt className="text-muted">Phone</dt>
+                    <dt className="text-muted">{copy.phone}</dt>
                     <dd className="mt-0.5 truncate font-medium">{formatPhone(vendor.vendor_phone)}</dd>
                 </div>
                 <div className="min-w-0">
-                    <dt className="text-muted">Email</dt>
-                    <dd className="mt-0.5 truncate font-medium">{vendor.vendor_email ?? "Not added"}</dd>
+                    <dt className="text-muted">{copy.email}</dt>
+                    <dd className="mt-0.5 truncate font-medium">{vendor.vendor_email ?? copy.notAdded}</dd>
                 </div>
                 <div className="min-w-0">
-                    <dt className="text-muted">Joined</dt>
+                    <dt className="text-muted">{copy.joined}</dt>
                     <dd className="mt-0.5 font-medium">
-                        {joinedFormat.format(new Date(vendor.vendor_created_at))}
+                        {joinedFormat(locale).format(new Date(vendor.vendor_created_at))}
                     </dd>
                 </div>
             </dl>
@@ -342,18 +352,18 @@ export function BusinessPreview({ data }: { data: VendorDashboard }) {
                     href={providerHref("/vendors/dashboard/business", vendor.vendor_id)}
                     className="inline-flex items-center justify-center rounded-[10px] bg-brand-600 px-4 py-2.5 text-sm font-medium text-white hover:bg-brand-700"
                 >
-                    Edit Business
+                    {copy.editBusiness}
                 </Link>
                 {isLive ? (
                     <Link
                         href={`/business/${vendor.vendor_slug}`}
                         className="inline-flex items-center justify-center rounded-[10px] border border-line-strong bg-surface px-4 py-2.5 text-sm font-medium text-brand-600 hover:border-brand-600 hover:bg-brand-50"
                     >
-                        View Public Profile
+                        {copy.viewPublic}
                     </Link>
                 ) : (
                     <span className="inline-flex items-center justify-center rounded-[10px] border border-line bg-surface-2 px-4 py-2.5 text-center text-sm text-muted">
-                        Public profile appears once approved
+                        {copy.publicOnceApproved}
                     </span>
                 )}
             </div>
@@ -366,33 +376,37 @@ export function BusinessPreview({ data }: { data: VendorDashboard }) {
 type ListingRow = VendorDashboard["listings"][number];
 
 /** "৳2,800 – ৳4,200 / maund", or "Price on request" when no price is set. */
-export function listingPrice(listing: Pick<ListingRow, "listing_price" | "listing_price_max" | "listing_price_unit">): string {
-    if (listing.listing_price === null) return "Price on request";
+export function listingPrice(
+    listing: Pick<ListingRow, "listing_price" | "listing_price_max" | "listing_price_unit">,
+    locale: Locale = "en"
+): string {
+    if (listing.listing_price === null) return providerText(locale).priceOnRequest;
     const price = toNumber(listing.listing_price);
     const max = listing.listing_price_max === null ? null : toNumber(listing.listing_price_max);
     const unit = listing.listing_price_unit ? ` / ${listing.listing_price_unit}` : "";
-    const taka = (n: number) => `৳${n.toLocaleString("en-US")}`;
+    const taka = (n: number) => `৳${fmt(n, locale)}`;
     return max !== null && max > price ? `${taka(price)} – ${taka(max)}${unit}` : `${taka(price)}${unit}`;
 }
 
-export function ListingsPreview({ data }: { data: VendorDashboard }) {
+export function ListingsPreview({ data, locale = "en" }: { data: VendorDashboard; locale?: Locale }) {
+    const copy = providerText(locale);
     const id = data.vendor.vendor_id;
     const manage = providerHref("/vendors/dashboard/listings", id);
 
     return (
         <Panel
-            title="Products & Services"
+            title={copy.navListings}
             action={
                 data.stats.listings.total > 0 ? (
                     <Link href={manage} className="text-[0.8125rem] font-medium text-brand-600 hover:underline">
-                        Manage All
+                        {copy.manageAll}
                     </Link>
                 ) : undefined
             }
         >
             {data.listings.length === 0 ? (
                 <p className="text-[0.875rem] text-muted">
-                    Nothing listed yet. Add the products or services customers can ask you about.
+                    {copy.noListings}
                 </p>
             ) : (
                 <ul className="divide-y divide-line">
@@ -413,13 +427,13 @@ export function ListingsPreview({ data }: { data: VendorDashboard }) {
                                     <div className="min-w-0 flex-1">
                                         <p className="truncate text-[0.875rem] font-medium">{listing.listing_title}</p>
                                         <p className="truncate text-[0.75rem] text-muted">
-                                            {listing.category_name ?? "Uncategorised"}
+                                            {listing.category_name ?? copy.uncategorised}
                                         </p>
                                     </div>
                                     <div className="flex items-center gap-2 sm:block sm:shrink-0 sm:text-right">
-                                        <p className="text-[0.8125rem] font-medium">{listingPrice(listing)}</p>
+                                        <p className="text-[0.8125rem] font-medium">{listingPrice(listing, locale)}</p>
                                         <div className="sm:mt-0.5">
-                                            <StatusBadge status={listing.listing_status} />
+                                            <StatusBadge status={listing.listing_status} locale={locale} />
                                         </div>
                                     </div>
                                 </div>
@@ -433,7 +447,7 @@ export function ListingsPreview({ data }: { data: VendorDashboard }) {
                 href={providerHref("/vendors/dashboard/listings", id, "add")}
                 className="mt-4 flex items-center justify-center gap-2 rounded-[10px] border border-line-strong px-4 py-2.5 text-sm font-medium text-brand-600 hover:border-brand-600 hover:bg-brand-50"
             >
-                <Plus className="size-4" /> Add New Service
+                <Plus className="size-4" /> {copy.addService}
             </Link>
         </Panel>
     );
@@ -441,7 +455,8 @@ export function ListingsPreview({ data }: { data: VendorDashboard }) {
 
 // Quick actions
 
-export function QuickActions({ data }: { data: VendorDashboard }) {
+export function QuickActions({ data, locale = "en" }: { data: VendorDashboard; locale?: Locale }) {
+    const copy = providerText(locale);
     const { vendor } = data;
     const id = vendor.vendor_id;
     const isLive = vendor.vendor_status === "approved";
@@ -455,32 +470,32 @@ export function QuickActions({ data }: { data: VendorDashboard }) {
     }[] = [
         {
             Icon: Plus,
-            title: "Add New Service",
-            body: "List a new service or product",
+            title: copy.addService,
+            body: copy.addServiceBody,
             href: providerHref("/vendors/dashboard/listings", id, "add"),
         },
         {
             Icon: Wallet,
-            title: "Payment Methods",
-            body: "Show customers how they can pay",
+            title: copy.navPayments,
+            body: copy.paymentsBody,
             href: providerHref("/vendors/dashboard/payment-methods", id),
         },
         {
             Icon: ExternalLink,
-            title: "View Public Profile",
-            body: isLive ? "See your page as customers do" : "Available once your business is approved",
+            title: copy.viewPublic,
+            body: isLive ? copy.viewPublicBody : copy.viewPublicLater,
             href: isLive ? `/business/${vendor.vendor_slug}` : undefined,
         },
         {
             Icon: Star,
-            title: "View & Reply Reviews",
-            body: "Engage with your customers",
+            title: copy.replyReviews,
+            body: copy.replyReviewsBody,
             href: providerHref("/vendors/dashboard/reviews", id),
         },
     ];
 
     return (
-        <Panel title="Quick Actions">
+        <Panel title={copy.quickActions}>
             <ul className="divide-y divide-line">
                 {actions.map(({ Icon, title, body, href, soon }) => {
                     const inner = (
@@ -494,7 +509,7 @@ export function QuickActions({ data }: { data: VendorDashboard }) {
                             </span>
                             {soon ? (
                                 <span className="rounded-full bg-surface-2 px-2 py-0.5 text-[0.6875rem] font-medium text-muted">
-                                    Soon
+                                    {copy.soon}
                                 </span>
                             ) : href ? (
                                 <ChevronRight className="size-4 shrink-0 text-soft" />

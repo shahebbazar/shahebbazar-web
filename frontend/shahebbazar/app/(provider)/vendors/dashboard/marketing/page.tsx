@@ -4,6 +4,8 @@ import { notFound, redirect } from "next/navigation";
 import { AlertTriangle, CheckCircle2, ChevronRight, Circle, Megaphone, Plus, Sparkles } from "lucide-react";
 import { authenticatedApiGet, getViewer } from "@/lib/auth-server";
 import { ProviderShell, parseVendorParam, providerHref } from "@/components/provider/ProviderShell";
+import { providerText } from "@/lib/i18n-provider";
+import { getAccountLocale } from "@/lib/locale-server";
 import type { MarketingResults, MarketingWorkspace, VendorSummary } from "@/lib/types";
 import { DeleteCampaignButton } from "./DeleteCampaignButton";
 import { MarketingResultsPanel } from "./MarketingResultsPanel";
@@ -116,14 +118,14 @@ export default async function MarketingPage({ searchParams }: { searchParams: Pr
     ]);
     if (!vendor) notFound();
     const adminView = viewer?.user_role === "admin";
+    const copy = providerText(await getAccountLocale());
 
     if (!workspace) {
         return (
             <ProviderShell vendor={vendor} current="marketing">
-                <h1 className="text-[1.75rem] leading-tight font-bold tracking-tight">Marketing</h1>
+                <h1 className="text-[1.75rem] leading-tight font-bold tracking-tight">{copy.navMarketing}</h1>
                 <p className="mt-3 max-w-xl text-sm text-muted">
-                    Marketing tools aren&apos;t switched on yet. When they are, you can promote your products by email,
-                    Facebook and WhatsApp from here.
+                    {copy.marketingOff}
                 </p>
             </ProviderShell>
         );
@@ -136,9 +138,9 @@ export default async function MarketingPage({ searchParams }: { searchParams: Pr
         <ProviderShell vendor={vendor} current="marketing">
             <div className="flex flex-wrap items-start justify-between gap-3">
                 <div>
-                    <h1 className="text-[1.75rem] leading-tight font-bold tracking-tight">Marketing</h1>
+                    <h1 className="text-[1.75rem] leading-tight font-bold tracking-tight">{copy.navMarketing}</h1>
                     <p className="mt-1.5 text-[0.9375rem] text-muted">
-                        Write offers for your customers by email, Facebook and WhatsApp, from your own products.
+                        {copy.marketingIntro}
                     </p>
                 </div>
                 {!adminView &&

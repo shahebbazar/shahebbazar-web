@@ -3,6 +3,8 @@ import { notFound, redirect } from "next/navigation";
 import { authenticatedApiGet } from "@/lib/auth-server";
 import type { VendorSummary } from "@/lib/types";
 import { ProviderShell, parseVendorParam } from "@/components/provider/ProviderShell";
+import { providerText } from "@/lib/i18n-provider";
+import { getAccountLocale } from "@/lib/locale-server";
 import { ListingsManager } from "./ListingsManager";
 
 export const metadata: Metadata = {
@@ -25,14 +27,14 @@ export default async function ListingsPage({
         );
     if (!vendor) notFound();
 
+    const copy = providerText(await getAccountLocale());
     return (
         <ProviderShell vendor={vendor} current="listings">
             <h1 className="text-[1.75rem] leading-tight font-bold tracking-tight">
-                Products &amp; Services
+                {copy.navListings}
             </h1>
             <p className="mt-1.5 text-[0.9375rem] text-muted">
-                What you sell or offer. New listings are checked by an administrator before
-                they appear on your public page.
+                {copy.listingsIntro}
             </p>
 
             <ListingsManager vendorId={vendor.vendor_id} />

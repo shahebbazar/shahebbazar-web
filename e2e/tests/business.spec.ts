@@ -1,6 +1,6 @@
 // A business owner's dashboard.
 
-import { test, expect, signIn, sql, expectNoSideScroll } from "../fixtures";
+import { test, expect, signIn, sql, expectNoSideScroll, userIdOf } from "../fixtures";
 
 test.beforeEach(async ({ context }) => {
     await signIn(context, "owner");
@@ -94,4 +94,38 @@ test("someone who runs a business is sent to it, not to registering another one"
     await page.getByRole("link", { name: "Go to your dashboard" }).click();
     await expect(page).toHaveURL(/\/vendors\/dashboard/);
     await expect(page.getByRole("link", { name: "Bookings" })).toHaveCount(0);
+});
+
+test("Bangla picked on the public site stays on in the dashboard and its tabs (KAN-328)", async ({ page }) => {
+    await page.goto("/");
+    await page.getByRole("navigation", { name: "Language" }).first().getByRole("link", { name: "বাংলা" }).click();
+    await expect(page).toHaveURL(/lang=bn/);
+
+    // The dashboard's links carry no ?lang, so the choice has to be remembered.
+    await page.goto("/vendors/dashboard?vendor=1");
+    await expect(page.getByRole("heading", { level: 1, name: "ব্যবসা ড্যাশবোর্ড" })).toBeVisible();
+    const nav = page.getByRole("navigation", { name: "ব্যবসা" });
+    for (const tab of ["পণ্য ও সেবা", "পেমেন্ট পদ্ধতি", "রিভিউ", "মেসেজ", "ইভেন্ট", "সেটিংস"]) {
+        await nav.getByRole("link", { name: tab }).click();
+        await expect(page.getByRole("heading", { level: 1, name: tab })).toBeVisible();
+    }
+
+    // English from the dashboard's own switch, and it stays English.
+    await page.getByRole("navigation", { name: "Language" }).getByRole("link", { name: "English" }).click();
+    await expect(page.getByRole("heading", { level: 1, name: "Settings" })).toBeVisible();
+    await page.goto("/vendors/dashboard?vendor=1");
+    await expect(page.getByRole("heading", { level: 1, name: "Provider Dashboard" })).toBeVisible();
+});
+
+test("with no language picked, the dashboard uses the account's own language (KAN-328)", async ({ page }) => {
+    const owner = await userIdOf("owner");
+    const [{ user_language }] = await sql<{ user_language: string }>("SELECT user_language FROM users WHERE user_id = $1", [owner]);
+    await sql("UPDATE users SET user_language = 'bn' WHERE user_id = $1", [owner]);
+    try {
+        await page.goto("/vendors/dashboard?vendor=1");
+        await expect(page.getByRole("heading", { level: 1, name: "ব্যবসা ড্যাশবোর্ড" })).toBeVisible();
+        await expect(page.getByRole("navigation", { name: "ব্যবসা" }).getByRole("link", { name: "আমার ব্যবসা" })).toBeVisible();
+    } finally {
+        await sql("UPDATE users SET user_language = $2 WHERE user_id = $1", [owner, user_language]);
+    }
 });

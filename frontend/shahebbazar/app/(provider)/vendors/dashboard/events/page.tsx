@@ -8,6 +8,8 @@ import { formatEventWhen } from "@/lib/format";
 import { eventTypeLabel } from "@/lib/events";
 import type { PublicSettings, VendorEvent, VendorSummary } from "@/lib/types";
 import { ProviderShell, parseVendorParam } from "@/components/provider/ProviderShell";
+import { providerText } from "@/lib/i18n-provider";
+import { getAccountLocale } from "@/lib/locale-server";
 import { EventStatusBadge } from "./EventStatusBadge";
 
 export const metadata: Metadata = {
@@ -28,22 +30,21 @@ export default async function EventsPage({ searchParams }: { searchParams: Promi
     if (!vendor) notFound();
     const list = events ?? [];
 
+    const copy = providerText(await getAccountLocale());
     return (
         <ProviderShell vendor={vendor} current="events">
             <div className="flex flex-wrap items-start justify-between gap-3">
                 <div>
-                    <h1 className="text-[1.75rem] leading-tight font-bold tracking-tight">Events</h1>
+                    <h1 className="text-[1.75rem] leading-tight font-bold tracking-tight">{copy.navEvents}</h1>
                     <p className="mt-1.5 max-w-2xl text-[0.9375rem] text-muted">
-                        Fairs, sales, tastings, workshops: anything you&apos;re running. Events appear on the Events page
-                        {settings?.require_event_approval ? " once an administrator approves them" : " as soon as you add them"}, and
-                        customers can say they&apos;re interested or going.
+                        {settings?.require_event_approval ? copy.eventsIntroApproval : copy.eventsIntroDirect}
                     </p>
                 </div>
                 <Link
                     href={`/vendors/dashboard/events/new?vendor=${vendor.vendor_id}`}
                     className="inline-flex items-center gap-1.5 rounded-[10px] bg-brand-600 px-4 py-2 text-sm font-semibold text-white hover:bg-brand-700"
                 >
-                    <Plus className="size-4" /> Add an event
+                    <Plus className="size-4" /> {copy.eventsAdd}
                 </Link>
             </div>
 
