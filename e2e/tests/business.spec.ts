@@ -1,6 +1,9 @@
 // A business owner's dashboard.
 
+import fs from "node:fs";
+import path from "node:path";
 import { test, expect, signIn, sql, expectNoSideScroll, userIdOf } from "../fixtures";
+import { ROOT, UPLOAD_DIR } from "../env";
 
 test.beforeEach(async ({ context }) => {
     await signIn(context, "owner");
@@ -80,6 +83,38 @@ test("the business details form and other dashboard pages open", async ({ page }
         const res = await page.goto(path);
         expect(res?.status(), path).toBe(200);
         await expect(page.getByRole("heading", { name: text }).first(), path).toBeVisible();
+    }
+});
+
+// KAN-327: after a crop the page kept the cover's old address, whose file the server had deleted, so
+// cropping again opened blank with "The photo could not be opened".
+test("a cover can be cropped again and again without reloading the page", async ({ page }) => {
+    const cover = () =>
+        sql<{ id: number; url: string }>(
+            "SELECT vendor_photo_id AS id, vendor_photo_url AS url FROM vendor_photos WHERE vendor_id = 1 ORDER BY vendor_photo_sort, vendor_photo_id LIMIT 1"
+        ).then((rows) => rows[0]);
+    const before = await cover();
+    try {
+        await page.goto("/vendors/dashboard/business?vendor=1");
+        const crop = page.getByRole("dialog", { name: "Position your cover photo" });
+        for (let round = 1; round <= 2; round++) {
+            await page.getByRole("button", { name: "Crop" }).click();
+            await expect(crop.locator("img")).toBeVisible();
+            await expect(crop.getByText("The photo could not be opened")).toBeHidden();
+            await crop.getByRole("button", { name: "Use this cover" }).click();
+            await expect(crop).toBeHidden();
+            await expect(page.getByText("Cover photo cropped.")).toBeVisible();
+            // The thumbnail shows the new file, not the one the crop replaced.
+            const { url } = await cover();
+            expect(url, `round ${round}`).not.toBe(before.url);
+            await expect(page.getByRole("img", { name: "Business photo 1" })).toHaveAttribute("src", new RegExp(`${url}$`));
+        }
+    } finally {
+        await sql("UPDATE vendor_photos SET vendor_photo_url = $1 WHERE vendor_photo_id = $2", [before.url, before.id]);
+        await sql("UPDATE vendors SET vendor_cover_url = $1 WHERE vendor_id = 1", [before.url]);
+        // A crop deletes the file it replaced once nothing else uses it, so the seed photo is put back.
+        const seed = path.join(UPLOAD_DIR, path.basename(before.url));
+        if (!fs.existsSync(seed)) fs.copyFileSync(path.join(ROOT, "database", "seed-assets", path.basename(before.url)), seed);
     }
 });
 
