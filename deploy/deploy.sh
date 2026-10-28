@@ -1,8 +1,9 @@
 #!/bin/sh
-# Deploys a commit of main to this server. GitHub Actions runs it over SSH once CI passes on main
-# (the Deploy job in .github/workflows/ci.yml; set up in docs/DEPLOY.md). By hand:
+# Deploys a commit of any branch of origin to this server. GitHub Actions runs it over SSH when
+# someone starts "Run workflow" on a branch and CI passes (the Deploy job in
+# .github/workflows/ci.yml; set up in docs/DEPLOY.md). By hand:
 #   sh deploy/deploy.sh            the latest main
-#   sh deploy/deploy.sh <commit>   a commit of main
+#   sh deploy/deploy.sh <commit>   a commit that is on a branch of origin
 #
 # Builds the new images while the old containers keep serving, backs up and applies any migrations
 # the update adds or changes (they are safe to run more than once), restarts what changed, then
@@ -16,15 +17,16 @@ main() {
 
     # Over SSH, the commit is the command GitHub sent. The deploy key can run nothing but this script.
     target=${1:-${SSH_ORIGINAL_COMMAND:-}}
-    git fetch --quiet origin main
+    # Every branch, and deleted ones forgotten, so only commits still on a branch can deploy.
+    git fetch --quiet --prune origin
     [ -n "$target" ] || target=$(git rev-parse origin/main)
     case $target in
         *[!0-9a-f]*) echo "Not a commit id: $target" >&2; exit 1 ;;
     esac
     asked=$target
     target=$(git rev-parse --verify --quiet "$asked^{commit}") || { echo "Unknown commit: $asked" >&2; exit 1; }
-    if ! git merge-base --is-ancestor "$target" origin/main; then
-        echo "$target isn't on main, so it isn't deployed." >&2
+    if [ -z "$(git branch -r --contains "$target")" ]; then
+        echo "$target isn't on any branch of origin, so it isn't deployed." >&2
         exit 1
     fi
 
@@ -33,12 +35,8 @@ main() {
     current=$(git rev-parse HEAD)
     [ -f deploy/.deployed ] || echo "$current" > deploy/.deployed
     deployed=$(cat deploy/.deployed)
-    if [ "$target" != "$current" ] && git merge-base --is-ancestor "$target" "$current"; then
-        echo "The server already runs a newer commit, $(git log -1 --format='%h %s'). Nothing to do."
-        exit 0
-    fi
-    git checkout --quiet main
-    git merge --quiet --ff-only "$target"
+    # Branches move independently, so any commit can be deployed, older ones included.
+    git checkout --quiet --detach "$target"
     echo "Deploying $(git log -1 --format='%h %s')"
 
     $compose build

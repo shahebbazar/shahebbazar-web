@@ -21,6 +21,7 @@ export function GET(request: NextRequest) {
     const response = redirectTo(`${path}?vendor=${to}`);
     response.cookies.set(ACTIVE_BUSINESS_COOKIE, to, {
         httpOnly: true,
+        secure: process.env.NODE_ENV === "production",
         sameSite: "lax",
         path: "/vendors",
         maxAge: 60 * 60 * 24 * 365,
