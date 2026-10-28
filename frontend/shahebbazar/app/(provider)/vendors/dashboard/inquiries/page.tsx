@@ -1,7 +1,7 @@
 import type { Metadata } from "next";
 import { notFound, redirect } from "next/navigation";
 import { authenticatedApiGet } from "@/lib/auth-server";
-import { ProviderShell, parseVendorParam, providerHref } from "@/components/provider/ProviderShell";
+import { ProviderShell, parseVendorParam, providerHref, dashboardFor } from "@/components/provider/ProviderShell";
 import { providerText } from "@/lib/i18n-provider";
 import { getAccountLocale } from "@/lib/locale-server";
 import { ConversationList } from "@/components/messaging/ConversationList";
@@ -13,7 +13,7 @@ export const metadata: Metadata = {
 
 export default async function InquiriesPage({ searchParams }: { searchParams: Promise<{ vendor?: string }> }) {
     const vendorId = parseVendorParam((await searchParams).vendor);
-    if (vendorId === null) redirect("/vendors/dashboard");
+    if (vendorId === null) redirect(dashboardFor("/vendors/dashboard/inquiries"));
     const [vendor, conversations] = await Promise.all([
         authenticatedApiGet<VendorSummary>(`/vendors/${vendorId}/summary`),
         authenticatedApiGet<ConversationSummary[]>(`/vendors/${vendorId}/conversations?type=inquiries`),

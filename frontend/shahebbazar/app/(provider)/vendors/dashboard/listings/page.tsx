@@ -1,8 +1,9 @@
 import type { Metadata } from "next";
 import { notFound, redirect } from "next/navigation";
 import { authenticatedApiGet } from "@/lib/auth-server";
-import type { VendorSummary } from "@/lib/types";
-import { ProviderShell, parseVendorParam } from "@/components/provider/ProviderShell";
+import { apiGet } from "@/lib/api";
+import type { PublicSettings, VendorSummary } from "@/lib/types";
+import { ProviderShell, parseVendorParam, dashboardFor } from "@/components/provider/ProviderShell";
 import { providerText } from "@/lib/i18n-provider";
 import { getAccountLocale } from "@/lib/locale-server";
 import { ListingsManager } from "./ListingsManager";
@@ -19,12 +20,12 @@ export default async function ListingsPage({
 }) {
     // The API only returns the business to its owner or an admin.
     const vendorId = parseVendorParam((await searchParams).vendor);
-    if (vendorId === null) redirect("/vendors/dashboard");
+    if (vendorId === null) redirect(dashboardFor("/vendors/dashboard/listings"));
 
-    const vendor =
-        await authenticatedApiGet<VendorSummary>(
-            `/vendors/${vendorId}/summary`
-        );
+    const [vendor, settings] = await Promise.all([
+        authenticatedApiGet<VendorSummary>(`/vendors/${vendorId}/summary`),
+        apiGet<PublicSettings>("/settings/public").catch(() => null),
+    ]);
     if (!vendor) notFound();
 
     const copy = providerText(await getAccountLocale());
@@ -34,7 +35,7 @@ export default async function ListingsPage({
                 {copy.navListings}
             </h1>
             <p className="mt-1.5 text-[0.9375rem] text-muted">
-                {copy.listingsIntro}
+                {settings?.require_listing_approval ? copy.listingsIntroApproval : copy.listingsIntroDirect}
             </p>
 
             <ListingsManager vendorId={vendor.vendor_id} />

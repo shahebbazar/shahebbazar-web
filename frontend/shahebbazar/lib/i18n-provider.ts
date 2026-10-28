@@ -18,7 +18,8 @@ const en = {
     // --- each tab's heading and introduction ---
     businessTitle: "Edit Business",
     businessIntro: "Fill in the details below so customers can find and trust your business.",
-    listingsIntro: "What you sell or offer. New listings are checked by an administrator before they appear on your public page.",
+    listingsIntroApproval: "What you sell or offer. New listings are checked by an administrator before they appear on your public page.",
+    listingsIntroDirect: "What you sell or offer. New listings appear on your public page as soon as you publish them.",
     paymentsIntro:
         "Customers see these on your business profile, so they know how they can pay before they visit or order. Payment is made to you directly; Shahebbazar does not take or handle payments.",
     reviewsIntro: "{ratings} ratings · average {average} · {written} written reviews. Unanswered reviews are listed first.",
@@ -132,7 +133,8 @@ const bn: Record<keyof typeof en, string> = {
 
     businessTitle: "ব্যবসার তথ্য সম্পাদনা",
     businessIntro: "নিচের তথ্যগুলো পূরণ করুন, যাতে গ্রাহকেরা আপনার ব্যবসা খুঁজে পান এবং ভরসা করতে পারেন।",
-    listingsIntro: "আপনি যা বিক্রি করেন বা যে সেবা দেন। নতুন পণ্য বা সেবা আপনার পাবলিক পাতায় দেখানোর আগে একজন অ্যাডমিন যাচাই করেন।",
+    listingsIntroApproval: "আপনি যা বিক্রি করেন বা যে সেবা দেন। নতুন পণ্য বা সেবা আপনার পাবলিক পাতায় দেখানোর আগে একজন অ্যাডমিন যাচাই করেন।",
+    listingsIntroDirect: "আপনি যা বিক্রি করেন বা যে সেবা দেন। প্রকাশ করার সঙ্গে সঙ্গে নতুন পণ্য বা সেবা আপনার পাবলিক পাতায় দেখা যায়।",
     paymentsIntro:
         "গ্রাহকেরা এগুলো আপনার ব্যবসার প্রোফাইলে দেখেন, তাই আসার বা অর্ডার করার আগেই জানতে পারেন কীভাবে পেমেন্ট করবেন। পেমেন্ট সরাসরি আপনাকে করা হয়; সাহেববাজার কোনো পেমেন্ট নেয় না বা পরিচালনা করে না।",
     reviewsIntro: "{ratings}টি রেটিং · গড় {average} · {written}টি লিখিত রিভিউ। যেগুলোর উত্তর দেওয়া হয়নি, সেগুলো আগে দেখানো হয়।",

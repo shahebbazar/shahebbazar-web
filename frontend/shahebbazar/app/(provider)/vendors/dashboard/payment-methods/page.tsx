@@ -3,7 +3,7 @@ import Link from "next/link";
 import { notFound, redirect } from "next/navigation";
 import { authenticatedApiGet } from "@/lib/auth-server";
 import type { VendorPaymentMethods } from "@/lib/types";
-import { ProviderShell, parseVendorParam } from "@/components/provider/ProviderShell";
+import { ProviderShell, parseVendorParam, dashboardFor } from "@/components/provider/ProviderShell";
 import { providerText } from "@/lib/i18n-provider";
 import { getAccountLocale } from "@/lib/locale-server";
 import { PaymentMethodsForm } from "./PaymentMethodsForm";
@@ -21,7 +21,7 @@ export default async function PaymentMethodsPage({
 }) {
     // The API only returns the business to its owner or an admin.
     const vendorId = parseVendorParam((await searchParams).vendor);
-    if (vendorId === null) redirect("/vendors/dashboard");
+    if (vendorId === null) redirect(dashboardFor("/vendors/dashboard/payment-methods"));
 
     const data = await authenticatedApiGet<VendorPaymentMethods>(`/vendors/${vendorId}/payment-methods`);
     if (!data) notFound();

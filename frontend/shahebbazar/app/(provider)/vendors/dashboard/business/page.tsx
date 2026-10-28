@@ -4,7 +4,7 @@ import { authenticatedApiGet } from "@/lib/auth-server";
 import type {
     VendorProfileWithOptions,
 } from "@/lib/types";
-import { ProviderShell, parseVendorParam } from "@/components/provider/ProviderShell";
+import { ProviderShell, parseVendorParam, dashboardFor } from "@/components/provider/ProviderShell";
 import { providerText } from "@/lib/i18n-provider";
 import { getAccountLocale } from "@/lib/locale-server";
 import { BusinessForm } from "./BusinessForm";
@@ -20,7 +20,7 @@ export default async function EditBusinessPage({
 }) {
     // Ownership is verified by the protected backend profile route.
     const vendorId = parseVendorParam((await searchParams).vendor);
-    if (vendorId === null) redirect("/vendors/dashboard");
+    if (vendorId === null) redirect(dashboardFor("/vendors/dashboard/business"));
 
     const profile =
         await authenticatedApiGet<VendorProfileWithOptions>(`/vendors/${vendorId}/profile`);
