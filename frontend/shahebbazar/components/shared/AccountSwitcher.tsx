@@ -1,6 +1,7 @@
 import Link from "next/link";
 import { ChevronDown, Plus, Store, UserRound } from "lucide-react";
 import { switchHref } from "@/lib/activeBusiness";
+import { fill, t, type Locale } from "@/lib/i18n";
 import { browserAssetUrl } from "@/lib/apiBase";
 import type { VendorPickerRow } from "@/lib/types";
 
@@ -21,6 +22,7 @@ type Props = {
     avatarUrl?: string | null;
     /** Under the account list in the dropdown: the theme choice and Log out, so the header itself stays short. */
     extras?: React.ReactNode;
+    locale?: Locale;
 };
 
 const ROW = "flex items-center gap-3 rounded-[10px] px-3.5 py-2.5 text-sm font-medium";
@@ -28,10 +30,14 @@ const ROW_ACTIVE = "bg-brand-50 text-brand-700";
 const ROW_IDLE = "text-muted hover:bg-surface-2 hover:text-ink";
 
 /** Who you are on this side: your name as a customer, or the business and your role in it. */
-function current({ userName, side, businesses }: Props) {
-    if (side.kind === "customer") return { name: userName, role: "Customer" };
+function current({ userName, side, businesses, locale = "en" }: Props) {
+    const copy = t(locale);
+    if (side.kind === "customer") return { name: userName, role: copy.accountRoleCustomer };
     const business = businesses.find((b) => b.vendor_id === side.vendorId);
-    return { name: business?.vendor_name ?? userName, role: business?.member_role === "manager" ? "Manager" : "Business owner" };
+    return {
+        name: business?.vendor_name ?? userName,
+        role: business?.member_role === "manager" ? copy.accountRoleManager : copy.accountRoleOwner,
+    };
 }
 
 /** A row's picture: the photo when there is one, otherwise the icon. */
@@ -42,16 +48,17 @@ function RowIcon({ photo, Icon }: { photo: string | null | undefined; Icon: type
 }
 
 /** The choices, for the dropdown and for the phone menu drawer. */
-export function AccountSwitcherList({ side, businesses, businessPath = "/vendors/dashboard", avatarUrl }: Omit<Props, "userName">) {
+export function AccountSwitcherList({ side, businesses, businessPath = "/vendors/dashboard", avatarUrl, locale = "en" }: Omit<Props, "userName">) {
+    const copy = t(locale);
     const isCustomer = side.kind === "customer";
     return (
         <div>
-            <p className="px-3.5 pb-1 text-[0.75rem] font-medium text-muted">Switch to</p>
+            <p className="px-3.5 pb-1 text-[0.75rem] font-medium text-muted">{copy.accountSwitchTo}</p>
             <ul className="space-y-0.5">
                 <li>
                     <Link href="/account" aria-current={isCustomer ? "true" : undefined} className={`${ROW} ${isCustomer ? ROW_ACTIVE : ROW_IDLE}`}>
                         <RowIcon photo={avatarUrl} Icon={UserRound} />
-                        <span className="min-w-0 flex-1 truncate">Customer account</span>
+                        <span className="min-w-0 flex-1 truncate">{copy.accountCustomer}</span>
                     </Link>
                 </li>
                 {businesses.map((b) => {
@@ -65,7 +72,7 @@ export function AccountSwitcherList({ side, businesses, businessPath = "/vendors
                             >
                                 <RowIcon photo={b.vendor_photo} Icon={Store} />
                                 <span className="min-w-0 flex-1 truncate">{b.vendor_name}</span>
-                                {b.member_role === "manager" && <span className="text-[0.6875rem] text-soft">Manager</span>}
+                                {b.member_role === "manager" && <span className="text-[0.6875rem] text-soft">{copy.accountRoleManager}</span>}
                             </Link>
                         </li>
                     );
@@ -74,28 +81,39 @@ export function AccountSwitcherList({ side, businesses, businessPath = "/vendors
             <div className="my-2 border-t border-line" />
             <Link href="/vendors/register" className={`${ROW} ${ROW_IDLE}`}>
                 <Plus className="size-4 shrink-0" aria-hidden />
-                {businesses.length ? "Register another business" : "Register a business"}
+                {businesses.length ? copy.accountRegisterAnother : copy.accountRegisterBusiness}
             </Link>
         </div>
     );
 }
 
 /**
- * The header button showing where you are, opening the list with `extras` (theme and Log out) under it.
- * From tablet width up; on phones the list is in the menu drawer.
+ * The header's account button: picture, name and role, opening a dropdown of `children` with `extras`
+ * (theme and Log out) under it. The same control for customers, business owners and admins.
+ * From tablet width up; on phones its contents are in the menu drawer.
  */
-export function AccountSwitcher(props: Props) {
-    const { name, role } = current(props);
+export function AccountMenu({
+    name,
+    role,
+    photo = null,
+    label,
+    extras,
+    children,
+}: {
+    name: string;
+    role: string;
+    photo?: string | null;
+    /** The button's accessible name. */
+    label: string;
+    extras?: React.ReactNode;
+    children?: React.ReactNode;
+}) {
     const initial = name.trim().charAt(0).toUpperCase() || "?";
-    const side = props.side;
-    const photo = side.kind === "customer"
-        ? props.avatarUrl
-        : props.businesses.find((b) => b.vendor_id === side.vendorId)?.vendor_photo;
-    const avatar = browserAssetUrl(photo ?? null);
+    const avatar = browserAssetUrl(photo);
     return (
         <details className="group relative min-w-0">
             <summary
-                aria-label={`${name}, ${role}. Switch account`}
+                aria-label={label}
                 className="flex min-w-0 cursor-pointer list-none items-center gap-2.5 rounded-[10px] px-1.5 py-1 hover:bg-surface-2 [&::-webkit-details-marker]:hidden"
             >
                 <span aria-hidden className="grid size-9 shrink-0 place-items-center overflow-hidden rounded-full bg-brand-100 text-sm font-semibold text-brand-700">
@@ -113,9 +131,29 @@ export function AccountSwitcher(props: Props) {
                 <ChevronDown className="hidden size-4 shrink-0 text-soft transition-transform group-open:rotate-180 md:block" aria-hidden />
             </summary>
             <div className="absolute right-0 z-50 mt-2 hidden w-72 rounded-xl border border-line bg-surface p-2 shadow-raised md:block">
-                <AccountSwitcherList side={props.side} businesses={props.businesses} businessPath={props.businessPath} avatarUrl={props.avatarUrl} />
-                {props.extras && <div className="mt-2 space-y-2 border-t border-line px-1.5 pt-3 pb-1">{props.extras}</div>}
+                {children}
+                {extras && <div className={`${children ? "mt-2 border-t border-line pt-3" : "pt-1"} space-y-2 px-1.5 pb-1`}>{extras}</div>}
             </div>
         </details>
+    );
+}
+
+/** The account menu for customers and business owners: where you are, and the list to switch. */
+export function AccountSwitcher(props: Props) {
+    const { name, role } = current(props);
+    const side = props.side;
+    const photo = side.kind === "customer"
+        ? props.avatarUrl
+        : props.businesses.find((b) => b.vendor_id === side.vendorId)?.vendor_photo;
+    return (
+        <AccountMenu
+            name={name}
+            role={role}
+            photo={photo}
+            label={fill(t(props.locale ?? "en").accountSwitchLabel, { name, role })}
+            extras={props.extras}
+        >
+            <AccountSwitcherList side={props.side} businesses={props.businesses} businessPath={props.businessPath} avatarUrl={props.avatarUrl} locale={props.locale} />
+        </AccountMenu>
     );
 }

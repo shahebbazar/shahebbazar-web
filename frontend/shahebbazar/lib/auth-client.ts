@@ -16,6 +16,8 @@ export type AuthUser = {
     user_email: string | null;
     user_role: AuthRole;
     user_avatar_url?: string | null;
+    /** The account's language, chosen at sign-up or in My details. */
+    user_language?: "en" | "bn";
 };
 export type LogoutResult =
     | {

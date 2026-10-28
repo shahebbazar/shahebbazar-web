@@ -4,6 +4,10 @@ import { Star } from "lucide-react";
 import { authenticatedApiGet, getViewer } from "@/lib/auth-server";
 import { formatDateTime } from "@/lib/format";
 import { ProviderShell, parseVendorParam } from "@/components/provider/ProviderShell";
+import { providerText } from "@/lib/i18n-provider";
+import { getAccountLocale } from "@/lib/locale-server";
+import { fill } from "@/lib/i18n";
+import { localiseDigits } from "@/lib/format";
 import type { OwnerReview, VendorSummary} from "@/lib/types";
 import { ReplyForm } from "./ReplyForm";
 
@@ -25,12 +29,17 @@ export default async function OwnerReviewsPage({ searchParams }: { searchParams:
     const written = (reviews ?? []).filter((r) => r.body);
     const average = reviews && reviews.length ? reviews.reduce((sum, r) => sum + r.rating, 0) / reviews.length : 0;
 
+    const locale = await getAccountLocale();
+    const copy = providerText(locale);
     return (
         <ProviderShell vendor={vendor} current="reviews">
-            <h1 className="text-[1.75rem] leading-tight font-bold tracking-tight">Reviews</h1>
+            <h1 className="text-[1.75rem] leading-tight font-bold tracking-tight">{copy.navReviews}</h1>
             <p className="mt-1.5 text-[0.9375rem] text-muted">
-                {reviews?.length ?? 0} ratings · average {average.toFixed(1)} · {written.length} written reviews.
-                Unanswered reviews are listed first.
+                {fill(copy.reviewsIntro, {
+                    ratings: localiseDigits(String(reviews?.length ?? 0), locale),
+                    average: localiseDigits(average.toFixed(1), locale),
+                    written: localiseDigits(String(written.length), locale),
+                })}
             </p>
 
             {written.length === 0 ? (

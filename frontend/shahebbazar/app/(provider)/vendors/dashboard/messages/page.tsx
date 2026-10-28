@@ -6,6 +6,8 @@ import {
     parseVendorParam, 
     providerHref 
 } from "@/components/provider/ProviderShell";
+import { providerText } from "@/lib/i18n-provider";
+import { getAccountLocale } from "@/lib/locale-server";
 import { ConversationList } from "@/components/messaging/ConversationList";
 import type {
     ConversationSummary,
@@ -25,10 +27,11 @@ export default async function OwnerMessagesPage({ searchParams }: { searchParams
     ]);
     if (!vendor) notFound();
 
+    const copy = providerText(await getAccountLocale());
     return (
         <ProviderShell vendor={vendor} current="messages">
-            <h1 className="text-[1.75rem] leading-tight font-bold tracking-tight">Messages</h1>
-            <p className="mt-1.5 mb-5 text-[0.9375rem] text-muted">Every conversation customers have started with your business.</p>
+            <h1 className="text-[1.75rem] leading-tight font-bold tracking-tight">{copy.navMessages}</h1>
+            <p className="mt-1.5 mb-5 text-[0.9375rem] text-muted">{copy.messagesIntro}</p>
             <ConversationList
                 conversations={conversations ?? []}
                 hrefFor={(id) => providerHref(`/vendors/dashboard/messages/${id}`, vendorId)}

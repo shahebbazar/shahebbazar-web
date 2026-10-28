@@ -8,19 +8,20 @@ import {
 } from "lucide-react";
 import { useSyncExternalStore } from "react";
 import { useTheme } from "next-themes";
+import { t, type Locale } from "@/lib/i18n";
 
 const THEME_OPTIONS = [
     {
         value: "light",
-        label: "Light",
+        label: "themeLight",
     },
     {
         value: "dark",
-        label: "Dark",
+        label: "themeDark",
     },
     {
         value: "system",
-        label: "System",
+        label: "themeSystem",
     },
 ] as const;
 
@@ -38,9 +39,12 @@ function useHasMounted() {
 
 export function ThemeSelector({
     className = "",
+    locale = "en",
 }: {
     className?: string;
+    locale?: Locale;
 }) {
+    const copy = t(locale);
     const {
         theme,
         resolvedTheme,
@@ -72,7 +76,7 @@ export function ThemeSelector({
             className={`relative inline-flex min-w-[112px] shrink-0 items-center ${className}`}
         >
             <span className="sr-only">
-                Appearance
+                {copy.appearance}
             </span>
 
             <SelectedIcon
@@ -81,7 +85,7 @@ export function ThemeSelector({
             />
 
             <select
-                aria-label="Appearance"
+                aria-label={copy.appearance}
                 value={selectedTheme}
                 onChange={(event) => {
                     setTheme(event.target.value);
@@ -93,7 +97,7 @@ export function ThemeSelector({
                         key={option.value}
                         value={option.value}
                     >
-                        {option.label}
+                        {copy[option.label]}
                     </option>
                 ))}
             </select>

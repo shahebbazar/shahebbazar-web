@@ -64,7 +64,8 @@ async function resolveSession(req, res, next) {
                 u.user_email,
                 u.user_role,
                 u.user_status,
-                u.user_avatar_url
+                u.user_avatar_url,
+                u.user_language
              FROM sessions s
              JOIN users u ON u.user_id = s.user_id
              WHERE s.session_token_hash = $1
@@ -91,7 +92,8 @@ async function resolveSession(req, res, next) {
             user_phone: row.user_phone,
             user_email: row.user_email,
             user_role: row.user_role,
-            user_avatar_url: row.user_avatar_url
+            user_avatar_url: row.user_avatar_url,
+            user_language: row.user_language
         };
 
         return next();
