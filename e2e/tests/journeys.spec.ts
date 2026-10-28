@@ -3,7 +3,7 @@
 // category, and the admin sign-in.
 
 import type { Browser, BrowserContext } from "@playwright/test";
-import { test, expect, codeSince, fillBusinessRegistration, logMark, newCustomer, signIn, signInUser, sql } from "../fixtures";
+import { test, expect, codeSince, fillBusinessRegistration, logMark, newCustomer, setApproval, signIn, signInUser, sql } from "../fixtures";
 import { PHONES } from "../env";
 
 const MANGO = "rajshahi-mango-traders"; // business 1, owned by PHONES.owner
@@ -118,7 +118,12 @@ test("a customer messages a business, the owner replies from the dashboard, and 
     await expect(page.getByText(answer)).toBeVisible();
 });
 
+// The demo data has business approval off; the approval journey below turns it on, and this puts it
+// back whether or not that test passed.
+test.afterEach(() => setApproval("business", false));
+
 test("a new business registers, is rejected with a reason, fixes it, and goes public once approved", async ({ page, browser }) => {
+    await setApproval("business", true);
     const name = `E2E Fresh Mangoes ${Date.now() % 100000}`;
     const phone = freshLocalPhone("0178");
     const reason = "Add your opening hours and a photo of the shop front.";

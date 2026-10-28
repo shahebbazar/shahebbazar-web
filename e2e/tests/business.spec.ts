@@ -2,7 +2,7 @@
 
 import fs from "node:fs";
 import path from "node:path";
-import { test, expect, signIn, sql, expectNoSideScroll, userIdOf } from "../fixtures";
+import { test, expect, setApproval, signIn, sql, expectNoSideScroll, userIdOf } from "../fixtures";
 import { ROOT, UPLOAD_DIR } from "../env";
 
 test.beforeEach(async ({ context }) => {
@@ -58,17 +58,54 @@ test("switching business redirects within the site's own address", async ({ page
     await expect(page.locator("main")).toContainText("Rajshahi Mango Traders");
 });
 
-test("adding a product says it waits for approval, and it does", async ({ page }) => {
-    const title = `E2E Langra Mango ${Date.now() % 100000}`;
+// Each `approval` is what the admin setting is; the demo data starts with it off.
+for (const approval of [false, true]) {
+    test(`adding a product with approval ${approval ? "on says it waits, and it does" : "off makes it public at once"}`, async ({ page }) => {
+        const title = `E2E Langra Mango ${approval ? "On" : "Off"} ${Date.now() % 100000}`;
+        if (approval) await setApproval("listing", true);
+        try {
+            await page.goto("/vendors/dashboard/add-listing?vendor=1");
+            await page.locator("input[name=listing_title]").fill(title);
+            await page.locator("select[name=category_id]").selectOption({ index: 1 });
+            await page.locator("input[name=listing_price]").fill("450");
+            await page.getByRole("button", { name: "Publish listing" }).click();
+            await expect(
+                page.getByText(approval ? "Listing created. It appears publicly once an admin approves it." : "Listing created. It is public now.")
+            ).toBeVisible();
+            const [row] = await sql<{ listing_status: string }>("SELECT listing_status FROM vendor_listings WHERE listing_title = $1", [title]);
+            expect(row.listing_status).toBe(approval ? "pending" : "approved");
+        } finally {
+            await sql("DELETE FROM vendor_listings WHERE listing_title = $1", [title]);
+            await setApproval("listing", false);
+        }
+    });
+}
+
+// KAN-329: the file box showed only file names, so the owner couldn't see which photos they had picked.
+test("chosen listing photos are shown before saving, and one can be taken out @phone", async ({ page }) => {
+    const title = `E2E Photo Preview ${Date.now() % 100000}`;
+    const seed = (name: string) => path.join(ROOT, "database", "seed-assets", name);
     await page.goto("/vendors/dashboard/add-listing?vendor=1");
     await page.locator("input[name=listing_title]").fill(title);
     await page.locator("select[name=category_id]").selectOption({ index: 1 });
-    await page.locator("input[name=listing_price]").fill("450");
-    await page.getByRole("button", { name: "Publish listing" }).click();
-    await expect(page.getByText("Listing created. It appears publicly once an admin approves it.")).toBeVisible();
-    const [row] = await sql<{ listing_status: string }>("SELECT listing_status FROM vendor_listings WHERE listing_title = $1", [title]);
-    expect(row.listing_status).toBe("pending");
-    await sql("DELETE FROM vendor_listings WHERE listing_title = $1", [title]);
+    await page.getByLabel("Choose listing photos").setInputFiles([seed("seed-listing-khirsapat-mango.jpg"), seed("seed-listing-fazli-mango-wholesale.jpg")]);
+
+    await expect(page.getByRole("img", { name: "Chosen photo 1" })).toBeVisible();
+    await expect(page.getByRole("img", { name: "Chosen photo 2" })).toBeVisible();
+    await expect(page.getByText("Main photo")).toBeVisible();
+    await page.getByRole("button", { name: "Remove chosen photo 2" }).click();
+    await expect(page.getByRole("img", { name: "Chosen photo 2" })).toBeHidden();
+
+    try {
+        await page.getByRole("button", { name: "Publish listing" }).click();
+        await expect(page.getByText(/^Listing created/)).toBeVisible();
+        // Only the photo left in is uploaded, and the previews clear for the next listing.
+        const rows = await sql("SELECT p.photo_id FROM listing_photos p JOIN vendor_listings l USING (listing_id) WHERE l.listing_title = $1", [title]);
+        expect(rows).toHaveLength(1);
+        await expect(page.getByRole("img", { name: "Chosen photo 1" })).toBeHidden();
+    } finally {
+        await sql("DELETE FROM vendor_listings WHERE listing_title = $1", [title]);
+    }
 });
 
 test("the business details form and other dashboard pages open", async ({ page }) => {

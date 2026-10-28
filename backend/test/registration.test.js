@@ -3,11 +3,13 @@
 
 const { describe, it, before, after } = require("node:test");
 const assert = require("node:assert/strict");
-const { businessChoices, query, call, requestCode, startApi, stopApi } = require("./support/harness");
+const { businessChoices, query, call, requestCode, requireApproval, startApi, stopApi } = require("./support/harness");
 
 let choices; // a seeded category and area, and a description
 before(async () => {
     await startApi();
+    // A new business here waits for approval; settings.test.js covers registering with it off.
+    await requireApproval();
     choices = await businessChoices();
 });
 after(stopApi);

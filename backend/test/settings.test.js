@@ -1,4 +1,5 @@
-// Admin settings (KAN-293): approval of new businesses and new listings can be switched off.
+// Admin settings (KAN-293): approval of new businesses and new listings can be switched off. The demo
+// data starts with both off; a database without the settings has both on.
 // Runs against the real API and a throwaway database; see test/support/harness.js.
 
 const { describe, it, before, after } = require("node:test");
@@ -24,12 +25,12 @@ before(async () => {
 after(stopApi);
 
 describe("defaults", () => {
-    it("both approvals start on, the free plan has one email a month, and the admin page shows what is waiting", async () => {
+    it("the demo data starts with every approval off, the free plan has one email a month, and the admin page shows what is waiting", async () => {
         const res = await call("GET", "/admin/settings", { as: "admin" });
         assert.equal(res.status, 200);
         assert.deepEqual(res.data.settings.map((s) => [s.key, s.value]), [
-            ["require_business_approval", true],
-            ["require_listing_approval", true],
+            ["require_business_approval", false],
+            ["require_listing_approval", false],
             ["require_event_approval", false],
             ["free_marketing_emails_per_month", 1],
             ["show_removed_account_reviews", true],
@@ -40,7 +41,14 @@ describe("defaults", () => {
         assert.equal(typeof res.data.waiting.listings, "number");
     });
 
-    it("the public summary says approval is needed", async () => {
+    it("the public summary says nothing needs approval", async () => {
+        const res = await call("GET", "/settings/public");
+        assert.deepEqual(res.data, { require_business_approval: false, require_listing_approval: false, require_event_approval: false });
+    });
+
+    // The rest of this file starts from here: approval on, as on a database with no stored setting.
+    it("with no stored setting, new businesses and listings need approval", async () => {
+        await query("DELETE FROM platform_settings WHERE setting_key IN ('require_business_approval', 'require_listing_approval')");
         const res = await call("GET", "/settings/public");
         assert.deepEqual(res.data, { require_business_approval: true, require_listing_approval: true, require_event_approval: false });
     });

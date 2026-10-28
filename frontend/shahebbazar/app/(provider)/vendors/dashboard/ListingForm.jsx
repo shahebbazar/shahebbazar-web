@@ -1,6 +1,9 @@
 "use client";
-import { useEffect, useState } from "react";
+import { useEffect, useRef, useState } from "react";
+import { ImagePlus, X } from "lucide-react";
 import { BROWSER_API_BASE, browserAssetUrl } from "@/lib/apiBase";
+
+const PHOTOS_MAX = 8;
 
 // Shared by the add-listing page and the inline editor, so the two cannot
 // drift apart. Field names match schema v2 — the earlier form posted title,
@@ -56,9 +59,15 @@ export default function ListingForm({
     );
 
     const [categories, setCategories] = useState([]);
-    const [photos, setPhotos] = useState([]);
-    // Bumped to clear the file picker after a save, so the same files are not uploaded twice.
-    const [fileInputKey, setFileInputKey] = useState(0);
+    // Photos chosen but not uploaded yet, each with a preview address so the owner sees what they picked
+    // (KAN-329). The addresses are released when a photo is removed, after a save, or when the form goes.
+    const [chosen, setChosen] = useState([]);
+    const chosenRef = useRef(chosen);
+    useEffect(() => {
+        chosenRef.current = chosen;
+    }, [chosen]);
+    useEffect(() => () => chosenRef.current.forEach((c) => URL.revokeObjectURL(c.url)), []);
+    const photos = chosen.map((c) => c.file);
     // The listing's saved photos, managed in the editor.
     const [savedPhotos, setSavedPhotos] = useState(listing?.photos ?? []);
     const [photoBusy, setPhotoBusy] = useState(false);
@@ -96,8 +105,18 @@ export default function ListingForm({
         setForm({ ...form, [e.target.name]: e.target.value });
     };
 
-    const handlePhotoUpload = (e) => {
-        setPhotos([...e.target.files]);
+    const addPhotos = (files) => {
+        setChosen((current) => [...current, ...files.map((file) => ({ file, url: URL.createObjectURL(file) }))]);
+    };
+
+    const removeChosen = (index) => {
+        URL.revokeObjectURL(chosen[index].url);
+        setChosen((current) => current.filter((_, i) => i !== index));
+    };
+
+    const clearChosen = () => {
+        chosen.forEach((c) => URL.revokeObjectURL(c.url));
+        setChosen([]);
     };
 
     const handleSubmit = async (e) => {
@@ -179,8 +198,7 @@ export default function ListingForm({
                         : "Listing created. It appears publicly once an admin approves it.",
             });
             if (!editing) setForm(EMPTY);
-            setPhotos([]);
-            setFileInputKey((k) => k + 1);
+            clearChosen();
             if (onSaved) onSaved(data);
         } catch (err) {
             console.error("Save failed:", err);
@@ -343,20 +361,56 @@ export default function ListingForm({
                 </div>
             )}
 
-            <label className="flex flex-col gap-1.5 text-sm">
+            <div className="flex flex-col gap-1.5 text-sm">
                 <span className="font-medium">{editing ? "Add photos" : "Photos"}</span>
-                <input
-                    key={fileInputKey}
-                    type="file"
-                    multiple
-                    accept="image/jpeg,image/png,image/webp"
-                    onChange={handlePhotoUpload}
-                    className="form-input"
-                />
+                <ul className="grid grid-cols-2 gap-3 sm:grid-cols-3">
+                    {chosen.map(({ url }, i) => (
+                        <li key={url} className="relative aspect-4/3 overflow-hidden rounded-lg border border-line bg-surface-2">
+                            {/* eslint-disable-next-line @next/next/no-img-element */}
+                            <img src={url} alt={`Chosen photo ${i + 1}`} className="size-full object-cover" />
+                            {i === 0 && savedPhotos.length === 0 && (
+                                <span className="absolute top-1.5 left-1.5 rounded-md bg-brand-600 px-1.5 py-0.5 text-[0.6875rem] font-semibold text-white">
+                                    Main photo
+                                </span>
+                            )}
+                            <button
+                                type="button"
+                                onClick={() => removeChosen(i)}
+                                aria-label={`Remove chosen photo ${i + 1}`}
+                                className="absolute top-1.5 right-1.5 grid size-7 place-items-center rounded-md bg-surface/95 text-error-ink hover:bg-surface"
+                            >
+                                <X className="size-4" />
+                            </button>
+                        </li>
+                    ))}
+                    {savedPhotos.length + chosen.length < PHOTOS_MAX && (
+                        <li className="aspect-4/3">
+                            <label className="grid size-full cursor-pointer place-items-center rounded-lg border border-dashed border-line-strong text-[0.8125rem] font-medium text-brand-600 hover:border-brand-600 hover:bg-brand-50">
+                                <span className="flex flex-col items-center gap-1.5">
+                                    <ImagePlus className="size-5" aria-hidden /> {chosen.length === 0 ? "Choose photos" : "Add more"}
+                                </span>
+                                <input
+                                    type="file"
+                                    multiple
+                                    accept="image/jpeg,image/png,image/webp"
+                                    className="sr-only"
+                                    aria-label="Choose listing photos"
+                                    onChange={(e) => {
+                                        const picked = Array.from(e.target.files ?? []);
+                                        // Cleared, so picking the same file again still counts as a change.
+                                        e.target.value = "";
+                                        if (picked.length > 0) addPhotos(picked);
+                                    }}
+                                />
+                            </label>
+                        </li>
+                    )}
+                </ul>
                 <span className="text-[0.8125rem] text-muted">
-                    JPG, PNG or WEBP, up to 5 MB each and 8 per listing. The first photo becomes the main one.
+                    JPG, PNG or WEBP, up to 5 MB each and {PHOTOS_MAX} per listing. The first photo becomes the main
+                    one. Photos are uploaded when you {editing ? "save changes" : "publish the listing"}.
                 </span>
-            </label>
+            </div>
 
             <div className="flex gap-3">
                 <button type="submit" className="form-button-primary" disabled={saving}>

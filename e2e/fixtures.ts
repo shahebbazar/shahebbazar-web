@@ -17,6 +17,14 @@ export async function sql<T = Record<string, unknown>>(text: string, params: unk
     }
 }
 
+/**
+ * Switches approval of new businesses or listings on or off. The demo data starts with both off, so a
+ * test of the approval steps turns one on and puts it back off when it ends.
+ */
+export async function setApproval(what: "business" | "listing", on: boolean) {
+    await sql("UPDATE platform_settings SET setting_value = $1 WHERE setting_key = $2", [JSON.stringify(on), `require_${what}_approval`]);
+}
+
 export const userIdOf = async (who: Who) =>
     (await sql<{ user_id: number }>("SELECT user_id FROM users WHERE user_phone = $1", [PHONES[who]]))[0].user_id;
 

@@ -1,6 +1,6 @@
 // The admin area: approvals, settings, marketing passes and moderation pages.
 
-import { test, expect, signIn, sql, userIdOf, expectNoSideScroll } from "../fixtures";
+import { test, expect, setApproval, signIn, sql, userIdOf, expectNoSideScroll } from "../fixtures";
 
 test.beforeEach(async ({ context }) => {
     await signIn(context, "admin");
@@ -29,6 +29,7 @@ const approvalSetting = async () =>
     (await sql<{ setting_value: boolean }>("SELECT setting_value FROM platform_settings WHERE setting_key = 'require_business_approval'"))[0].setting_value;
 
 test("turning business approval off asks first in the page, and Approvals then warns @phone", async ({ page }) => {
+    await setApproval("business", true);
     await page.goto("/admin/settings");
     const toggle = page.getByRole("switch", { name: "Approve new businesses before they appear" });
     await expect(toggle).toBeChecked();
@@ -58,7 +59,7 @@ test("turning business approval off asks first in the page, and Approvals then w
         await expect(page.getByRole("switch", { name: "Approve new businesses before they appear" })).toBeChecked();
         await expect.poll(() => approvalSetting()).toBe(true);
     } finally {
-        await sql("UPDATE platform_settings SET setting_value = 'true' WHERE setting_key = 'require_business_approval'");
+        await setApproval("business", false);
     }
 });
 

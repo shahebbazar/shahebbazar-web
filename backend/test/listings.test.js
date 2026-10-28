@@ -5,7 +5,7 @@ const { describe, it, before, after } = require("node:test");
 const assert = require("node:assert/strict");
 const fs = require("node:fs");
 const path = require("node:path");
-const { ORIGIN, UPLOAD_DIR, JPEG, PNG, query, call, startApi, stopApi } = require("./support/harness");
+const { ORIGIN, UPLOAD_DIR, JPEG, PNG, query, call, requireApproval, startApi, stopApi } = require("./support/harness");
 
 const OWNED_VENDOR = 1;
 const OWNED_VENDOR_SLUG = "rajshahi-mango-traders";
@@ -40,7 +40,11 @@ async function categoryId() {
     return cachedCategory;
 }
 
-before(startApi);
+// These follow a listing through approval, so approval is on.
+before(async () => {
+    await startApi();
+    await requireApproval();
+});
 after(stopApi);
 
 // ---------- access control ----------

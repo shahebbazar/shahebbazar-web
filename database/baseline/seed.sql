@@ -975,10 +975,12 @@ JOIN public.vendors v ON v.vendor_slug = 'rajshahi-mango-traders'
 WHERE u.user_phone IN ('+8801722000003', '+8801722000004', '+8801722000005', '+8801722000006');
 
 -- Platform settings (KAN-293). Also in database/migrations/003_platform_settings.sql.
--- Approval of new businesses and listings starts on, as the site has always worked.
+-- The demo data starts with approval of new businesses and listings off, so whatever testers add is
+-- public at once; an admin can switch either on in Settings. Without a row, both default to on
+-- (backend/lib/settings.js).
 INSERT INTO public.platform_settings (setting_key, setting_value) VALUES
-    ('require_business_approval', 'true'),
-    ('require_listing_approval', 'true')
+    ('require_business_approval', 'false'),
+    ('require_listing_approval', 'false')
 ON CONFLICT (setting_key) DO NOTHING;
 
 -- Listing photos: development placeholders in database/seed-assets/, copied into the upload folder
