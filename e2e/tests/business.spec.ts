@@ -90,6 +90,28 @@ test("switching business redirects within the site's own address", async ({ page
     await expect(page.locator("main")).toContainText("Rajshahi Mango Traders");
 });
 
+// A dashboard address without ?vendor (a bookmark, a link someone pasted) opened the dashboard's home,
+// not the page asked for.
+test("a dashboard link without the business opens that page for the owner's business", async ({ page }) => {
+    const [{ event_id }] = await sql<{ event_id: number }>("SELECT event_id FROM events WHERE vendor_id = 1 ORDER BY event_id LIMIT 1");
+    for (const [asked, heading] of [
+        ["/vendors/dashboard/listings", "Products & Services"],
+        ["/vendors/dashboard/settings", "Settings"],
+        ["/vendors/dashboard/events/new", "Add an event"],
+        [`/vendors/dashboard/events/${event_id}`, /./],
+    ] as const) {
+        await page.goto(asked);
+        await expect(page, asked).toHaveURL(new RegExp(`${asked}\\?vendor=1$`));
+        await expect(page.getByRole("heading", { level: 1, name: heading }), asked).toBeVisible();
+    }
+
+    // Only a dashboard page: anything else opens the dashboard home.
+    for (const next of ["https://evil.example/", "//evil.example", "/account", "/vendors/dashboard/../../account"]) {
+        await page.goto(`/vendors/dashboard?next=${encodeURIComponent(next)}`);
+        await expect(page, next).toHaveURL(/\/vendors\/dashboard\?vendor=1$/);
+    }
+});
+
 // Each `approval` is what the admin setting is; the demo data starts with it off.
 for (const approval of [false, true]) {
     test(`adding a product with approval ${approval ? "on says it waits, and it does" : "off makes it public at once"}`, async ({ page }) => {
@@ -97,6 +119,10 @@ for (const approval of [false, true]) {
         if (approval) await setApproval("listing", true);
         try {
             await page.goto("/vendors/dashboard/add-listing?vendor=1");
+            // The page's introduction says the same as the setting: it said approval was needed when it wasn't.
+            await expect(page.locator("main")).toContainText(
+                approval ? "New listings are checked by an administrator" : "New listings appear on your public page as soon as you publish them."
+            );
             await page.locator("input[name=listing_title]").fill(title);
             await page.locator("select[name=category_id]").selectOption({ index: 1 });
             await page.locator("input[name=listing_price]").fill("450");

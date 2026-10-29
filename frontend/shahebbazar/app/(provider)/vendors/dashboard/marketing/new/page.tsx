@@ -3,7 +3,7 @@ import Link from "next/link";
 import { notFound, redirect } from "next/navigation";
 import { ChevronLeft } from "lucide-react";
 import { authenticatedApiGet, getViewer } from "@/lib/auth-server";
-import { ProviderShell, parseVendorParam, providerHref } from "@/components/provider/ProviderShell";
+import { ProviderShell, parseVendorParam, providerHref, dashboardFor } from "@/components/provider/ProviderShell";
 import type { MarketingWorkspace, VendorEvent, VendorSummary } from "@/lib/types";
 import { NewCampaignForm } from "./NewCampaignForm";
 
@@ -13,7 +13,7 @@ export const metadata: Metadata = {
 
 export default async function NewCampaignPage({ searchParams }: { searchParams: Promise<{ vendor?: string }> }) {
     const vendorId = parseVendorParam((await searchParams).vendor);
-    if (vendorId === null) redirect("/vendors/dashboard");
+    if (vendorId === null) redirect(dashboardFor("/vendors/dashboard/marketing/new"));
     const [vendor, workspace, viewer, events] = await Promise.all([
         authenticatedApiGet<VendorSummary>(`/vendors/${vendorId}/summary`),
         authenticatedApiGet<MarketingWorkspace>(`/vendors/${vendorId}/marketing/workspace`),

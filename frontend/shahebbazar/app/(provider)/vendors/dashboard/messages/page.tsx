@@ -4,7 +4,8 @@ import { authenticatedApiGet } from "@/lib/auth-server";
 import { 
     ProviderShell, 
     parseVendorParam, 
-    providerHref 
+    providerHref,
+    dashboardFor,
 } from "@/components/provider/ProviderShell";
 import { providerText } from "@/lib/i18n-provider";
 import { getAccountLocale } from "@/lib/locale-server";
@@ -20,7 +21,7 @@ export const metadata: Metadata = {
 
 export default async function OwnerMessagesPage({ searchParams }: { searchParams: Promise<{ vendor?: string }> }) {
     const vendorId = parseVendorParam((await searchParams).vendor);
-    if (vendorId === null) redirect("/vendors/dashboard");
+    if (vendorId === null) redirect(dashboardFor("/vendors/dashboard/messages"));
     const [vendor, conversations] = await Promise.all([
         authenticatedApiGet<VendorSummary>(`/vendors/${vendorId}/summary`),
         authenticatedApiGet<ConversationSummary[]>(`/vendors/${vendorId}/conversations`),

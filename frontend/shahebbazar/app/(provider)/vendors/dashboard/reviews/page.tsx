@@ -3,7 +3,7 @@ import { notFound, redirect } from "next/navigation";
 import { Star } from "lucide-react";
 import { authenticatedApiGet, getViewer } from "@/lib/auth-server";
 import { formatDateTime } from "@/lib/format";
-import { ProviderShell, parseVendorParam } from "@/components/provider/ProviderShell";
+import { ProviderShell, parseVendorParam, dashboardFor } from "@/components/provider/ProviderShell";
 import { providerText } from "@/lib/i18n-provider";
 import { getAccountLocale } from "@/lib/locale-server";
 import { fill } from "@/lib/i18n";
@@ -17,7 +17,7 @@ export const metadata: Metadata = {
 
 export default async function OwnerReviewsPage({ searchParams }: { searchParams: Promise<{ vendor?: string }> }) {
     const vendorId = parseVendorParam((await searchParams).vendor);
-    if (vendorId === null) redirect("/vendors/dashboard");
+    if (vendorId === null) redirect(dashboardFor("/vendors/dashboard/reviews"));
     const [vendor, reviews, viewer] = await Promise.all([
         authenticatedApiGet<VendorSummary>(`/vendors/${vendorId}/summary`),
         authenticatedApiGet<OwnerReview[]>(`/vendors/${vendorId}/reviews`),

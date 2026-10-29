@@ -20,6 +20,7 @@ import {
     PickerShell,
     ProviderShell,
     businessCode,
+    dashboardNext,
     parseVendorParam,
     providerHref,
 } from "@/components/provider/ProviderShell";
@@ -41,7 +42,7 @@ export const metadata: Metadata = {
 
 const PERIODS: DashboardPeriod[] = [7, 30, 90];
 
-type Query = { vendor?: string; days?: string };
+type Query = { vendor?: string; days?: string; next?: string };
 
 export default async function ProviderDashboardPage({
     searchParams,
@@ -65,7 +66,7 @@ export default async function ProviderDashboardPage({
         // got in the way (KAN-334). The picker is left for someone with no business any more.
         const remembered = Number((await cookies()).get(ACTIVE_BUSINESS_COOKIE)?.value);
         const open = vendors.find((v) => v.vendor_id === remembered) ?? vendors[0];
-        if (open) redirect(providerHref("/vendors/dashboard", open.vendor_id));
+        if (open) redirect(providerHref(dashboardNext(query.next), open.vendor_id));
 
         const session = await authenticatedApiGet<{ user: AuthUser }>("/auth/me");
         return (

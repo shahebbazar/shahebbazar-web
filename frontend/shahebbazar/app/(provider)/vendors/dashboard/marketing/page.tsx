@@ -3,7 +3,7 @@ import Link from "next/link";
 import { notFound, redirect } from "next/navigation";
 import { AlertTriangle, CheckCircle2, ChevronRight, Circle, Megaphone, Plus, Sparkles } from "lucide-react";
 import { authenticatedApiGet, getViewer } from "@/lib/auth-server";
-import { ProviderShell, parseVendorParam, providerHref } from "@/components/provider/ProviderShell";
+import { ProviderShell, parseVendorParam, providerHref, dashboardFor } from "@/components/provider/ProviderShell";
 import { providerText } from "@/lib/i18n-provider";
 import { getAccountLocale } from "@/lib/locale-server";
 import type { MarketingResults, MarketingWorkspace, VendorSummary } from "@/lib/types";
@@ -108,7 +108,7 @@ function RenewBanner({ workspace }: { workspace: MarketingWorkspace }) {
 export default async function MarketingPage({ searchParams }: { searchParams: Promise<{ vendor?: string; days?: string }> }) {
     const query = await searchParams;
     const vendorId = parseVendorParam(query.vendor);
-    if (vendorId === null) redirect("/vendors/dashboard");
+    if (vendorId === null) redirect(dashboardFor("/vendors/dashboard/marketing"));
     const days = [7, 30, 90].find((p) => p === Number(query.days)) ?? 30;
     const [vendor, workspace, viewer, results] = await Promise.all([
         authenticatedApiGet<VendorSummary>(`/vendors/${vendorId}/summary`),

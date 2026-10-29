@@ -3,7 +3,7 @@ import Link from "next/link";
 import { notFound, redirect } from "next/navigation";
 import { ChevronLeft } from "lucide-react";
 import { authenticatedApiGet, getViewer } from "@/lib/auth-server";
-import { ProviderShell, parseVendorParam, providerHref } from "@/components/provider/ProviderShell";
+import { ProviderShell, parseVendorParam, providerHref, dashboardFor } from "@/components/provider/ProviderShell";
 import type { CampaignDetail, VendorSummary } from "@/lib/types";
 import { CampaignEditor } from "./CampaignEditor";
 
@@ -20,7 +20,7 @@ export default async function CampaignPage({
 }) {
     const [{ campaignId }, { vendor: rawVendor }] = await Promise.all([params, searchParams]);
     const vendorId = parseVendorParam(rawVendor);
-    if (vendorId === null || !/^\d{1,10}$/.test(campaignId)) redirect("/vendors/dashboard");
+    if (vendorId === null || !/^\d{1,10}$/.test(campaignId)) redirect(dashboardFor(`/vendors/dashboard/marketing/${campaignId}`));
     const [vendor, campaign, viewer] = await Promise.all([
         authenticatedApiGet<VendorSummary>(`/vendors/${vendorId}/summary`),
         authenticatedApiGet<CampaignDetail>(`/vendors/${vendorId}/marketing/campaigns/${campaignId}`),

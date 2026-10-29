@@ -7,7 +7,7 @@ import { apiGet, assetUrl } from "@/lib/api";
 import { formatEventWhen } from "@/lib/format";
 import { eventTypeLabel } from "@/lib/events";
 import type { PublicSettings, VendorEvent, VendorSummary } from "@/lib/types";
-import { ProviderShell, parseVendorParam } from "@/components/provider/ProviderShell";
+import { ProviderShell, parseVendorParam, dashboardFor } from "@/components/provider/ProviderShell";
 import { providerText } from "@/lib/i18n-provider";
 import { getAccountLocale } from "@/lib/locale-server";
 import { EventStatusBadge } from "./EventStatusBadge";
@@ -20,7 +20,7 @@ export const metadata: Metadata = {
 export default async function EventsPage({ searchParams }: { searchParams: Promise<{ vendor?: string; deleted?: string }> }) {
     const params = await searchParams;
     const vendorId = parseVendorParam(params.vendor);
-    if (vendorId === null) redirect("/vendors/dashboard");
+    if (vendorId === null) redirect(dashboardFor("/vendors/dashboard/events"));
 
     const [vendor, events, settings] = await Promise.all([
         authenticatedApiGet<VendorSummary>(`/vendors/${vendorId}/summary`),

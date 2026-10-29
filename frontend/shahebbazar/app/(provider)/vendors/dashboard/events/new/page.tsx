@@ -5,7 +5,7 @@ import { ChevronLeft } from "lucide-react";
 import { authenticatedApiGet } from "@/lib/auth-server";
 import { apiGet } from "@/lib/api";
 import type { PublicSettings, VendorSummary } from "@/lib/types";
-import { ProviderShell, parseVendorParam } from "@/components/provider/ProviderShell";
+import { ProviderShell, parseVendorParam, dashboardFor } from "@/components/provider/ProviderShell";
 import { EventForm } from "../EventForm";
 
 export const metadata: Metadata = {
@@ -14,7 +14,7 @@ export const metadata: Metadata = {
 
 export default async function NewEventPage({ searchParams }: { searchParams: Promise<{ vendor?: string }> }) {
     const vendorId = parseVendorParam((await searchParams).vendor);
-    if (vendorId === null) redirect("/vendors/dashboard");
+    if (vendorId === null) redirect(dashboardFor("/vendors/dashboard/events/new"));
 
     const [vendor, areas, settings] = await Promise.all([
         authenticatedApiGet<VendorSummary>(`/vendors/${vendorId}/summary`),
