@@ -100,6 +100,9 @@ export function OffersPrompt({
                                 className="size-4 accent-brand-600"
                             />
                             {copy.offersSms}
+                            <span className="rounded-full bg-surface-2 px-2 py-0.5 text-[0.6875rem] font-medium text-muted">
+                                {copy.offersSoon}
+                            </span>
                         </label>
                         <label className={`flex items-center gap-2 ${hasEmail === false ? "text-soft" : ""}`}>
                             <input

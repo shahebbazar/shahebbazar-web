@@ -21,7 +21,7 @@ export default async function SavedPage() {
             {saved.length > 0 && (
                 <p className="mb-4 text-sm text-muted">
                     Tick SMS or email under a business to get its offers. Untick to stop them at any time; every
-                    offer also has a link to stop it.
+                    offer also has a link to stop it. Offers by SMS are coming soon: until then, businesses send them by email.
                     {!hasEmail && (
                         <>
                             {" "}For offers by email,{" "}

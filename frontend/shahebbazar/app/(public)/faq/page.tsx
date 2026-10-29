@@ -54,7 +54,7 @@ const GROUPS: { id: string; title: string; items: Answer[] }[] = [
         items: [
             {
                 q: "How do I get offers from a business?",
-                a: "Save the business with the bookmark button. We then ask whether you want its offers by SMS or by email. Nothing is ticked for you, and saving a business does not sign you up.",
+                a: "Save the business with the bookmark button. We then ask whether you want its offers by SMS or by email. Nothing is ticked for you, and saving a business does not sign you up. Offers by SMS are coming soon: until then, businesses send them by email.",
             },
             {
                 q: "Why can't I choose email?",
