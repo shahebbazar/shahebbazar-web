@@ -1,10 +1,10 @@
-// Admin settings (KAN-293): approval of new businesses and new listings can be switched off. The demo
-// data starts with both off; a database without the settings has both on.
+// Admin settings (KAN-293): approval of new businesses and new listings can be switched on and off.
+// Both start off (KAN-335), in the demo data and on a database without the settings.
 // Runs against the real API and a throwaway database; see test/support/harness.js.
 
 const { describe, it, before, after } = require("node:test");
 const assert = require("node:assert/strict");
-const { PHONES, ROLES, businessChoices, query, call, signIn, startApi, stopApi, userIdOf } = require("./support/harness");
+const { PHONES, ROLES, businessChoices, query, call, requireApproval, signIn, startApi, stopApi, userIdOf } = require("./support/harness");
 
 let choices;
 const setting = (key, value) => call("PUT", `/admin/settings/${key}`, { as: "admin", json: { value } });
@@ -46,11 +46,13 @@ describe("defaults", () => {
         assert.deepEqual(res.data, { require_business_approval: false, require_listing_approval: false, require_event_approval: false });
     });
 
-    // The rest of this file starts from here: approval on, as on a database with no stored setting.
-    it("with no stored setting, new businesses and listings need approval", async () => {
+    it("with no stored setting, nothing needs approval either", async () => {
         await query("DELETE FROM platform_settings WHERE setting_key IN ('require_business_approval', 'require_listing_approval')");
         const res = await call("GET", "/settings/public");
-        assert.deepEqual(res.data, { require_business_approval: true, require_listing_approval: true, require_event_approval: false });
+        assert.deepEqual(res.data, { require_business_approval: false, require_listing_approval: false, require_event_approval: false });
+
+        // The rest of this file starts from here: approval on.
+        await requireApproval();
     });
 });
 

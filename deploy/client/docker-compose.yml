@@ -2,12 +2,15 @@
 #
 # Their rules, from the VPS developer guide: no host ports (their Traefik serves HTTPS and routes by the
 # labels below), every service has resource limits, public containers join the shared network
-# traefik_public and private traffic stays on net_shahebbazar. Deploying is `sudo project-ctl build`
-# then `up`; nobody runs commands inside the containers, so the API sets up its own database
-# (DB_AUTO_SETUP).
+# traefik_public and private traffic stays on the site's own net_<PROJECT>. Deploying is
+# `sudo project-ctl build` then `up`; nobody runs commands inside the containers, so the API sets up
+# its own database (DB_AUTO_SETUP).
 #
-# traefik_public is shared with other projects, so containers and Traefik routers are all named
-# shahebbazar-..., and the containers reach each other by those names: a plain "api" could resolve to
+# The server runs three copies, one per workspace: staging (shahebbazar), the test site
+# (shahebbazar-test) and the live site (shahebbazar-prod). PROJECT in the workspace's .env is that
+# workspace's name; staging leaves it out and gets the default. traefik_public is shared with other
+# projects and with the other copies, so containers, Traefik routers and middlewares are all named
+# <PROJECT>-..., and the containers reach each other by those names: a plain "api" could resolve to
 # another project's container on the shared network.
 #
 # Settings come from .env in the workspace (deploy/client/.env.example lists them).
@@ -15,7 +18,7 @@
 services:
   db:
     image: postgres:16-alpine
-    container_name: shahebbazar-db
+    container_name: ${PROJECT:-shahebbazar}-db
     restart: unless-stopped
     environment:
       POSTGRES_USER: ${PGUSER:-postgres}
@@ -27,7 +30,7 @@ services:
     volumes:
       - pgdata:/var/lib/postgresql/data
     networks:
-      - net_shahebbazar
+      - private
     healthcheck:
       test: ["CMD-SHELL", "pg_isready -U ${PGUSER:-postgres} -d ${PGDATABASE:-shahebbazar}"]
       interval: 5s
@@ -44,19 +47,23 @@ services:
     build:
       context: ../..
       dockerfile: backend/Dockerfile
-    container_name: shahebbazar-api
+    container_name: ${PROJECT:-shahebbazar}-api
     restart: unless-stopped
     depends_on:
       db:
         condition: service_healthy
     environment:
-      PGHOST: shahebbazar-db
+      PGHOST: ${PROJECT:-shahebbazar}-db
       PGPORT: 5432
       PGUSER: ${PGUSER:-postgres}
       PGPASSWORD: ${PGPASSWORD}
       PGDATABASE: ${PGDATABASE:-shahebbazar}
       # Loads an empty database and applies new migrations on start (backend/lib/setupDatabase.js).
       DB_AUTO_SETUP: "true"
+      # What an empty database is loaded with: demo (staging, the test site) or reference (the live
+      # site: locations and categories only, plus an admin for ADMIN_PHONE).
+      DB_SEED: ${DB_SEED:-demo}
+      ADMIN_PHONE: ${ADMIN_PHONE:-}
       # Traefik is the one proxy in front; the analytics visitor hash needs the visitor's real address.
       TRUST_PROXY: 1
       CORS_ORIGIN: https://${SITE_HOST:?Set SITE_HOST in .env}
@@ -73,7 +80,7 @@ services:
       MARKETING_WORKSPACE_ENABLED: "true"
       # Campaign emails go to the test inbox until the client's email provider is set up.
       MARKETING_EMAIL_ENABLED: "true"
-      SMTP_HOST: ${SMTP_HOST:-shahebbazar-mail}
+      SMTP_HOST: ${SMTP_HOST:-${PROJECT:-shahebbazar}-mail}
       SMTP_PORT: ${SMTP_PORT:-1025}
       SMTP_SECURE: ${SMTP_SECURE:-false}
       SMTP_USER: ${SMTP_USER:-}
@@ -83,7 +90,7 @@ services:
       - uploads:/data/uploads
     networks:
       - traefik_public
-      - net_shahebbazar
+      - private
     deploy:
       resources:
         limits:
@@ -93,15 +100,15 @@ services:
     labels:
       - "traefik.enable=true"
       - "traefik.docker.network=traefik_public"
-      - "traefik.http.routers.shahebbazar-api.rule=Host(`${SITE_HOST}`) && (PathPrefix(`/api`) || PathPrefix(`/uploads`))"
-      - "traefik.http.routers.shahebbazar-api.priority=100"
-      - "traefik.http.routers.shahebbazar-api.entrypoints=websecure"
-      - "traefik.http.routers.shahebbazar-api.tls=true"
-      - "traefik.http.routers.shahebbazar-api.tls.certresolver=mytlschallenge"
-      - "traefik.http.routers.shahebbazar-api.middlewares=shahebbazar-headers,shahebbazar-compress,shahebbazar-body"
-      - "traefik.http.services.shahebbazar-api.loadbalancer.server.port=4000"
+      - "traefik.http.routers.${PROJECT:-shahebbazar}-api.rule=Host(`${SITE_HOST}`) && (PathPrefix(`/api`) || PathPrefix(`/uploads`))"
+      - "traefik.http.routers.${PROJECT:-shahebbazar}-api.priority=100"
+      - "traefik.http.routers.${PROJECT:-shahebbazar}-api.entrypoints=websecure"
+      - "traefik.http.routers.${PROJECT:-shahebbazar}-api.tls=true"
+      - "traefik.http.routers.${PROJECT:-shahebbazar}-api.tls.certresolver=mytlschallenge"
+      - "traefik.http.routers.${PROJECT:-shahebbazar}-api.middlewares=${PROJECT:-shahebbazar}-headers,${PROJECT:-shahebbazar}-compress,${PROJECT:-shahebbazar}-body"
+      - "traefik.http.services.${PROJECT:-shahebbazar}-api.loadbalancer.server.port=4000"
       # Up to 8 listing photos of 5 MB each in one upload, with room to spare.
-      - "traefik.http.middlewares.shahebbazar-body.buffering.maxRequestBodyBytes=52428800"
+      - "traefik.http.middlewares.${PROJECT:-shahebbazar}-body.buffering.maxRequestBodyBytes=52428800"
 
   web:
     build:
@@ -111,16 +118,16 @@ services:
         NEXT_PUBLIC_API_BASE_URL: https://${SITE_HOST}
         NEXT_PUBLIC_ASSET_BASE_URL: https://${SITE_HOST}
         NEXT_PUBLIC_TEST_BUILD: ${TEST_BUILD:-true}
-    container_name: shahebbazar-web
+    container_name: ${PROJECT:-shahebbazar}-web
     restart: unless-stopped
     depends_on:
       - api
     environment:
       # The website's server talks to the API directly on the private network.
-      API_BASE_URL: http://shahebbazar-api:4000
+      API_BASE_URL: http://${PROJECT:-shahebbazar}-api:4000
     networks:
       - traefik_public
-      - net_shahebbazar
+      - private
     deploy:
       resources:
         limits:
@@ -130,28 +137,39 @@ services:
     labels:
       - "traefik.enable=true"
       - "traefik.docker.network=traefik_public"
-      - "traefik.http.routers.shahebbazar-web.rule=Host(`${SITE_HOST}`)"
-      - "traefik.http.routers.shahebbazar-web.priority=1"
-      - "traefik.http.routers.shahebbazar-web.entrypoints=websecure"
-      - "traefik.http.routers.shahebbazar-web.tls=true"
-      - "traefik.http.routers.shahebbazar-web.tls.certresolver=mytlschallenge"
-      - "traefik.http.routers.shahebbazar-web.middlewares=shahebbazar-headers,shahebbazar-compress"
-      - "traefik.http.services.shahebbazar-web.loadbalancer.server.port=3000"
+      - "traefik.http.routers.${PROJECT:-shahebbazar}-web.rule=Host(`${SITE_HOST}`)"
+      - "traefik.http.routers.${PROJECT:-shahebbazar}-web.priority=10"
+      - "traefik.http.routers.${PROJECT:-shahebbazar}-web.entrypoints=websecure"
+      - "traefik.http.routers.${PROJECT:-shahebbazar}-web.tls=true"
+      - "traefik.http.routers.${PROJECT:-shahebbazar}-web.tls.certresolver=mytlschallenge"
+      - "traefik.http.routers.${PROJECT:-shahebbazar}-web.middlewares=${PROJECT:-shahebbazar}-headers,${PROJECT:-shahebbazar}-compress"
+      - "traefik.http.services.${PROJECT:-shahebbazar}-web.loadbalancer.server.port=3000"
+      # The live site's www address sends visitors on to the plain one. Only the live site sets
+      # WWW_HOST; elsewhere this router repeats SITE_HOST below the website's priority, so it never wins.
+      - "traefik.http.routers.${PROJECT:-shahebbazar}-www.rule=Host(`${WWW_HOST:-${SITE_HOST}}`)"
+      - "traefik.http.routers.${PROJECT:-shahebbazar}-www.priority=5"
+      - "traefik.http.routers.${PROJECT:-shahebbazar}-www.entrypoints=websecure"
+      - "traefik.http.routers.${PROJECT:-shahebbazar}-www.tls=true"
+      - "traefik.http.routers.${PROJECT:-shahebbazar}-www.tls.certresolver=mytlschallenge"
+      - "traefik.http.routers.${PROJECT:-shahebbazar}-www.middlewares=${PROJECT:-shahebbazar}-www"
+      - "traefik.http.middlewares.${PROJECT:-shahebbazar}-www.redirectregex.regex=^https://[^/]+/(.*)"
+      - "traefik.http.middlewares.${PROJECT:-shahebbazar}-www.redirectregex.replacement=https://${SITE_HOST}/$${1}"
+      - "traefik.http.middlewares.${PROJECT:-shahebbazar}-www.redirectregex.permanent=true"
       # Shared by the site's routers. Compression happens here; the website's own is off in the server build.
-      - "traefik.http.middlewares.shahebbazar-compress.compress=true"
+      - "traefik.http.middlewares.${PROJECT:-shahebbazar}-compress.compress=true"
       # Photos are compressed already.
-      - "traefik.http.middlewares.shahebbazar-compress.compress.excludedcontenttypes=image/jpeg,image/png,image/webp"
-      - "traefik.http.middlewares.shahebbazar-headers.headers.stsSeconds=31536000"
-      - "traefik.http.middlewares.shahebbazar-headers.headers.contentTypeNosniff=true"
-      - "traefik.http.middlewares.shahebbazar-headers.headers.referrerPolicy=strict-origin-when-cross-origin"
+      - "traefik.http.middlewares.${PROJECT:-shahebbazar}-compress.compress.excludedcontenttypes=image/jpeg,image/png,image/webp"
+      - "traefik.http.middlewares.${PROJECT:-shahebbazar}-headers.headers.stsSeconds=31536000"
+      - "traefik.http.middlewares.${PROJECT:-shahebbazar}-headers.headers.contentTypeNosniff=true"
+      - "traefik.http.middlewares.${PROJECT:-shahebbazar}-headers.headers.referrerPolicy=strict-origin-when-cross-origin"
       # A staging site isn't for search engines. Empty for the live site, which removes the header.
-      - "traefik.http.middlewares.shahebbazar-headers.headers.customResponseHeaders.X-Robots-Tag=${ROBOTS_HEADER-noindex, nofollow}"
+      - "traefik.http.middlewares.${PROJECT:-shahebbazar}-headers.headers.customResponseHeaders.X-Robots-Tag=${ROBOTS_HEADER-noindex, nofollow}"
 
   # The test inbox: every campaign email lands here instead of being delivered. At <site>/mail,
   # behind MAIL_UI_USER / MAIL_UI_PASSWORD.
   mailpit:
     image: axllent/mailpit:v1.31.3
-    container_name: shahebbazar-mail
+    container_name: ${PROJECT:-shahebbazar}-mail
     restart: unless-stopped
     environment:
       MP_WEBROOT: mail
@@ -159,7 +177,7 @@ services:
       MP_MAX_MESSAGES: 2000
     networks:
       - traefik_public
-      - net_shahebbazar
+      - private
     deploy:
       resources:
         limits:
@@ -169,13 +187,13 @@ services:
     labels:
       - "traefik.enable=true"
       - "traefik.docker.network=traefik_public"
-      - "traefik.http.routers.shahebbazar-mail.rule=Host(`${SITE_HOST}`) && PathPrefix(`/mail`)"
-      - "traefik.http.routers.shahebbazar-mail.priority=100"
-      - "traefik.http.routers.shahebbazar-mail.entrypoints=websecure"
-      - "traefik.http.routers.shahebbazar-mail.tls=true"
-      - "traefik.http.routers.shahebbazar-mail.tls.certresolver=mytlschallenge"
-      - "traefik.http.routers.shahebbazar-mail.middlewares=shahebbazar-headers"
-      - "traefik.http.services.shahebbazar-mail.loadbalancer.server.port=8025"
+      - "traefik.http.routers.${PROJECT:-shahebbazar}-mail.rule=Host(`${SITE_HOST}`) && PathPrefix(`/mail`)"
+      - "traefik.http.routers.${PROJECT:-shahebbazar}-mail.priority=100"
+      - "traefik.http.routers.${PROJECT:-shahebbazar}-mail.entrypoints=websecure"
+      - "traefik.http.routers.${PROJECT:-shahebbazar}-mail.tls=true"
+      - "traefik.http.routers.${PROJECT:-shahebbazar}-mail.tls.certresolver=mytlschallenge"
+      - "traefik.http.routers.${PROJECT:-shahebbazar}-mail.middlewares=${PROJECT:-shahebbazar}-headers"
+      - "traefik.http.services.${PROJECT:-shahebbazar}-mail.loadbalancer.server.port=8025"
 
 volumes:
   pgdata:
@@ -185,5 +203,6 @@ volumes:
 networks:
   traefik_public:
     external: true
-  net_shahebbazar:
+  private:
+    name: net_${PROJECT:-shahebbazar}
     external: true

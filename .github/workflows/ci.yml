@@ -3,8 +3,9 @@
 # API tests, Frontend checks and Browser tests.
 # Once they pass on main, Deploy to staging updates the staging site on the client's server
 # (docs/DEPLOY-CLIENT.md).
-# Run workflow (Actions tab) runs the checks on the chosen branch, then deploys it to the AWS test
-# server (docs/DEPLOY.md), or, for main only, to staging again.
+# Run workflow (Actions tab) runs the checks on the chosen branch, then deploys it to the test site on
+# the client's server, to the AWS test server (docs/DEPLOY.md), or, for main only, to staging again.
+# The live site is never deployed from here: only by hand on the server, as the client asked.
 
 name: CI
 
@@ -18,8 +19,8 @@ on:
       deploy_to:
         description: Where to deploy the branch once the checks pass (staging takes main only)
         type: choice
-        options: [test server, staging]
-        default: test server
+        options: [test site, test server, staging]
+        default: test site
 
 # A newer push to a pull request cancels its older run. Runs on main aren't cancelled, so a deploy
 # is never stopped halfway.
@@ -265,26 +266,73 @@ jobs:
           printf '%s\n' "$STAGING_KNOWN_HOSTS" | tr -d '\r' > ~/.ssh/known_hosts
           ssh -i ~/.ssh/staging_key -o BatchMode=yes -o ServerAliveInterval=30 "$STAGING_USER@$STAGING_HOST" "$GITHUB_SHA"
 
-      # From outside, as a visitor: the deploy only checks /api/health from the server itself, so a
-      # site that starts but can't render pages would otherwise go unnoticed.
+      - uses: actions/checkout@v5
+        with:
+          sparse-checkout: deploy/client
+      # From outside, as a visitor (deploy/client/check-site.sh).
       - name: Check the staging site
         env:
           STAGING_HOST: ${{ secrets.STAGING_HOST }}
-          SITE: https://staging.shahebbazar.com
         run: |
           if [ -z "$STAGING_HOST" ]; then
             echo "::notice::Nothing was deployed, so there is nothing to check."
             exit 0
           fi
-          fail() { echo "::error::$1"; exit 1; }
-          get() { curl -fsS --retry 5 --retry-delay 5 --retry-all-errors --max-time 30 "$SITE$1"; }
+          sh deploy/client/check-site.sh https://staging.shahebbazar.com
 
-          get /api/health | jq -e '.ok == true' > /dev/null || fail "$SITE/api/health doesn't report ok."
-          # grep without -q reads to the end: -q stops at the first match, so curl's write fails
-          # ("Failure writing output") and --retry-all-errors downloads the page again.
-          get / | grep 'Shahebbazar' > /dev/null || fail "The home page didn't load."
-          get /login | grep 'Log in to Shahebbazar' > /dev/null || fail "The login page didn't load."
-          slug=$(get '/api/businesses?limit=1' | jq -r '.results[0].vendor_slug // empty')
-          [ -n "$slug" ] || fail "/api/businesses returned no businesses."
-          get "/business/$slug" > /dev/null || fail "The business page /business/$slug didn't load."
-          echo "Staging answers: /api/health, /, /login and /business/$slug."
+  # Updates the test site on the client's server (test.shahebbazar.com) with the branch someone chose
+  # in Actions → CI → Run workflow, once every check has passed. Over SSH with a key that can only run
+  # the test site's deploy/client/deploy.sh (docs/DEPLOY-CLIENT.md, "Automatic deploys"). Until the
+  # test-site environment's secrets are set, it notes that and passes.
+  deploy-test-site:
+    name: Deploy to the test site
+    needs: [api, web, e2e]
+    if: github.event_name == 'workflow_dispatch' && inputs.deploy_to == 'test site'
+    runs-on: ubuntu-24.04
+    timeout-minutes: 25
+    environment:
+      name: test-site
+      url: https://test.shahebbazar.com
+    concurrency:
+      group: deploy-test-site
+      cancel-in-progress: false
+
+    steps:
+      - name: Deploy
+        env:
+          TEST_SITE_HOST: ${{ secrets.TEST_SITE_HOST }}
+          TEST_SITE_USER: ${{ secrets.TEST_SITE_USER }}
+          TEST_SITE_SSH_KEY: ${{ secrets.TEST_SITE_SSH_KEY }}
+          TEST_SITE_KNOWN_HOSTS: ${{ secrets.TEST_SITE_KNOWN_HOSTS }}
+        run: |
+          if [ -z "$TEST_SITE_HOST" ]; then
+            echo "::notice::The test-site environment's secrets aren't set (docs/DEPLOY-CLIENT.md), so nothing was deployed."
+            exit 0
+          fi
+          install -m 700 -d ~/.ssh
+          if printf '%s' "$TEST_SITE_SSH_KEY" | grep -q 'BEGIN'; then
+            printf '%s\n' "$TEST_SITE_SSH_KEY" | tr -d '\r' | sed 's/^[[:space:]]*//; s/[[:space:]]*$//' > ~/.ssh/test_site_key
+          else
+            printf '%s' "$TEST_SITE_SSH_KEY" | tr -d '[:space:]' | base64 -d > ~/.ssh/test_site_key
+          fi
+          chmod 600 ~/.ssh/test_site_key
+          if ! ssh-keygen -y -f ~/.ssh/test_site_key > /dev/null; then
+            echo "::error::TEST_SITE_SSH_KEY isn't a readable private key. Set it again as described in docs/DEPLOY-CLIENT.md."
+            exit 1
+          fi
+          printf '%s\n' "$TEST_SITE_KNOWN_HOSTS" | tr -d '\r' > ~/.ssh/known_hosts
+          ssh -i ~/.ssh/test_site_key -o BatchMode=yes -o ServerAliveInterval=30 "$TEST_SITE_USER@$TEST_SITE_HOST" "$GITHUB_SHA"
+
+      - uses: actions/checkout@v5
+        with:
+          sparse-checkout: deploy/client
+      # From outside, as a visitor (deploy/client/check-site.sh).
+      - name: Check the test site
+        env:
+          TEST_SITE_HOST: ${{ secrets.TEST_SITE_HOST }}
+        run: |
+          if [ -z "$TEST_SITE_HOST" ]; then
+            echo "::notice::Nothing was deployed, so there is nothing to check."
+            exit 0
+          fi
+          sh deploy/client/check-site.sh https://test.shahebbazar.com
