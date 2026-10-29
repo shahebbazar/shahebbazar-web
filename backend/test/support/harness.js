@@ -208,7 +208,9 @@ async function businessChoices() {
 /** Switches on approval of new businesses and listings, which the demo data starts with off. */
 async function requireApproval() {
     await query(
-        "UPDATE platform_settings SET setting_value = 'true' WHERE setting_key IN ('require_business_approval', 'require_listing_approval')"
+        `INSERT INTO platform_settings (setting_key, setting_value)
+         VALUES ('require_business_approval', 'true'), ('require_listing_approval', 'true')
+         ON CONFLICT (setting_key) DO UPDATE SET setting_value = EXCLUDED.setting_value`
     );
 }
 

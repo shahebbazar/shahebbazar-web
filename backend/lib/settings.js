@@ -1,18 +1,18 @@
 // Platform settings an admin can change without a code release (KAN-293), stored in platform_settings.
 //
-// Every setting is declared here with its type and default. A missing row means the default, so
-// an older database without the row behaves as before.
+// Every setting is declared here with its type and default. A missing row means the default.
 
 const SETTINGS = {
+    // Approval starts off (KAN-335), as both seeds load it: whatever is added is public at once.
     require_business_approval: {
         type: "boolean",
-        default: true,
+        default: false,
         label: "Approve new businesses before they appear",
         help: "When off, a newly registered business is public straight away.",
     },
     require_listing_approval: {
         type: "boolean",
-        default: true,
+        default: false,
         label: "Approve new products and services before they appear",
         help: "When off, a new product or service is public straight away.",
     },
