@@ -36,7 +36,7 @@ export function OfferChoices({
         });
     }
 
-    const box = (channel: OfferChannel, label: string, disabled = false) => (
+    const box = (channel: OfferChannel, label: string, disabled = false, note?: string) => (
         <label className={`inline-flex items-center gap-1.5 ${disabled ? "text-soft" : ""}`}>
             <input
                 type="checkbox"
@@ -47,6 +47,7 @@ export function OfferChoices({
                 className="size-4 accent-brand-600"
             />
             {label}
+            {note && <span className="rounded-full bg-surface-2 px-2 py-0.5 text-[0.6875rem] font-medium text-muted">{note}</span>}
         </label>
     );
 
@@ -54,7 +55,8 @@ export function OfferChoices({
         <fieldset className="mt-2 rounded-lg border border-line px-3 py-2 text-[0.8125rem]">
             <legend className="px-1 text-xs font-medium text-muted">Offers from this business</legend>
             <div className="flex flex-wrap items-center gap-x-4 gap-y-1">
-                {box("sms", "SMS")}
+                {/* Businesses can't send offers by SMS yet: the choice is kept for when they can. */}
+                {box("sms", "SMS", false, "Coming soon")}
                 {box("email", "Email", !hasEmail && !channels.includes("email"))}
                 {!hasEmail && (
                     <Link href="/account/details#email" className="text-xs font-medium text-brand-600 hover:underline">

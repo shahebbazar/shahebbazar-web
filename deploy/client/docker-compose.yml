@@ -179,6 +179,8 @@ services:
       - traefik_public
       - private
     deploy:
+      # TEST_INBOX=0 in .env leaves it out: the live site sends through its real mailbox (SMTP_*).
+      replicas: ${TEST_INBOX:-1}
       resources:
         limits:
           cpus: "0.25"

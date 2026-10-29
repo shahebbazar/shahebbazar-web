@@ -236,6 +236,8 @@ const strings = {
         offersTitle: "Get offers from {name}?",
         offersBody: "Only this business will send you offers. You can stop at any time.",
         offersSms: "By SMS to your phone",
+        // Businesses can't send offers by SMS yet: the choice is kept for when they can.
+        offersSoon: "Coming soon",
         offersEmail: "By email",
         offersNoEmail: "Your account has no email address yet.",
         offersAddEmail: "Add one in My details",
@@ -478,6 +480,7 @@ const strings = {
         offersTitle: "{name} থেকে অফার পেতে চান?",
         offersBody: "শুধু এই ব্যবসা আপনাকে অফার পাঠাবে। যেকোনো সময় বন্ধ করতে পারবেন।",
         offersSms: "আপনার ফোনে এসএমএসে",
+        offersSoon: "শীঘ্রই আসছে",
         offersEmail: "ইমেইলে",
         offersNoEmail: "আপনার অ্যাকাউন্টে এখনো ইমেইল ঠিকানা নেই।",
         offersAddEmail: "আমার তথ্য পাতায় যোগ করুন",

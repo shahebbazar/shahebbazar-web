@@ -196,6 +196,8 @@ then deployed with `deploy.sh` by hand, with these changes in its `.env`:
   MARKETING_EMAIL_FROM=offers@shahebbazar.com
   ```
 
+  Then `TEST_INBOX=0`, so the live site runs no test inbox and has nothing at `/mail`.
+
   The domain's MX, SPF (`include:_spf.mail.hostinger.com`), DKIM (`hostingermail-a/b/c._domainkey`)
   and DMARC records are in Cloudflare, **DNS only**. Staging keeps these lines commented out, so its
   campaigns go to the test inbox; set them there only for a one-off delivery test to your own address.
