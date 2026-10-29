@@ -976,7 +976,7 @@ WHERE u.user_phone IN ('+8801722000003', '+8801722000004', '+8801722000005', '+8
 
 -- Platform settings (KAN-293). Also in database/migrations/003_platform_settings.sql.
 -- The demo data starts with approval of new businesses and listings off, so whatever testers add is
--- public at once; an admin can switch either on in Settings. Without a row, both default to on
+-- public at once; an admin can switch either on in Settings. Off is also the default without a row
 -- (backend/lib/settings.js).
 INSERT INTO public.platform_settings (setting_key, setting_value) VALUES
     ('require_business_approval', 'false'),
