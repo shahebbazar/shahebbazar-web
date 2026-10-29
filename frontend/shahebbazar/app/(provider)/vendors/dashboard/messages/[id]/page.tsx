@@ -7,6 +7,7 @@ import {
     ProviderShell,
     parseVendorParam,
     providerHref,
+    dashboardFor,
 } from "@/components/provider/ProviderShell";
 import { ThreadView } from "@/components/messaging/ThreadView";
 import type { ConversationThread, VendorSummary } from "@/lib/types";
@@ -34,7 +35,7 @@ export default async function OwnerConversationPage({
     const vendorId = parseVendorParam(query.vendor);
 
     if (vendorId === null) {
-        redirect("/vendors/dashboard");
+        redirect(dashboardFor(`/vendors/dashboard/messages/${id}`));
     }
 
     if (!/^\d{1,10}$/.test(id)) {

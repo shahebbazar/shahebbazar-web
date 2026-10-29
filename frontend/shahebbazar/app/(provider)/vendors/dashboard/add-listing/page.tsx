@@ -1,5 +1,5 @@
 import { redirect } from "next/navigation";
-import { parseVendorParam, providerHref } from "@/components/provider/ProviderShell";
+import { parseVendorParam, providerHref, dashboardFor } from "@/components/provider/ProviderShell";
 
 // Old address of the add-listing form.
 export default async function AddListingRedirect({
@@ -10,7 +10,7 @@ export default async function AddListingRedirect({
     const vendorId = parseVendorParam((await searchParams).vendor);
     redirect(
         vendorId === null
-            ? "/vendors/dashboard"
+            ? dashboardFor("/vendors/dashboard/listings")
             : providerHref("/vendors/dashboard/listings", vendorId, "add")
     );
 }

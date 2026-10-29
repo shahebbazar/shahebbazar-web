@@ -5,7 +5,7 @@ import { ChevronLeft, ExternalLink, Users } from "lucide-react";
 import { authenticatedApiGet } from "@/lib/auth-server";
 import { apiGet } from "@/lib/api";
 import type { VendorEvent, VendorSummary } from "@/lib/types";
-import { ProviderShell, parseVendorParam } from "@/components/provider/ProviderShell";
+import { ProviderShell, parseVendorParam, dashboardFor } from "@/components/provider/ProviderShell";
 import { EventForm } from "../EventForm";
 import { EventPhotos } from "../EventPhotos";
 import { EventActions } from "../EventActions";
@@ -31,7 +31,7 @@ export default async function EditEventPage({
     const [{ eventId: rawId }, query] = await Promise.all([params, searchParams]);
     const vendorId = parseVendorParam(query.vendor);
     const eventId = parseVendorParam(rawId);
-    if (vendorId === null) redirect("/vendors/dashboard");
+    if (vendorId === null) redirect(dashboardFor(`/vendors/dashboard/events/${rawId}`));
     if (eventId === null) notFound();
 
     const [vendor, event, areas] = await Promise.all([

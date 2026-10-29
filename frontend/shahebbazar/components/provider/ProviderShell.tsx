@@ -80,6 +80,19 @@ export function providerHref(
     return `${path}?vendor=${vendorId}${hash ? `#${hash}` : ""}`;
 }
 
+/**
+ * Where a dashboard page opened without ?vendor (a bookmark, a pasted link) sends the vendor: the
+ * dashboard picks their business, then opens this page for it instead of its own home.
+ */
+export function dashboardFor(path: string): string {
+    return `/vendors/dashboard?next=${encodeURIComponent(path)}`;
+}
+
+/** The page a dashboardFor() link asks for, if it is a dashboard page; otherwise the dashboard home. */
+export function dashboardNext(raw: string | string[] | undefined): string {
+    return typeof raw === "string" && /^\/vendors\/dashboard(\/[a-z0-9-]+)*$/.test(raw) ? raw : "/vendors/dashboard";
+}
+
 
 /** "SB-000042": the id the design shows in the header, zero-padded. */
 export function businessCode(vendorId: number): string {
