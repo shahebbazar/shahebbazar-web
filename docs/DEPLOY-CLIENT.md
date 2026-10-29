@@ -199,8 +199,13 @@ then deployed with `deploy.sh` by hand, with these changes in its `.env`:
   The domain's MX, SPF (`include:_spf.mail.hostinger.com`), DKIM (`hostingermail-a/b/c._domainkey`)
   and DMARC records are in Cloudflare, **DNS only**. Staging keeps these lines commented out, so its
   campaigns go to the test inbox; set them there only for a one-off delivery test to your own address.
-- **The data.** An empty database is loaded with the demo data today, demo accounts included. The live
-  site needs a reference-only seed (locations and categories) before its first start.
+- `DB_SEED=reference` and `ADMIN_PHONE=<the first admin's mobile number>`, **before the first start**.
+  The empty database then gets only locations, categories and marketing passes
+  (`database/baseline/reference.sql`): no demo businesses, accounts or photos. The one account is the
+  admin, who signs in at `/admin/login` with a code by SMS. Approval starts off, as on staging: new
+  businesses, listings and events are public at once, and the admin can switch approval on in Settings. Without a valid `ADMIN_PHONE` the API
+  doesn't start and its log says why. Once loaded, these two settings change nothing. There's no page
+  for adding admins yet: another admin means root changing that account's `user_role` in the database.
 
 ## Troubleshooting
 

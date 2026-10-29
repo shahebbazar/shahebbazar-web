@@ -60,6 +60,10 @@ services:
       PGDATABASE: ${PGDATABASE:-shahebbazar}
       # Loads an empty database and applies new migrations on start (backend/lib/setupDatabase.js).
       DB_AUTO_SETUP: "true"
+      # What an empty database is loaded with: demo (staging, the test site) or reference (the live
+      # site: locations and categories only, plus an admin for ADMIN_PHONE).
+      DB_SEED: ${DB_SEED:-demo}
+      ADMIN_PHONE: ${ADMIN_PHONE:-}
       # Traefik is the one proxy in front; the analytics visitor hash needs the visitor's real address.
       TRUST_PROXY: 1
       CORS_ORIGIN: https://${SITE_HOST:?Set SITE_HOST in .env}

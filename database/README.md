@@ -9,6 +9,7 @@ one consolidated baseline; nothing else is loaded.
 | --- | --- |
 | `baseline/schema.sql` | The complete schema: every table, view, index and constraint. The single source of truth. |
 | `baseline/seed.sql` | Sample data for development and demonstrations: locations, categories, businesses, listings, accounts, reviews and events. |
+| `baseline/reference.sql` | The live site's data instead of `seed.sql` (`DB_SEED=reference`, docs/DEPLOY-CLIENT.md): locations, categories, marketing passes and approval settings only. A new category or location goes in both files; `backend/test/referenceSeed.test.js` checks they agree. |
 | `seed-assets/` | Images the seed references as `uploads/<file>`. `db:load` copies them into the upload folder. |
 | `migrations/` | Numbered changes for databases that already exist, e.g. `001_marketing_passes.sql`. Each is also in the baseline, so a fresh load does not need them. |
 | `checks/verify-baseline.sql` | Returns a row for every missing table, view, column or required sample data. No rows means the database is complete. |

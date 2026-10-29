@@ -166,7 +166,11 @@ async function autoSetup() {
         const client = await pool.connect().catch((err) => err);
         if (!(client instanceof Error)) {
             try {
-                await setupDatabase(client, { uploadDir: UPLOAD_DIR });
+                await setupDatabase(client, {
+                    uploadDir: UPLOAD_DIR,
+                    seed: process.env.DB_SEED || 'demo',
+                    adminPhone: process.env.ADMIN_PHONE,
+                });
                 return;
             } finally {
                 client.release();

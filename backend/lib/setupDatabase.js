@@ -5,6 +5,9 @@
 // - An empty database gets the baseline schema and seed (database/baseline), and the seed photos are
 //   copied into the upload folder, as `npm run db:load` does. The current migration files are recorded
 //   as applied, because the baseline already includes them.
+// - The live site loads reference.sql instead of the demo seed (DB_SEED=reference, KAN-279): locations,
+//   categories and marketing passes, no demo businesses, accounts or photos, and one admin account
+//   for ADMIN_PHONE, who signs in with a code by SMS like everyone else.
 // - Every start then applies migration files not yet recorded, in name order, and records each one.
 //   Migrations are written to be safe to run more than once, so a database loaded before this
 //   record existed simply runs them once more.
@@ -13,9 +16,11 @@
 
 const fs = require("fs");
 const path = require("path");
+const { normalisePhone } = require("./phone");
 
 const DATABASE_DIR = path.join(__dirname, "..", "..", "database");
 const BASELINE_FILES = ["baseline/schema.sql", "baseline/seed.sql"];
+const SEED_FILES = { demo: "baseline/seed.sql", reference: "baseline/reference.sql" };
 const MIGRATIONS_DIR = path.join(DATABASE_DIR, "migrations");
 const SEED_ASSETS_DIR = path.join(DATABASE_DIR, "seed-assets");
 const LOCK_ID = 4_2026_1025; // any fixed number; only this setup uses it
@@ -57,21 +62,35 @@ async function recordBaselineMigrations(client, dir = MIGRATIONS_DIR) {
 }
 
 /**
- * Loads an empty database and applies new migrations. `client` is a connected pg client.
+ * Loads an empty database and applies new migrations. `client` is a connected pg client. `seed` is
+ * "demo" (seed.sql and its photos) or "reference" (reference.sql and an admin for `adminPhone`).
  * Returns what it did: { loaded, applied: [file names] }.
  */
-async function setupDatabase(client, { uploadDir, migrationsDir = MIGRATIONS_DIR, log = console.log } = {}) {
+async function setupDatabase(client, { uploadDir, seed = "demo", adminPhone, migrationsDir = MIGRATIONS_DIR, log = console.log } = {}) {
+    if (!SEED_FILES[seed]) throw new Error(`DB_SEED must be demo or reference, not "${seed}".`);
+    const admin = seed === "reference" ? normalisePhone(adminPhone ?? "") : null;
     await client.query("SELECT pg_advisory_lock($1)", [LOCK_ID]);
     try {
         let loaded = false;
         const empty = (await client.query("SELECT to_regclass('public.users') IS NULL AS empty")).rows[0].empty;
         if (empty) {
-            for (const file of BASELINE_FILES) {
+            // Without an admin, nobody could approve the first businesses, so nothing is loaded.
+            if (seed === "reference" && !admin) {
+                throw new Error("ADMIN_PHONE must be a Bangladeshi mobile number to load the reference data.");
+            }
+            for (const file of ["baseline/schema.sql", SEED_FILES[seed]]) {
                 await client.query(readSql(path.join(DATABASE_DIR, file)));
                 log(`Database setup: applied ${file}`);
             }
+            if (admin) {
+                await client.query(
+                    "INSERT INTO public.users (user_phone, user_name, user_role, user_phone_verified_at) VALUES ($1, 'Shahebbazar admin', 'admin', now())",
+                    [admin],
+                );
+                log(`Database setup: added the admin account for ${admin}`);
+            }
             await recordBaselineMigrations(client, migrationsDir);
-            if (uploadDir) log(`Database setup: copied ${copySeedAssets(uploadDir)} seed images`);
+            if (uploadDir && seed === "demo") log(`Database setup: copied ${copySeedAssets(uploadDir)} seed images`);
             loaded = true;
         }
 
